@@ -1,0 +1,15 @@
+# 크롤링 타겟 (일단은 이것만 바꾸시면 됩니다)
+TARGET_URL=
+
+# 인증 (로그인이 필요한 경우)
+LOGIN_URL=
+LOGIN_ID=
+LOGIN_PASSWORD=
+
+# 크롤러 동작 설정
+MAX_PAGES=
+DELAY=
+TIMEOUT=
+
+# 결과 저장 경로
+OUTPUT_FILE=
