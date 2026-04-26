@@ -15,7 +15,7 @@ from openai import OpenAI
 class LLMClient:
     def __init__(
         self,
-        model: str = "llama-3.3-70b-versatile",   # Groq 무료 모델
+        model: str = "gpt-4o",                    # OpenAI GPT-4o
         api_key: Optional[str] = None,
         max_retries: int = 3,
         retry_delay: float = 2.0,
@@ -25,7 +25,7 @@ class LLMClient:
         self.retry_delay = retry_delay
         self.client = OpenAI(
             api_key=api_key or os.environ.get("OPENAI_API_KEY"),
-            base_url="https://api.groq.com/openai/v1",  # Groq 엔드포인트
+            # base_url 미지정 → OpenAI 기본 엔드포인트 사용
         )
 
     def generate(
