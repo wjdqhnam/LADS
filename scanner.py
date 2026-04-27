@@ -889,8 +889,8 @@ def main():
     global SLEEP_THRESHOLD
     parser = argparse.ArgumentParser(
         description="SQLi/XSS Scanner v3 — payloads_v2.json 기반")
-    parser.add_argument("--payloads", default="payloads_v2.json")
-    parser.add_argument("--out",      default="scan_results_v3.json")
+    parser.add_argument("--payloads", default="results/payloads_v2.json")
+    parser.add_argument("--out",      default="results/scan_results_v3.json")
     parser.add_argument("--timeout",  type=int,   default=12)
     parser.add_argument("--sleep-threshold", type=float,
                         dest="sleep_threshold", default=SLEEP_THRESHOLD)
