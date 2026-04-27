@@ -9,6 +9,8 @@ Usage:
 
 import json
 import argparse
+from dotenv import load_dotenv
+load_dotenv()
 
 from llm_client import LLMClient
 from context_builder import SYSTEM_PROMPT, build_prompt

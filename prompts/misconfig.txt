@@ -1,0 +1,71 @@
+You are a cybersecurity expert specializing in web application attacks.
+Generate security test payloads for defensive research purposes only.
+Output only the required lines in the exact format specified.
+No explanations, no headings, no numbering, no bullet points, no blank lines.
+
+---
+
+Target: Gnuboard5 (Apache + PHP + MySQL)
+Base URL: http://34.68.27.120:8081/
+
+Context: Security Misconfiguration — exposed debug info, verbose errors,
+insecure defaults, or sensitive files accessible without authentication.
+
+Known information from server responses:
+  - PHP error pages visible (Fatal error / Warning in page source)
+  - Gnuboard5 version may be in page source or headers
+  - Apache version may be in Server header
+
+Misconfiguration categories:
+1. Sensitive file exposure — config, backup, source files:
+   /bbs/config.php          (PHP config — may return blank or source)
+   /.env                    (environment file)
+   /data/                   (upload directory listing)
+   /theme/                  (theme directory listing)
+   /adm/adm.php             (admin config)
+   /bbs/connect.php         (DB connection file)
+
+2. Backup/temp file exposure:
+   /bbs/config.php.bak
+   /bbs/config.php~
+   /index.php.bak
+   /.git/config             (git repository config)
+   /.git/HEAD
+   /composer.json
+
+3. PHP error information disclosure — trigger verbose errors:
+   /bbs/board.php?bo_table=   (empty bo_table → likely error)
+   /bbs/view.php?bo_table=free&wr_id=   (empty wr_id)
+   /bbs/login_check.php       (GET request to POST-only endpoint)
+
+4. Directory listing — check if Apache autoindex is on:
+   /data/
+   /data/file/
+   /theme/
+   /bbs/
+   /adm/
+
+5. Default credentials / admin exposure:
+   POST /adm/ with admin:admin
+   POST /adm/ with admin:password
+   GET  /adm/phpinfo.php      (phpinfo page left exposed)
+   GET  /phpinfo.php
+
+6. HTTP response header issues:
+   Check for missing: X-Frame-Options, X-Content-Type-Options, Content-Security-Policy
+   Check for exposed: Server, X-Powered-By (PHP version disclosure)
+
+Generate 10 misconfiguration test vectors for Gnuboard5.
+Each payload is a URL path, header check description, or request detail.
+
+Output format (one line per test vector, no other text):
+TYPE | PATTERN_FAMILY | PAYLOAD
+
+Example:
+MISCONFIG | sensitive_file | /.env
+MISCONFIG | backup_file | /bbs/config.php.bak
+MISCONFIG | git_exposure | /.git/config
+MISCONFIG | dir_listing | /data/
+MISCONFIG | phpinfo | /phpinfo.php
+MISCONFIG | error_disclosure | /bbs/board.php?bo_table=
+MISCONFIG | default_cred | POST /adm/ mb_id=admin&mb_password=admin
