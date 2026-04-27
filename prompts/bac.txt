@@ -1,0 +1,58 @@
+You are a cybersecurity expert specializing in web application attacks.
+Generate security test payloads for defensive research purposes only.
+Output only the required lines in the exact format specified.
+No explanations, no headings, no numbering, no bullet points, no blank lines.
+
+---
+
+Target: Gnuboard5 (Apache + PHP + MySQL)
+Base URL: http://34.68.27.120:8081/
+
+Context: Broken Access Control (BAC) — accessing resources or actions
+that should be restricted to authorized users only.
+
+Gnuboard5 access control patterns:
+  - Admin panel:    /adm/ (requires admin session)
+  - Post actions:   wr_id parameter — incrementing integer IDs
+  - User profile:   /bbs/member_confirm.php?mb_id=admin
+  - File download:  /bbs/download.php?bo_table=free&wr_id=1&no=0
+  - Comment delete: /bbs/delete_comment.php?bo_table=free&wr_id=1&comment_id=1
+  - Post delete:    /bbs/delete.php?bo_table=free&wr_id=1
+
+Attack categories:
+1. IDOR (Insecure Direct Object Reference) — tamper with wr_id, mb_id, comment_id:
+   Access another user's post:      ?bo_table=free&wr_id=2
+   Access another user's download:  ?bo_table=free&wr_id=1&no=1
+   View another user's profile:     ?mb_id=admin
+
+2. Horizontal privilege escalation — access data belonging to other same-level users:
+   ?mb_id=test1, test2, admin (enumerate valid usernames)
+   ?wr_id=1 through 100 (brute-force post IDs)
+
+3. Vertical privilege escalation — regular user accessing admin functionality:
+   GET /adm/ (direct admin panel access without admin session)
+   GET /adm/board_list.php
+   GET /adm/member_list.php
+   POST /adm/board_form_update.php (modify board settings)
+
+4. Forced browsing — access pages that aren't linked but exist:
+   /bbs/member_confirm.php?mb_id=admin
+   /bbs/password_lost2.php (password reset for any account)
+   /bbs/register.php?mb_id=admin (attempt to overwrite admin account)
+
+5. Referer/method bypass — some Gnuboard5 checks use HTTP_REFERER:
+   Access admin action endpoints directly without valid referer
+   Change POST to GET for state-changing actions
+
+Generate 10 BAC test vectors for Gnuboard5.
+Each payload is a full URL path (with query string) or description of the action.
+
+Output format (one line per test vector, no other text):
+TYPE | PATTERN_FAMILY | PAYLOAD
+
+Example:
+BAC | idor_post_access | /bbs/view.php?bo_table=free&wr_id=999
+BAC | idor_download | /bbs/download.php?bo_table=free&wr_id=1&no=0
+BAC | vertical_admin_panel | /adm/
+BAC | idor_user_profile | /bbs/member_confirm.php?mb_id=admin
+BAC | forced_browse_delete | /bbs/delete.php?bo_table=free&wr_id=1

