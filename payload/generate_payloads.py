@@ -12,9 +12,9 @@ import argparse
 from dotenv import load_dotenv
 load_dotenv()
 
-from llm_client import LLMClient
-from context_builder import SYSTEM_PROMPT, build_prompt
-from payload_parser import clean
+from .llm_client import LLMClient
+from .context_builder import SYSTEM_PROMPT, build_prompt
+from .payload_parser import clean
 
 
 # ── Target: http://34.68.27.120:8081/ (Gnuboard5) ─────────────
@@ -182,6 +182,6 @@ def run(out_file: str = "payloads_v2.json"):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--out", default="payloads_v2.json")
+    parser.add_argument("--out", default="results/payloads_v2.json")
     args = parser.parse_args()
     run(args.out)
