@@ -457,37 +457,46 @@ class Crawler:
         get_forms = [(url, f) for url, f in all_forms if f.method == "GET"]
 
         sep = "=" * 60
-        print(f"\n{sep}")
-        print("DAST 공격 표면 요약")
-        print(sep)
-        print(f"총 방문 페이지        : {len(self.results)}")
-        print(f"  정상 페이지         : {len(ok_pages)}")
-        print(f"  PHP 에러 페이지     : {len(err_pages)}")
-        print(f"URL 파라미터 페이지   : {len(urls_with_params)}")
-        print(f"고유 입력 구조 수     : {len(self.seen_input_structures)}")
-        print(f"Form 총 개수          : {len(all_forms)}")
-        print(f"  POST form           : {len(post_forms)}")
-        print(f"  GET form            : {len(get_forms)}")
+        log_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "sum_log.txt")
 
-        if post_forms:
-            print("\n[POST Form 목록]")
-            for url, f in post_forms:
-                fields_str = [ff.name for ff in f.fields]
-                print(f"  URL    : {url}")
-                print(f"  action : {f.action}")
-                print(f"  fields : {fields_str}")
-                print()
+        # 로그 파일에 요약 저장
+        with open(log_path, "w", encoding="utf-8") as log:
+            def w(text=""):
+                log.write(text + "\n")
 
-        if urls_with_params:
-            print(f"\n[URL 파라미터 (상위 15개)]")
-            for r in urls_with_params[:15]:
-                print(f"  {r.url}")
-                print(f"    params: {list(r.query_params.keys())}")
+            w(f"\n{sep}")
+            w("DAST 공격 표면 요약")
+            w(sep)
+            w(f"총 방문 페이지        : {len(self.results)}")
+            w(f"  정상 페이지         : {len(ok_pages)}")
+            w(f"  PHP 에러 페이지     : {len(err_pages)}")
+            w(f"URL 파라미터 페이지   : {len(urls_with_params)}")
+            w(f"고유 입력 구조 수     : {len(self.seen_input_structures)}")
+            w(f"Form 총 개수          : {len(all_forms)}")
+            w(f"  POST form           : {len(post_forms)}")
+            w(f"  GET form            : {len(get_forms)}")
 
-        if err_pages:
-            print(f"\n[PHP 에러 페이지 (상위 10개)]")
-            for r in err_pages[:10]:
-                print(f"  {r.url}  (HTTP {r.status_code})")
+            if post_forms:
+                w("\n[POST Form 목록]")
+                for url, f in post_forms:
+                    fields_str = [ff.name for ff in f.fields]
+                    w(f"  URL    : {url}")
+                    w(f"  action : {f.action}")
+                    w(f"  fields : {fields_str}")
+                    w()
+
+            if urls_with_params:
+                w(f"\n[URL 파라미터 (상위 15개)]")
+                for r in urls_with_params[:15]:
+                    w(f"  {r.url}")
+                    w(f"    params: {list(r.query_params.keys())}")
+
+            if err_pages:
+                w(f"\n[PHP 에러 페이지 (상위 10개)]")
+                for r in err_pages[:10]:
+                    w(f"  {r.url}  (HTTP {r.status_code})")
+
+        print(f"요약 저장: {log_path}")
 
 
 if __name__ == "__main__":
