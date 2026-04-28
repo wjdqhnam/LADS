@@ -4,6 +4,7 @@ __pycache__/
 
 
 # Data files
+log/
 targets.json
 sum_log.txt
 crawl_result.json
