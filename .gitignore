@@ -1,7 +1,9 @@
 .env
-crawl_result.json
 __pycache__/
 *.pyc
+
+
+# Data files
 targets.json
-baseline/
 sum_log.txt
+crawl_result.json
