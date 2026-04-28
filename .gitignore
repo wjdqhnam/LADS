@@ -1,7 +1,9 @@
 .env
-crawl_result.json
+*.env
 __pycache__/
 *.pyc
 targets.json
 baseline/
 sum_log.txt
+# JSON 결과 파일 (로컬 전용)
+*.json
