@@ -269,6 +269,9 @@ class Crawler:
             if self._is_in_scope(u) and not self._is_excluded(u):
                 urls.add(u)
 
+        return urls
+
+
 # 크롤링 시작점 모으기
     def _discover_seeds(self) -> list[str]:
         seeds: set[str] = set()
