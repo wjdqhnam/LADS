@@ -14,7 +14,8 @@ load_dotenv()
 
 from .llm_client import LLMClient
 from .context_builder import SYSTEM_PROMPT, build_prompt
-from .payload_parser import clean
+from .payload_parser import clean as parse_clean
+from payload_filter import filter_payloads, deduplicate, report as filter_report
 
 
 # ── Target: http://34.68.27.120:8081/ (Gnuboard5) ─────────────
@@ -153,9 +154,11 @@ def run(out_file: str = "payloads_v2.json"):
                     system=SYSTEM_PROMPT,
                     temperature=0.7,
                 )
-                records = clean(raw)
+                parsed          = parse_clean(raw)           # 파싱 + 중복 제거
+                filtered, rejected = filter_payloads(parsed) # 품질 필터링
+                records         = deduplicate(filtered)       # 최종 중복 제거
                 all_results[pname][vtype] = records
-                print(f"{len(records)} payloads")
+                print(f"{len(records)} payloads (제거: {len(rejected)}개)")
                 for r in records:
                     print(f"    [{r['type']:20s}] {r['payload'][:70]}")
             except Exception as e:
@@ -168,11 +171,13 @@ def run(out_file: str = "payloads_v2.json"):
     with open(out_file, "w", encoding="utf-8") as f:
         json.dump(all_results, f, ensure_ascii=False, indent=2)
 
-    total = sum(
-        len(records)
+    all_records = [
+        r
         for point_data in all_results.values()
         for records in point_data.values()
-    )
+        for r in records
+    ]
+    total = len(all_records)
 
     print(f"{'='*60}")
     print(f"  저장 완료 -> {out_file}")
