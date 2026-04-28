@@ -4,3 +4,4 @@ __pycache__/
 *.pyc
 targets.json
 baseline/
+sum_log.txt
