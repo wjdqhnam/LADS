@@ -13,15 +13,12 @@ from typing import Optional
 
 load_dotenv()
 
-BASE_URL   = os.getenv("TARGET_URL", "http://localhost")
-MAX_PAGES  = int(os.getenv("MAX_PAGES", 300))
-DELAY      = float(os.getenv("DELAY", 0.3))
-TIMEOUT    = int(os.getenv("TIMEOUT", 10))
+BASE_URL = os.getenv("TARGET_URL", "http://localhost")
 OUTPUT_FILE = os.getenv("OUTPUT_FILE", "crawl_result.json")
-
 LOGIN_URL      = os.getenv("LOGIN_URL", "")
 LOGIN_ID       = os.getenv("LOGIN_ID", "")
 LOGIN_PASSWORD = os.getenv("LOGIN_PASSWORD", "")
+
 
 # robots.txt/sitemap.xml 자동 발견 실패 시 사용하는 fallback 경로
 SEED_PATHS = [
@@ -42,6 +39,14 @@ EXCLUDE_PATTERNS = [
     r"logout", r"signout",
     r"\.(jpg|jpeg|png|gif|svg|ico|css|js|pdf|zip|woff|ttf|eot)(\?|$)",
 ]
+
+# 크롤러 동작 설정
+class CrawlConfig:
+    MAX_PAGES = 500           # 전체 방문 페이지 하드 리밋
+    MIN_PAGES = 100           # 조기 종료 판단 전 최소 방문 페이지 수
+    STAGNATION_LIMIT = 50     # 새 입력 구조가 안 나온 상태로 허용할 페이지 수
+    DELAY = 0.3               # 요청 간 대기 시간
+    TIMEOUT = 10              # 요청 타임아웃
 
 
 @dataclass
@@ -91,6 +96,11 @@ class Crawler:
         self.queue: deque[str] = deque()
         self.results: list[PageResult] = []
 
+        # DAST 기준에서 중요한 것은 URL 값이 아니라 입력 구조다.
+        # 예: /search.php?stx=a 와 /search.php?stx=b 는 같은 입력 구조로 본다.
+        self.seen_input_structures: set[tuple] = set()
+        self.no_new_input_pages: int = 0
+
     def _is_in_scope(self, url: str) -> bool:
         parsed = urlparse(url)
         return (
@@ -103,6 +113,57 @@ class Crawler:
 
     def _normalize(self, url: str) -> str:
         return urlparse(url)._replace(fragment="").geturl()
+
+# 입력 구조 비교용 URL 정규화 (query string 제외, path는 기본적으로 "/"로)
+    def _normalize_path(self, url: str) -> str:
+        parsed = urlparse(self._normalize(url))
+        return parsed.path or "/"
+
+# URL에서 query parameter 이름만 추출해 입력 구조 비교용 시그니처 생성
+    def _query_signature(self, url: str) -> Optional[tuple]:
+        parsed = urlparse(url)
+        params = parse_qs(parsed.query, keep_blank_values=True)
+        if not params:
+            return None
+        return (
+            "QUERY",
+            "GET",
+            parsed.path or "/",
+            tuple(sorted(params.keys())),
+        )
+
+
+# Form 구조 비교용 시그니처 생성 (vlaue는 제외, field 이름과 form 속성 위주)
+    def _form_signature(self, form: Form) -> tuple:
+        field_names = tuple(sorted(ff.name for ff in form.fields if ff.name))
+        return (
+            "FORM",
+            form.method.upper(),
+            self._normalize_path(form.action),
+            field_names,
+            form.enctype,
+        )
+
+# 현재 페이지에서 발견한 입력 구조 등록 및 새로 발견한 구조 개수 반환
+    def _register_input_structures(self, result: PageResult) -> int:
+        new_count = 0
+
+        query_sig = self._query_signature(result.url)
+        if query_sig and query_sig not in self.seen_input_structures:
+            self.seen_input_structures.add(query_sig)
+            new_count += 1
+
+        for form in result.forms:
+            form_sig = self._form_signature(form)
+            if form_sig not in self.seen_input_structures:
+                self.seen_input_structures.add(form_sig)
+                new_count += 1
+
+        return new_count
+
+# 조기 종료 조건: MIN_PAGES 이상 방문했는데 최근 STAGNATION_LIMIT 페이지 동안 새 입력 구조가 안 나오면 종료
+    def _should_stop_early(self, crawled: int) -> bool:
+        return crawled >= CrawlConfig.MIN_PAGES and self.no_new_input_pages >= CrawlConfig.STAGNATION_LIMIT
 
     def _extract_forms(self, soup: BeautifulSoup, page_url: str) -> list[Form]:
         forms = []
@@ -128,8 +189,7 @@ class Crawler:
                     fields.append(FormField(name=name,
                                             field_type=inp.get("type", "text"),
                                             value=inp.get("value", "")))
-            forms.append(Form(action=action, method=method,
-                              fields=fields, enctype=enctype))
+            forms.append(Form(action=action, method=method, fields=fields, enctype=enctype))
         return forms
 
     def _extract_links(self, soup: BeautifulSoup, page_url: str) -> list[str]:
@@ -231,7 +291,7 @@ class Crawler:
 
     def _fetch(self, url: str) -> Optional[requests.Response]:
         try:
-            return self.session.get(url, timeout=TIMEOUT, allow_redirects=True)
+            return self.session.get(url, timeout=CrawlConfig.TIMEOUT, allow_redirects=True)
         except requests.RequestException as e:
             print(f"  [ERROR] {url} — {e}", file=sys.stderr)
             return None
@@ -244,7 +304,7 @@ class Crawler:
             self.queue.append(s)
 
         crawled = 0
-        while self.queue and crawled < MAX_PAGES:
+        while self.queue and crawled < CrawlConfig.MAX_PAGES:
             url = self.queue.popleft()
             if url in self.visited:
                 continue
@@ -254,6 +314,10 @@ class Crawler:
             resp = self._fetch(url)
             if resp is None:
                 crawled += 1
+                self.no_new_input_pages += 1
+                if self._should_stop_early(crawled):
+                    print(f"\n[STOP] 최근 {CrawlConfig.STAGNATION_LIMIT}페이지 동안 새 입력 구조가 없어 조기 종료")
+                    break
                 continue
 
             result = PageResult(url=url, status_code=resp.status_code)
@@ -264,18 +328,28 @@ class Crawler:
 
             content_type = resp.headers.get("Content-Type", "")
             if "text/html" not in content_type:
+                new_inputs = self._register_input_structures(result)
+                self.no_new_input_pages = 0 if new_inputs else self.no_new_input_pages + 1
                 self.results.append(result)
                 crawled += 1
-                time.sleep(DELAY)
+                if self._should_stop_early(crawled):
+                    print(f"\n[STOP] 최근 {CrawlConfig.STAGNATION_LIMIT}페이지 동안 새 입력 구조가 없어 조기 종료")
+                    break
+                time.sleep(CrawlConfig.DELAY)
                 continue
 
             # PHP 에러 페이지 감지
             if "Fatal error" in resp.text or "Warning" in resp.text[:200]:
                 result.is_error_page = True
                 print(f"       [PHP ERROR] {url}")
+                new_inputs = self._register_input_structures(result)
+                self.no_new_input_pages = 0 if new_inputs else self.no_new_input_pages + 1
                 self.results.append(result)
                 crawled += 1
-                time.sleep(DELAY)
+                if self._should_stop_early(crawled):
+                    print(f"\n[STOP] 최근 {CrawlConfig.STAGNATION_LIMIT}페이지 동안 새 입력 구조가 없어 조기 종료")
+                    break
+                time.sleep(CrawlConfig.DELAY)
                 continue
 
             soup = BeautifulSoup(resp.text, "lxml")
@@ -284,15 +358,28 @@ class Crawler:
             result.forms = self._extract_forms(soup, url)
             result.links = self._extract_links(soup, url)
 
+            new_inputs = self._register_input_structures(result)
+            if new_inputs:
+                self.no_new_input_pages = 0
+                print(f"       [INPUT] 새 입력 구조 {new_inputs}개 발견 / 누적 {len(self.seen_input_structures)}개")
+            else:
+                self.no_new_input_pages += 1
+
             for link in result.links:
                 if link not in self.visited:
                     self.queue.append(link)
 
             self.results.append(result)
             crawled += 1
-            time.sleep(DELAY)
+
+            if self._should_stop_early(crawled):
+                print(f"\n[STOP] 최근 {CrawlConfig.STAGNATION_LIMIT}페이지 동안 새 입력 구조가 없어 조기 종료")
+                break
+
+            time.sleep(CrawlConfig.DELAY)
 
         print(f"\n크롤링 완료: {crawled}페이지 방문")
+        print(f"고유 입력 구조 수: {len(self.seen_input_structures)}개")
         return self.results
 
     def save(self, path: str = OUTPUT_FILE):
@@ -335,6 +422,7 @@ class Crawler:
         print(f"  정상 페이지         : {len(ok_pages)}")
         print(f"  PHP 에러 페이지     : {len(err_pages)}")
         print(f"URL 파라미터 페이지   : {len(urls_with_params)}")
+        print(f"고유 입력 구조 수     : {len(self.seen_input_structures)}")
         print(f"Form 총 개수          : {len(all_forms)}")
         print(f"  POST form           : {len(post_forms)}")
         print(f"  GET form            : {len(get_forms)}")
