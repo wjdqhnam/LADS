@@ -1,29 +1,30 @@
-"""
-Payload Generation Pipeline v2
-: 서버 실제 분석 기반 타겟 포인트 -> LLM -> 파싱 -> 저장
-
-Usage:
-    python generate_payloads.py
-    python generate_payloads.py --out payloads_v2.json
-"""
-
-import json
+﻿import json
 import argparse
+import sys
+import os
 from dotenv import load_dotenv
 load_dotenv()
 
-from .llm_client import LLMClient
-from .context_builder import SYSTEM_PROMPT, build_prompt
-from .payload_parser import clean as parse_clean
+# 직접 실행(python generate_payloads.py) 시 LADS 루트를 경로에 추가
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+try:
+    from .llm_client import LLMClient
+    from .context_builder import SYSTEM_PROMPT, build_prompt
+    from .payload_parser import clean as parse_clean
+except ImportError:
+    # 직접 실행 시 절대경로 import
+    from llm_client import LLMClient
+    from context_builder import SYSTEM_PROMPT, build_prompt
+    from payload_parser import clean as parse_clean
+
 from payload_filter import filter_payloads, deduplicate, report as filter_report
 
 
-# ── Target: http://34.68.27.120:8081/ (Gnuboard5) ─────────────
 
 INPUT_POINTS = [
 
-    # ── XSS 타겟 ──────────────────────────────────────────────
-
+    # XSS 타겟
     {
         "name":    "xss_wr_subject",
         "url":     "http://34.68.27.120:8081/bbs/write_update.php",
@@ -70,8 +71,7 @@ INPUT_POINTS = [
         "vuln_types": ["xss_comment"],
     },
 
-    # ── SQLi 타겟 ──────────────────────────────────────────────
-
+    # SQLi 타겟
     {
         "name":    "sqli_search_sfl",
         "url":     "http://34.68.27.120:8081/bbs/search.php",
@@ -99,7 +99,7 @@ INPUT_POINTS = [
         "param":   "stx",
         "type":    "string",
         "db":      "MySQL",
-        "note":    "검색 키워드 - LIKE '%{stx}%' 문자열 컨텍스트",
+        "note":    "검색 키워드 - INSTR(LOWER(col),LOWER(stx)) 컨텍스트, PHP 공백분리 → 페이로드 공백금지, a'))))...# 패턴",
         "vuln_types": ["sqli_string"],
     },
     {

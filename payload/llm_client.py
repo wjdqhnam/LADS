@@ -1,11 +1,4 @@
-"""
-LLM Client — GPT-4o 전용 모듈
-사용법:
-    client = LLMClient()
-    result = client.generate("프롬프트")
-"""
-
-import os
+﻿import os
 import time
 from typing import Optional
 
@@ -55,7 +48,7 @@ class LLMClient:
                     raise
 
 
-# ── 직접 실행 시 연결 테스트 ────────────────────────────────────
+# 연결 테스트 (직접 실행 시)
 if __name__ == "__main__":
     client = LLMClient()
     result = client.generate(

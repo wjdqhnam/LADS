@@ -1,11 +1,4 @@
-"""
-Payload Parser - LLM response -> payload list converter
-
-Supported output format:
-    TYPE | PATTERN_FAMILY | PAYLOAD
-"""
-
-import re
+﻿import re
 from typing import List, Dict
 
 
@@ -69,7 +62,7 @@ def payloads_only(llm_output: str) -> List[str]:
     return [r["payload"] for r in clean(llm_output)]
 
 
-# ── Self-test when run directly ──────────────────────────────────
+# 파서 테스트 (직접 실행 시)
 if __name__ == "__main__":
     mock_output = """
 ERROR_BASED | extractvalue_version | 0 OR EXTRACTVALUE(1,CONCAT(0x7e,version()))

