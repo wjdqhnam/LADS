@@ -3,3 +3,5 @@ crawl_result.json
 __pycache__/
 *.pyc
 targets.json
+baseline/
+sum_log.txt

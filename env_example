@@ -6,10 +6,5 @@ LOGIN_URL=
 LOGIN_ID=
 LOGIN_PASSWORD=
 
-# 크롤러 동작 설정
-MAX_PAGES=
-DELAY=
-TIMEOUT=
-
 # 결과 저장 경로
 OUTPUT_FILE=
