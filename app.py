@@ -217,7 +217,6 @@ def _task_fuzz():
 
 
 def _task_execute():
-    """: Executor"""
     from fuzzer.executor import execute
 
     if not os.path.exists(FUZZ_TASKS_FILE):
