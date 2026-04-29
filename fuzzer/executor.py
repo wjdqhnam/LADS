@@ -105,7 +105,7 @@ def execute(
         elif loc == "body":
             data = dict(base_params)
             data[str(inject_param)] = injected
-        else:  # query (default)
+        else:
             params = dict(base_params)
             params[str(inject_param)] = injected
 
@@ -132,7 +132,6 @@ def execute(
                 )
 
             elapsed = time.perf_counter() - started
-            body_text = None
             try:
                 body_text = resp.text
             except Exception:
@@ -181,4 +180,3 @@ def execute(
             json.dump(results, f, ensure_ascii=False, indent=2)
 
     return results
-
