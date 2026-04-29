@@ -63,6 +63,7 @@ def execute(
             "inject_mode": inject_mode,
             "inject_location": inject_location,
             "inject_param": inject_param,
+            "meta": t.get("meta") or {},
             "error": None,
         }
 
@@ -104,7 +105,7 @@ def execute(
         elif loc == "body":
             data = dict(base_params)
             data[str(inject_param)] = injected
-        else:  # query (default)
+        else:
             params = dict(base_params)
             params[str(inject_param)] = injected
 
@@ -131,7 +132,6 @@ def execute(
                 )
 
             elapsed = time.perf_counter() - started
-            body_text = None
             try:
                 body_text = resp.text
             except Exception:
@@ -145,7 +145,7 @@ def execute(
                     "status": resp.status_code,
                     "length": len(resp.content) if resp.content is not None else None,
                     "elapsed": round(elapsed, 3),
-                    "response_body": body_text[:5000] if body_text else None,
+                    "response_body": body_text[:20000] if body_text else None,
                 }
             )
         except requests.Timeout:
@@ -180,4 +180,3 @@ def execute(
             json.dump(results, f, ensure_ascii=False, indent=2)
 
     return results
-
