@@ -182,7 +182,7 @@ def _task_scan():
 
 def _task_fuzz():
     """Step 7: Fuzzing Strategy Engine"""
-    from fuzzing_strategy import build_tasks
+    from fuzzer.fuzzing_strategy import build_tasks
 
     if not os.path.exists(PAYLOADS_FILE):
         print(f"[ERROR] {PAYLOADS_FILE} 없음.")
@@ -218,7 +218,7 @@ def _task_fuzz():
 
 def _task_execute():
     """Step 8: Executor"""
-    from executor import execute
+    from fuzzer.executor import execute
 
     if not os.path.exists(FUZZ_TASKS_FILE):
         print(f"[ERROR] {FUZZ_TASKS_FILE} 없음. Step 7 전략 수립을 먼저 실행하세요.")
