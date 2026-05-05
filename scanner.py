@@ -9,6 +9,8 @@ import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
+from baseline import xss as bxss
+from baseline import sqli as bsqli
 
 # 설정
 TARGET_BASE = "http://34.68.27.120:8081"
@@ -717,6 +719,42 @@ POINT_CONFIG = {
 }
 
 
+# Baseline 페이로드 매핑
+def _baseline_payloads(strength: str = "HIGH") -> Dict:
+    """각 POINT_CONFIG 포인트에 맞는 baseline 페이로드 딕셔너리 반환."""
+    s = strength
+    return {
+        "xss_search_stx":         {"stx_filtered":    bxss.get_by_context("stx_filtered",       s)},
+        "xss_qalist_stx":         {"stx_filtered":    bxss.get_by_context("stx_filtered",       s)},
+        "xss_faq_stx":            {"stx_filtered":    bxss.get_by_context("stx_filtered",       s)},
+        "xss_board_stx":          {"stx_filtered":    bxss.get_by_context("stx_filtered",       s)},
+        "cve_18661_login_xss":    {"url_redirect":    bxss.get_by_context("url_redirect",       s)},
+        "xss_password_url":       {"url_redirect":    bxss.get_by_context("url_redirect",       s)},
+        "open_redirect_login":    {"url_redirect":    bxss.get_by_context("url_redirect",       s)},
+        "cve_18663_move_xss":     {"body":            bxss.get_by_context("body",               s)},
+        "xss_move_from_bo":       {"body":            bxss.get_by_context("body",               s)},
+        "xss_move_wr_id":         {"body":            bxss.get_by_context("body",               s)},
+        "xss_profile_mb":         {"attr_value":      bxss.get_by_context("attr_value",         s)},
+        "xss_register_name":      {"attr_value":      bxss.get_by_context("attr_value",         s)},
+        "sqli_search_sfl":        {"field_selector":  bsqli.get_by_sql_context("field_selector", s)},
+        "sqli_qalist_sfl":        {"field_selector":  bsqli.get_by_sql_context("field_selector", s)},
+        "sqli_board_sfl":         {"field_selector":  bsqli.get_by_sql_context("field_selector", s)},
+        "sqli_search_sst":        {"orderby":         bsqli.get_by_sql_context("orderby",        s)},
+        "sqli_board_sst":         {"orderby":         bsqli.get_by_sql_context("orderby",        s)},
+        "sqli_search_stx":        {"like_string":     bsqli.get_by_sql_context("like_string",    s)},
+        "sqli_search_stx_fix":    {"like_string":     bsqli.get_by_sql_context("like_string",    s)},
+        "sqli_qalist_blind":      {"like_string":     bsqli.get_by_sql_context("like_string",    s)},
+        "sqli_faq_stx":           {"like_string":     bsqli.get_by_sql_context("like_string",    s)},
+        "sqli_board_stx":         {"like_string":     bsqli.get_by_sql_context("like_string",    s)},
+        "sqli_password_sod":      {"like_string":     bsqli.get_by_sql_context("like_string",    s)},
+        "sqli_password_sop":      {"like_string":     bsqli.get_by_sql_context("like_string",    s)},
+        "sqli_board_wr_id":       {"like_string":     bsqli.get_by_sql_context("like_string",    s)},
+        "sqli_profile_mb":        {"like_string":     bsqli.get_by_sql_context("like_string",    s)},
+        "sqli_login_mb_id":       {"auth":            bsqli.get_by_sql_context("auth",           s)},
+        "sqli_ajax_member":       {"auth":            bsqli.get_by_sql_context("auth",           s)},
+        "cve_18662_install_sqli": {"cve_prefix":      bsqli.get_by_sql_context("cve_prefix",     s)},
+    }
+
 
 # HTTP 세션
 def make_session() -> requests.Session:
@@ -1169,6 +1207,12 @@ def main():
                         help="특정 포인트만 (예: sqli_search_sfl)")
     parser.add_argument("--targets",  default=None,
                         help="targets.json 경로 (crawler.py → analyzer.py 출력)")
+    parser.add_argument("--baseline", action="store_true",
+                        help="baseline/ 페이로드 포함 (JSON 없어도 단독 실행 가능)")
+    parser.add_argument("--baseline-strength", default="HIGH",
+                        choices=["LOW", "MEDIUM", "HIGH", "INSANE"],
+                        dest="baseline_strength",
+                        help="baseline 강도 (기본: HIGH)")
     args = parser.parse_args()
 
     SLEEP_THRESHOLD = args.sleep_threshold
@@ -1177,14 +1221,23 @@ def main():
         with open(args.payloads, encoding="utf-8") as f:
             all_payloads: Dict = json.load(f)
     except FileNotFoundError:
-        # --point 지정 + BLIND_SQLI_PAYLOADS에 있으면 파일 없어도 진행
-        if args.point and args.point in BLIND_SQLI_PAYLOADS:
-            print(f"  [INFO] {args.payloads} 없음 → "
-                  f"{args.point} 는 BLIND_SQLI_PAYLOADS로 자동 진행")
-            all_payloads = {}
-        else:
+        if not args.baseline:
             print(f"[ERROR] {args.payloads} 없음. generate_payloads.py 먼저 실행.")
             sys.exit(1)
+        all_payloads = {}
+        print(f"  [INFO] {args.payloads} 없음 → baseline 전용 모드")
+
+    # baseline 페이로드 merge
+    if args.baseline:
+        baseline = _baseline_payloads(args.baseline_strength)
+        for pt_key, bl_payloads in baseline.items():
+            if pt_key in all_payloads:
+                for vtype, plist in bl_payloads.items():
+                    all_payloads[pt_key].setdefault(vtype, []).extend(plist)
+            else:
+                all_payloads[pt_key] = bl_payloads
+        n_bl = sum(len(v) for pls in baseline.values() for v in pls.values())
+        print(f"  [BASELINE] {len(baseline)}개 포인트 / {n_bl}개 페이로드 추가 (강도: {args.baseline_strength})")
 
     # targets.json 자동 로드 (crawler.py → analyzer.py 연동)
     if args.targets:
@@ -1289,6 +1342,9 @@ def main():
         if point_key not in POINT_CONFIG:
             print(f"\n  [SKIP] {point_key} → POINT_CONFIG 없음")
             continue
+        if payload_key not in all_payloads:
+            print(f"\n  [SKIP] {payload_key} → 페이로드 없음")
+            continue
 
         results = scan_point(
             session, point_key, all_payloads[payload_key],
@@ -1337,3 +1393,8 @@ def main():
 
 if __name__ == "__main__":
     main()
+    try:
+        from pause_on_exit import pause_if_enabled
+        pause_if_enabled()
+    except Exception:
+        pass

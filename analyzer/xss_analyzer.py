@@ -1,25 +1,24 @@
-# 그누보드 필터링 방어막 우회 체크 리스트
-XSS_BYPASS_KEYWORDS = [
-    "onerror=", "onload=", "ontoggle=", 
-    "javascript:", "eval(", "onmouseover=",
-    "string.fromcharcode", "animation-name:"
-]
-
 def validate_xss(test_result):
     """XSS (Stored, Reflected 및 우회) 검증"""
     payload = test_result.get("payload", "").lower()
-    response_body = test_result.get("response", {}).get("body", "").lower() 
+    response_body = test_result.get("response", {}).get("body", "").lower()
+    xss_context = test_result.get("xss_context", "unknown")
     
     if not response_body:
-        return False, "검증 불가 (응답 HTML 바디 데이터 누락됨)"
+        return False, "검증 불가 (응답 데이터 누락)"
 
-    # 1. 우회 키워드 생존 확인
-    for keyword in XSS_BYPASS_KEYWORDS:
-        if keyword in payload and keyword in response_body:
-            return True, f"고도화된 XSS 성공 (우회 키워드 '{keyword}' 살아남음)"
+    # 1. HTML 인코딩 여부 우선 확인 (필터링됨)
+    if "&lt;" in response_body and (payload.startswith("<") or "onclick" in payload):
+         return False, "안전함 (페이로드가 HTML 인코딩됨)"
 
-    # 2. 일반 반사 확인
-    if payload and payload in response_body:
-        return True, "일반 XSS 성공 (페이로드 원본이 변형 없이 렌더링됨)"
+    # 2. 페이로드 생존 확인 (scanner.py의 XSS_MARKERS 개념 적용)
+    if payload in response_body:
+        return True, f"XSS 성공 (컨텍스트: {xss_context}, 페이로드 반사 확인)"
 
-    return False, "안전함 (XSS 필터링됨 / HTML 인코딩됨)"
+    # 3. 부분 키워드 실행 가능성 확인
+    critical_keywords = ["onerror=", "onload=", "eval(", "<svg"]
+    for kw in critical_keywords:
+        if kw in payload and kw in response_body:
+            return True, f"XSS 성공 (위험 키워드 '{kw}' 실행 가능 환경)"
+
+    return False, "안전함 (XSS 필터링됨)"

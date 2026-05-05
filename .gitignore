@@ -1,9 +1,20 @@
+# Environment files
 .env
 *.env
+
+# Python cache
 __pycache__/
 *.pyc
-targets.json
+
+# Data / result files
+log/
 baseline/
+targets.json
 sum_log.txt
-# JSON 결과 파일 (로컬 전용)
+crawl_result.json
+
+# JSON result files - local only
 *.json
+
+# Debug logs
+debug-*.log
