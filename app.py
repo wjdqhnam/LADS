@@ -34,22 +34,15 @@ import threading
 from pathlib import Path
 
 from flask import Flask, Response, render_template_string, request
-from dotenv import load_dotenv
+from dotenv import load_dotenv, set_key
 
 load_dotenv()
 
 
 # ── 설정 ─────────────────────────────────────────────────────────
-BASE_URL          = os.getenv("TARGET_URL",        "http://34.68.27.120:8081")
-CMS_NAME          = "Gnuboard5 5.3.2.8"
-CRAWL_RESULT_FILE = os.getenv("CRAWL_RESULT",      "crawl_result.json")
-TARGETS_FILE      = os.getenv("TARGETS_FILE",      "targets.json")
-PAYLOADS_FILE     = os.getenv("PAYLOADS_FILE",     "results/payloads_llm.json")
-SCAN_RESULTS_FILE = os.getenv("SCAN_RESULTS_FILE", "results/scan_results_llm.json")
-PAYLOADS_META_FILE = os.getenv("PAYLOADS_META_FILE", "results/payloads_llm_meta.json")
-FUZZ_TASKS_FILE    = os.getenv("FUZZ_TASKS_FILE",   "fuzz_tasks.json")
-EXEC_RESULTS_FILE  = os.getenv("EXEC_RESULTS_FILE", "execution_results.json")
-FINDINGS_FILE      = os.getenv("FINDINGS_FILE",     "results/findings.json")
+CMS_NAME = "Gnuboard5 5.3.2.8"
+
+import tasks
 
 app = Flask(__name__)
 _task_lock    = threading.Lock()
@@ -57,7 +50,9 @@ _thread_local = threading.local()
 
 
 # #region agent log
-_DBG_LOG_PATH = Path(__file__).with_name("debug-3194ca.log")
+_DBG_LOG_DIR  = Path(__file__).parent / "log"
+_DBG_LOG_DIR.mkdir(exist_ok=True)
+_DBG_LOG_PATH = _DBG_LOG_DIR / "debug-3194ca.log"
 _DBG_BUILD_ID = os.getenv("LADS_BUILD_ID") or datetime.now().strftime("%Y%m%d-%H%M%S") + "-" + uuid.uuid4().hex[:8]
 
 
@@ -124,177 +119,14 @@ class _RoutingStream:
 sys.stdout = _RoutingStream(sys.__stdout__)
 
 
-# ── 태스크 함수 ───────────────────────────────────────────────────
 
-def _task_crawl():
-    from crawler import Crawler
-    from target_builder import build_targets, print_summary
-
-    print(f"크롤링 시작: {BASE_URL}")
-    crawler = Crawler(BASE_URL)
-    crawler.crawl()
-    crawler.save(CRAWL_RESULT_FILE)
-    crawler.summary()
-
-    print(f"타겟 구성 시작: {CRAWL_RESULT_FILE}")
-    with open(CRAWL_RESULT_FILE, encoding="utf-8") as f:
-        pages = json.load(f)
-    targets = build_targets(pages)
-
-    os.makedirs("results", exist_ok=True)
-    with open(TARGETS_FILE, "w", encoding="utf-8") as f:
-        json.dump(targets, f, ensure_ascii=False, indent=2)
-
-    print(f"타겟 구성 완료: {TARGETS_FILE} ({len(targets)}개)")
-    print_summary(targets)
-
-
-def _task_payload():
-    from payload.generate_payloads import run as generate_run
-
-    os.makedirs("results", exist_ok=True)
-    print(f"LLM 페이로드 생성 시작 (출력: {PAYLOADS_FILE})")
-    generate_run(out_file=PAYLOADS_FILE)
-
-
-def _task_scan():
-    import scanner
-
-    if not os.path.exists(PAYLOADS_FILE):
-        print(f"[ERROR] {PAYLOADS_FILE} 없음. 페이로드를 먼저 생성하세요.")
-        return
-
-    os.makedirs("results", exist_ok=True)
-
-    old_argv = sys.argv[:]
-    argv_list = ["scanner.py", "--payloads", PAYLOADS_FILE, "--out", SCAN_RESULTS_FILE]
-    if os.path.exists(TARGETS_FILE):
-        argv_list += ["--targets", TARGETS_FILE]
-
-    sys.argv = argv_list
-    try:
-        scanner.main()
-    except SystemExit as e:
-        if e.code and e.code != 0:
-            print(f"[ERROR] 스캐너 종료: exit code {e.code}")
-    finally:
-        sys.argv = old_argv
-
-
-def _task_fuzz():
-    from fuzzer.fuzzing_strategy import build_tasks
-
-    if not os.path.exists(PAYLOADS_FILE):
-        print(f"[ERROR] {PAYLOADS_FILE} 없음.")
-        print(f"        페이로드 생성(② LLM 페이로드 생성)을 먼저 실행하세요.")
-        return
-
-    if not os.path.exists(PAYLOADS_META_FILE):
-        print(f"[WARN] {PAYLOADS_META_FILE} 없음. generate_payloads.py가 meta를 저장하도록 수정되어야 합니다.")
-        return
-
-    with open(PAYLOADS_META_FILE, encoding="utf-8") as f:
-        points_meta = json.load(f)
-
-    with open(PAYLOADS_FILE, encoding="utf-8") as f:
-        payloads = json.load(f)
-
-    targets = None
-    if os.path.exists(TARGETS_FILE):
-        with open(TARGETS_FILE, encoding="utf-8") as f:
-            targets = json.load(f)
-
-    print(f"meta={len(points_meta)} payload_points={len(payloads)}")
-    tasks = build_tasks(points_meta, payloads, targets)
-
-    with open(FUZZ_TASKS_FILE, "w", encoding="utf-8") as f:
-        json.dump(tasks, f, ensure_ascii=False, indent=2)
-
-    replace_ = sum(1 for t in tasks if t.get("inject_mode") == "replace")
-    append_  = sum(1 for t in tasks if t.get("inject_mode") == "append")
-    print(f"완료: {len(tasks)} 태스크 → {FUZZ_TASKS_FILE}")
-    print(f"         mode  → replace: {replace_}, append: {append_}")
-
-
-def _task_execute():
-    from fuzzer.executor import execute
-
-    if not os.path.exists(FUZZ_TASKS_FILE):
-        print(f"[ERROR] {FUZZ_TASKS_FILE} 없음.  전략 수립을 먼저 실행하세요.")
-        return
-
-    with open(FUZZ_TASKS_FILE, encoding="utf-8") as f:
-        tasks = json.load(f)
-
-    print(f"{len(tasks)} 태스크 실행 시작")
-    results = execute(tasks, timeout=10, delay=0.0, output_file=EXEC_RESULTS_FILE)
-
-    ok      = sum(1 for r in results if r["error"] is None)
-    timeout = sum(1 for r in results if r["error"] == "timeout")
-    err     = sum(1 for r in results if r["error"] and r["error"] != "timeout")
-    print(f"완료: 성공 {ok} / 타임아웃 {timeout} / 오류 {err} → {EXEC_RESULTS_FILE}")
-
-
-def _task_validate():
-    """Step 8.5: Validator - 응답 분석 → 취약점 판정"""
-    from fuzzer.validator import run as validate_run
-
-    if not os.path.exists(EXEC_RESULTS_FILE):
-        print(f"[ERROR] {EXEC_RESULTS_FILE} 없음. Step 8 실행을 먼저 하세요.")
-        return
-
-    print(f"[Validator] {EXEC_RESULTS_FILE} 분석 중...")
-    findings = validate_run(input_file=EXEC_RESULTS_FILE, output_file=FINDINGS_FILE)
-
-    xss_cnt  = sum(1 for f in findings if "xss" in (f.get("vuln_type") or "").lower())
-    sqli_cnt = sum(1 for f in findings if "sqli" in (f.get("vuln_type") or "").lower() or "sql" in (f.get("vuln_type") or "").lower())
-
-    print(f"[Validator] 완료: 취약점 {len(findings)}개 발견 → {FINDINGS_FILE}")
-    print(f"           XSS: {xss_cnt}개  /  SQLi: {sqli_cnt}개")
-    for f in findings:
-        print(f"  [{f['vuln_type']:20s}] {f['point']} | {f['payload'][:50]} | {f['evidence']}")
-
-
-def _task_all(skip_crawl: bool = False, skip_payload: bool = False):
-    if skip_crawl:
-        print(f"[건너뜀] 크롤링 — {CRAWL_RESULT_FILE} 재사용")
-    else:
-        _task_crawl()
-
-    if skip_payload:
-        print(f"[건너뜀] 페이로드 생성 — {PAYLOADS_FILE} 재사용")
-    else:
-        _task_payload()
-
-    _task_scan()
-
-
-_TASK_FUNCS = {
-    "crawl"   : _task_crawl,
-    "payload" : _task_payload,
-    "scan"    : _task_scan,
-    "fuzz"    : _task_fuzz,
-    "execute" : _task_execute,
-    "validate": _task_validate,
-    "all"     : _task_all,
-}
-
-_TASK_LABELS = {
-    "crawl"   : "크롤링 + 타겟 구성",
-    "payload" : "LLM 페이로드 생성",
-    "scan"    : "스캔 실행",
-    "fuzz"    : " · 전략 수립",
-    "execute" : " · 실행",
-    "validate": " · 취약점 판정",
-    "all"     : "전체 파이프라인",
-}
 
 
 # ── SSE 라우트 ────────────────────────────────────────────────────
 
 @app.route("/stream/<task>")
 def stream_task(task):
-    if task not in _TASK_FUNCS:
+    if task not in tasks.TASK_FUNCS:
         return "알 수 없는 태스크", 404
 
     skip_crawl   = request.args.get("skip_crawl")   == "1"
@@ -311,9 +143,9 @@ def stream_task(task):
         _thread_local.log_queue = q
         try:
             if task == "all":
-                _task_all(skip_crawl=skip_crawl, skip_payload=skip_payload)
+                tasks.TASK_FUNCS["all"](skip_crawl=skip_crawl, skip_payload=skip_payload)
             else:
-                _TASK_FUNCS[task]()
+                tasks.TASK_FUNCS[task]()
         except Exception as exc:
             q.put(f"[ERROR] {type(exc).__name__}: {exc}")
         finally:
@@ -324,7 +156,7 @@ def stream_task(task):
     threading.Thread(target=run_in_thread, daemon=True).start()
 
     def generate():
-        label = _TASK_LABELS.get(task, task)
+        label = tasks.TASK_LABELS.get(task, task)
         yield f"data: [{label}] 시작\n\n"
         while True:
             try:
@@ -350,20 +182,20 @@ def stream_task(task):
 
 def _get_file_status():
     return [
-        ("crawl_result.json",      os.path.exists(CRAWL_RESULT_FILE)),
-        ("targets.json",           os.path.exists(TARGETS_FILE)),
-        ("payloads_llm.json",      os.path.exists(PAYLOADS_FILE)),
-        ("scan_results_llm.json",  os.path.exists(SCAN_RESULTS_FILE)),
-        ("fuzz_tasks.json",        os.path.exists(FUZZ_TASKS_FILE)),
-        ("execution_results.json", os.path.exists(EXEC_RESULTS_FILE)),
+        ("crawl_result.json",      os.path.exists(tasks.CRAWL_RESULT_FILE)),
+        ("targets.json",           os.path.exists(tasks.TARGETS_FILE)),
+        ("payloads_llm.json",      os.path.exists(tasks.PAYLOADS_FILE)),
+        ("scan_results_llm.json",  os.path.exists(tasks.SCAN_RESULTS_FILE)),
+        ("fuzz_tasks.json",        os.path.exists(tasks.FUZZ_TASKS_FILE)),
+        ("execution_results.json", os.path.exists(tasks.EXEC_RESULTS_FILE)),
     ]
 
 
 def _get_quick_summary():
-    if not os.path.exists(SCAN_RESULTS_FILE):
+    if not os.path.exists(tasks.SCAN_RESULTS_FILE):
         return None
     try:
-        with open(SCAN_RESULTS_FILE, encoding="utf-8") as f:
+        with open(tasks.SCAN_RESULTS_FILE, encoding="utf-8") as f:
             results = json.load(f)
         total = len(results)
         vulns = sum(1 for r in results if r.get("vulnerable"))
@@ -373,10 +205,10 @@ def _get_quick_summary():
 
 
 def _get_exec_summary():
-    if not os.path.exists(EXEC_RESULTS_FILE):
+    if not os.path.exists(tasks.EXEC_RESULTS_FILE):
         return None
     try:
-        with open(EXEC_RESULTS_FILE, encoding="utf-8") as f:
+        with open(tasks.EXEC_RESULTS_FILE, encoding="utf-8") as f:
             results = json.load(f)
         total   = len(results)
         ok      = sum(1 for r in results if r.get("error") is None)
@@ -434,6 +266,7 @@ _MAIN_HTML = """\
 <nav class="navbar navbar-light mb-4 px-3">
   <div class="container-fluid">
     <span class="navbar-brand fw-bold fs-4 me-3">LADS</span>
+    <a href="/config" class="btn btn-outline-dark btn-sm ms-auto">설정</a>
   </div>
 </nav>
 
@@ -798,7 +631,7 @@ def index():
     return render_template_string(
         _MAIN_HTML,
         cms_name     = CMS_NAME,
-        base_url     = BASE_URL,
+        base_url     = tasks.BASE_URL,
         file_status  = _get_file_status(),
         summary      = _get_quick_summary(),
         exec_summary = _get_exec_summary(),
@@ -820,10 +653,10 @@ def __debug_build():
 
 @app.route("/results")
 def results_page():
-    if not os.path.exists(SCAN_RESULTS_FILE):
+    if not os.path.exists(tasks.SCAN_RESULTS_FILE):
         return render_template_string(_RESULTS_HTML, results=None, total=0, n_vuln=0, rate=0.0)
     try:
-        with open(SCAN_RESULTS_FILE, encoding="utf-8") as f:
+        with open(tasks.SCAN_RESULTS_FILE, encoding="utf-8") as f:
             results = json.load(f)
     except Exception as exc:
         return f"결과 파일 읽기 오류: {exc}", 500
@@ -832,6 +665,156 @@ def results_page():
     n_vuln = sum(1 for r in results if r.get("vulnerable"))
     rate   = n_vuln / max(total, 1) * 100
     return render_template_string(_RESULTS_HTML, results=results, total=total, n_vuln=n_vuln, rate=rate)
+
+
+_CONFIG_HTML = """\
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <title>LADS - 설정</title>
+""" + _COMMON_HEAD + """
+</head>
+<body>
+<nav class="navbar navbar-light mb-4 px-3">
+  <div class="container-fluid">
+    <span class="navbar-brand fw-bold fs-4 me-3">LADS</span>
+    <span class="text-secondary me-auto">설정</span>
+    <a href="/" class="btn btn-outline-dark btn-sm">대시보드</a>
+  </div>
+</nav>
+
+<div class="container" style="max-width:640px;">
+  {% if saved %}
+  <div class="alert" style="background:#f0fdf4;border:1px solid #86efac;color:#111;">
+    저장 완료. 다음 태스크 실행부터 반영됩니다.
+  </div>
+  {% endif %}
+
+  <form method="POST">
+
+    <div class="card mb-3">
+      <div class="card-header fw-semibold">스캔 대상</div>
+      <div class="card-body">
+        <div class="mb-3">
+          <label class="form-label fw-semibold">타겟 URL <code>TARGET_URL</code></label>
+          <input type="text" name="TARGET_URL" value="{{ TARGET_URL }}"
+                 class="form-control font-monospace" placeholder="http://example.com">
+        </div>
+      </div>
+    </div>
+
+    <div class="card mb-3">
+      <div class="card-header fw-semibold">로그인 설정</div>
+      <div class="card-body">
+
+        <div class="mb-3">
+          <label class="form-label fw-semibold">로그인 URL <code>LOGIN_URL</code></label>
+          <input type="text" name="LOGIN_URL" value="{{ LOGIN_URL }}"
+                 class="form-control font-monospace" placeholder="http://example.com/login">
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label fw-semibold">로그인 메서드 <code>LOGIN_METHOD</code></label>
+          <select name="LOGIN_METHOD" class="form-select">
+            <option value="POST" {% if LOGIN_METHOD == "POST" %}selected{% endif %}>POST</option>
+            <option value="GET"  {% if LOGIN_METHOD == "GET"  %}selected{% endif %}>GET</option>
+          </select>
+        </div>
+
+        <div class="row mb-3">
+          <div class="col">
+            <label class="form-label fw-semibold">ID 필드명 (폴백용) <code>LOGIN_ID_FIELD</code></label>
+            <input type="text" name="LOGIN_ID_FIELD" value="{{ LOGIN_ID_FIELD }}"
+                   class="form-control font-monospace" placeholder="mb_id">
+          </div>
+          <div class="col">
+            <label class="form-label fw-semibold">PW 필드명 (폴백용)<code>LOGIN_PASSWORD_FIELD</code></label>
+            <input type="text" name="LOGIN_PASSWORD_FIELD" value="{{ LOGIN_PASSWORD_FIELD }}"
+                   class="form-control font-monospace" placeholder="mb_password">
+          </div>
+        </div>
+
+        <div class="row mb-3">
+          <div class="col">
+            <label class="form-label fw-semibold">아이디 <code>LOGIN_ID</code></label>
+            <input type="text" name="LOGIN_ID" value="{{ LOGIN_ID }}" class="form-control">
+          </div>
+          <div class="col">
+            <label class="form-label fw-semibold">비밀번호 <code>LOGIN_PASSWORD</code></label>
+            <input type="password" name="LOGIN_PASSWORD" value="{{ LOGIN_PASSWORD }}"
+                   class="form-control">
+          </div>
+        </div>
+
+        <hr style="border-color:#e5e7eb;">
+        <p class="text-secondary small mb-2">
+          아래 지시자 중 하나 이상을 설정하면 로그인 성공 여부를 자동 판단합니다.
+        </p>
+        <p class="text-secondary small mb-2">
+          ID/PW 필드명은 선택 입력입니다. 비워두면 로그인 폼에서 자동 탐지를 시도하고, 실패 시 이 값을 사용합니다.
+        </p>
+
+        <div class="mb-3">
+          <label class="form-label fw-semibold">성공 문자열 <code>LOGIN_SUCCESS_INDICATOR</code></label>
+          <input type="text" name="LOGIN_SUCCESS_INDICATOR" value="{{ LOGIN_SUCCESS_INDICATOR }}"
+                 class="form-control" placeholder="로그아웃 / 마이페이지 등">
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label fw-semibold">성공 URL 키워드 <code>LOGIN_SUCCESS_URL_KEYWORD</code></label>
+          <input type="text" name="LOGIN_SUCCESS_URL_KEYWORD" value="{{ LOGIN_SUCCESS_URL_KEYWORD }}"
+                 class="form-control" placeholder="main / dashboard 등">
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label fw-semibold">실패 문자열 <code>LOGIN_FAIL_INDICATOR</code></label>
+          <input type="text" name="LOGIN_FAIL_INDICATOR" value="{{ LOGIN_FAIL_INDICATOR }}"
+                 class="form-control" placeholder="비밀번호가 틀렸습니다 등">
+        </div>
+
+      </div>
+    </div>
+
+    <button type="submit" class="btn btn-dark mb-4">저장</button>
+  </form>
+</div>
+</body>
+</html>"""
+
+
+@app.route("/config", methods=["GET", "POST"])
+def config_page():
+    import tasks
+    env_path = str(Path(__file__).parent / ".env")
+    saved = False
+
+    if request.method == "POST":
+        for key in [
+            "TARGET_URL",
+            "LOGIN_URL", "LOGIN_METHOD",
+            "LOGIN_ID_FIELD", "LOGIN_PASSWORD_FIELD",
+            "LOGIN_ID", "LOGIN_PASSWORD",
+            "LOGIN_SUCCESS_INDICATOR", "LOGIN_SUCCESS_URL_KEYWORD", "LOGIN_FAIL_INDICATOR",
+        ]:
+            set_key(env_path, key, request.form.get(key, ""))
+        load_dotenv(dotenv_path=env_path, override=True)
+        tasks.reload_config()
+        saved = True
+
+    return render_template_string(
+        _CONFIG_HTML,
+        saved                    = saved,
+        TARGET_URL               = os.getenv("TARGET_URL", ""),
+        LOGIN_URL                = os.getenv("LOGIN_URL", ""),
+        LOGIN_METHOD             = os.getenv("LOGIN_METHOD", "POST"),
+        LOGIN_ID_FIELD           = os.getenv("LOGIN_ID_FIELD", ""),
+        LOGIN_PASSWORD_FIELD     = os.getenv("LOGIN_PASSWORD_FIELD", ""),
+        LOGIN_ID                 = os.getenv("LOGIN_ID", ""),
+        LOGIN_PASSWORD           = os.getenv("LOGIN_PASSWORD", ""),
+        LOGIN_SUCCESS_INDICATOR  = os.getenv("LOGIN_SUCCESS_INDICATOR", ""),
+        LOGIN_SUCCESS_URL_KEYWORD= os.getenv("LOGIN_SUCCESS_URL_KEYWORD", ""),
+        LOGIN_FAIL_INDICATOR     = os.getenv("LOGIN_FAIL_INDICATOR", ""),
+    )
 
 
 _FINDINGS_HTML = """\
@@ -910,10 +893,10 @@ _FINDINGS_HTML = """\
 
 @app.route("/findings")
 def findings_page():
-    if not os.path.exists(FINDINGS_FILE):
+    if not os.path.exists(tasks.FINDINGS_FILE):
         return render_template_string(_FINDINGS_HTML, findings=None, xss_cnt=0, sqli_cnt=0)
     try:
-        with open(FINDINGS_FILE, encoding="utf-8") as f:
+        with open(tasks.FINDINGS_FILE, encoding="utf-8") as f:
             findings = json.load(f)
     except Exception as exc:
         return f"결과 파일 읽기 오류: {exc}", 500
@@ -924,10 +907,10 @@ def findings_page():
 
 @app.route("/exec_results")
 def exec_results_page():
-    if not os.path.exists(EXEC_RESULTS_FILE):
+    if not os.path.exists(tasks.EXEC_RESULTS_FILE):
         return render_template_string(_EXEC_HTML, results=None, total=0, ok=0, timeout=0, err=0)
     try:
-        with open(EXEC_RESULTS_FILE, encoding="utf-8") as f:
+        with open(tasks.EXEC_RESULTS_FILE, encoding="utf-8") as f:
             results = json.load(f)
     except Exception as exc:
         return f"결과 파일 읽기 오류: {exc}", 500
@@ -944,5 +927,5 @@ def exec_results_page():
 if __name__ == "__main__":
     os.makedirs("results", exist_ok=True)
     print(f"LADS 대시보드 시작: http://localhost:5000")
-    print(f"타겟: {BASE_URL}")
+    print(f"타겟: {tasks.BASE_URL}")
     app.run(host="0.0.0.0", port=5000, debug=False, threaded=True)

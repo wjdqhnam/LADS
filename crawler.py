@@ -13,11 +13,19 @@ from typing import Optional
 
 load_dotenv()
 
-BASE_URL = os.getenv("TARGET_URL", "http://localhost")
-OUTPUT_FILE = os.getenv("OUTPUT_FILE", "crawl_result.json")
-LOGIN_URL      = os.getenv("LOGIN_URL", "")
-LOGIN_ID       = os.getenv("LOGIN_ID", "")
-LOGIN_PASSWORD = os.getenv("LOGIN_PASSWORD", "")
+BASE_URL = os.getenv("TARGET_URL", "http://localhost:8080")
+OUTPUT_FILE = os.getenv("OUTPUT_FILE", "results/crawl_result.json")
+
+# 로그인 관련 변수
+LOGIN_URL                 = os.getenv("LOGIN_URL", "")
+LOGIN_METHOD              = os.getenv("LOGIN_METHOD", "POST").upper()
+LOGIN_ID_FIELD            = os.getenv("LOGIN_ID_FIELD", "")
+LOGIN_PASSWORD_FIELD      = os.getenv("LOGIN_PASSWORD_FIELD", "")
+LOGIN_ID                  = os.getenv("LOGIN_ID", "")
+LOGIN_PASSWORD            = os.getenv("LOGIN_PASSWORD", "")
+LOGIN_SUCCESS_INDICATOR   = os.getenv("LOGIN_SUCCESS_INDICATOR", "")
+LOGIN_SUCCESS_URL_KEYWORD = os.getenv("LOGIN_SUCCESS_URL_KEYWORD", "")
+LOGIN_FAIL_INDICATOR      = os.getenv("LOGIN_FAIL_INDICATOR", "")
 
 
 # robots.txt/sitemap.xml 자동 발견 실패 시 사용하는 fallback 경로
@@ -88,8 +96,8 @@ class Crawler:
         self.base_url = base_url.rstrip("/")
         self.parsed_base = urlparse(base_url)
 
-        self.session = requests.Session() # 세션 사용으로 쿠키 유지 및 연결 재사용
-        self.session.headers.update({     # 요청 헤더를 브라우저 처럼 설정
+        self.session = requests.Session()
+        self.session.headers.update({
             "User-Agent": (
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
                 "AppleWebKit/537.36 (KHTML, like Gecko) "
@@ -98,6 +106,8 @@ class Crawler:
             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
             "Accept-Language": "ko-KR,ko;q=0.9,en;q=0.8",
         })
+
+        self.auth_cookies: dict = {}  # 로그인 성공시 쿠키가 저장되는 dict
 
         self.visited: set[str] = set()
         self.queue: deque[str] = deque()
@@ -336,7 +346,245 @@ class Crawler:
             return None
 
 
+    # 로그인 폼의 hidden input 추출
+    def _extract_hidden_inputs(self, form_tag: BeautifulSoup) -> dict:
+        hidden = {}
+
+        if not form_tag:
+            return hidden
+
+        for inp in form_tag.find_all("input", {"type": "hidden"}):
+            name = inp.get("name")
+            if name:
+                hidden[name] = inp.get("value", "")
+
+        return hidden
+
+
+    # ID/PW 필드가 포함된 로그인 form 탐색
+    def _find_login_form(self, soup: BeautifulSoup, id_field: str = "", password_field: str = ""):
+        forms = soup.find_all("form")
+
+        if id_field and password_field:
+            for form in forms:
+                has_id = form.find("input", {"name": id_field})
+                has_pw = form.find("input", {"name": password_field})
+
+                if has_id and has_pw:
+                    return form
+
+        for form in forms:
+            if self._infer_login_fields(form, id_field, password_field):
+                return form
+
+        return soup.find("form")
+    
+    
+    def _infer_login_fields(self, form_tag: BeautifulSoup, id_field: str = "", password_field: str = "") -> Optional[tuple[str, str]]:
+        inputs = form_tag.find_all("input")
+
+        password_name = password_field if password_field and form_tag.find("input", {"name": password_field}) else ""
+        if not password_name:
+            for inp in inputs:
+                name = inp.get("name", "")
+                input_type = inp.get("type", "text").lower()
+                haystack = " ".join([
+                    name,
+                    inp.get("id", ""),
+                    inp.get("placeholder", ""),
+                    inp.get("autocomplete", ""),
+                ]).lower()
+
+                if name and (input_type == "password" or "pass" in haystack or "passwd" in haystack or "pw" in haystack):
+                    password_name = name
+                    break
+
+        id_name = id_field if id_field and form_tag.find("input", {"name": id_field}) else ""
+        if not id_name:
+            candidates = []
+            for idx, inp in enumerate(inputs):
+                name = inp.get("name", "")
+                input_type = inp.get("type", "text").lower()
+                if not name or name == password_name or input_type in {"hidden", "password", "submit", "button", "checkbox", "radio"}:
+                    continue
+
+                haystack = " ".join([
+                    name,
+                    inp.get("id", ""),
+                    inp.get("placeholder", ""),
+                    inp.get("autocomplete", ""),
+                ]).lower()
+
+                score = 0
+                if input_type in {"text", "email", "tel"}:
+                    score += 2
+                if any(token in haystack for token in ["login", "user", "userid", "username", "email", "member", "mb_id", "id"]):
+                    score += 5
+                if "email" in haystack:
+                    score += 2
+                if password_name:
+                    password_idx = next((i for i, p in enumerate(inputs) if p.get("name") == password_name), idx)
+                    if idx < password_idx:
+                        score += 1
+
+                candidates.append((score, -idx, name))
+
+            if candidates:
+                id_name = max(candidates)[2]
+
+        if id_name and password_name:
+            return id_name, password_name
+        return None
+
+
+    def _heuristic_login_check(
+        self,
+        post_resp: requests.Response,
+        login_url: str,
+        login_password_field: str,
+        pre_post_cookies: set,
+    ) -> Optional[str]:
+        """성공/실패 지시자가 없을 때 휴리스틱으로 로그인 성공 여부 판단.
+        성공 근거 문자열 반환, 판단 불가면 None."""
+
+        # 1. 리다이렉트: 최종 URL 경로가 로그인 URL과 다르면 성공 추정
+        login_path = urlparse(login_url).path.rstrip("/") or "/"
+        final_path = urlparse(post_resp.url).path.rstrip("/") or "/"
+        if final_path != login_path:
+            return f"로그인 페이지 이탈 ({post_resp.url})"
+
+        # 2. 폼 소멸: 로그인 URL 재요청 시 비밀번호 필드가 사라졌으면 성공 추정
+        try:
+            recheck = self.session.get(login_url, timeout=CrawlConfig.TIMEOUT, allow_redirects=True)
+            recheck_soup = BeautifulSoup(recheck.text, "lxml")
+            if login_password_field and not recheck_soup.find("input", {"name": login_password_field}):
+                return f"'{login_password_field}' 필드 소멸"
+            if not recheck_soup.find("input", {"type": "password"}):
+                return "비밀번호 입력 필드 소멸"
+        except requests.RequestException:
+            pass
+
+        # 3. 신규 쿠키: POST 이후 없던 쿠키가 생겼으면 성공 추정
+        new_cookies = set(self.session.cookies.keys()) - pre_post_cookies
+        if new_cookies:
+            return f"신규 쿠키 생성: {new_cookies}"
+
+        return None
+
+
+    # 로그인 수행 후 auth_cookies에 세션 쿠키 저장
+    def login(self) -> bool:
+        login_url = os.getenv("LOGIN_URL", LOGIN_URL)
+        login_method = os.getenv("LOGIN_METHOD", LOGIN_METHOD).upper()
+        login_id_field = os.getenv("LOGIN_ID_FIELD", LOGIN_ID_FIELD)
+        login_password_field = os.getenv("LOGIN_PASSWORD_FIELD", LOGIN_PASSWORD_FIELD)
+        login_id = os.getenv("LOGIN_ID", LOGIN_ID)
+        login_password = os.getenv("LOGIN_PASSWORD", LOGIN_PASSWORD)
+        login_success_indicator = os.getenv("LOGIN_SUCCESS_INDICATOR", LOGIN_SUCCESS_INDICATOR)
+        login_success_url_keyword = os.getenv("LOGIN_SUCCESS_URL_KEYWORD", LOGIN_SUCCESS_URL_KEYWORD)
+        login_fail_indicator = os.getenv("LOGIN_FAIL_INDICATOR", LOGIN_FAIL_INDICATOR)
+
+        if not login_url:
+            print("[LOGIN] LOGIN_URL 미설정 — 로그인 건너뜀", file=sys.stderr)
+            return False
+
+        try:
+            get_resp = self.session.get(
+                login_url,
+                timeout=CrawlConfig.TIMEOUT,
+                allow_redirects=True,
+            )
+        except requests.RequestException as e:
+            print(f"[LOGIN] GET 실패: {e}", file=sys.stderr)
+            return False
+
+        soup = BeautifulSoup(get_resp.text, "lxml")
+
+        form_tag = self._find_login_form(soup, login_id_field, login_password_field)
+
+        if not form_tag:
+            print("[LOGIN] 로그인 form을 찾지 못함", file=sys.stderr)
+            return False
+
+        inferred = self._infer_login_fields(form_tag, login_id_field, login_password_field)
+        if not inferred:
+            print("[LOGIN] ID/PW 필드 자동 탐지 실패 — LOGIN_ID_FIELD / LOGIN_PASSWORD_FIELD 설정 필요", file=sys.stderr)
+            return False
+
+        login_id_field, login_password_field = inferred
+        print(f"[LOGIN] 필드 사용 — id={login_id_field}, password={login_password_field}")
+
+        payload = self._extract_hidden_inputs(form_tag)
+        payload[login_id_field] = login_id
+        payload[login_password_field] = login_password
+
+        post_url = login_url
+        if form_tag.get("action"):
+            post_url = urljoin(login_url, form_tag.get("action"))
+
+        method = (login_method or "POST").upper()
+        pre_post_cookies = set(self.session.cookies.keys())
+
+        try:
+            if method == "GET":
+                post_resp = self.session.get(
+                    post_url,
+                    params=payload,
+                    timeout=CrawlConfig.TIMEOUT,
+                    allow_redirects=True,
+                )
+            else:
+                post_resp = self.session.post(
+                    post_url,
+                    data=payload,
+                    timeout=CrawlConfig.TIMEOUT,
+                    allow_redirects=True,
+                )
+        except requests.RequestException as e:
+            print(f"[LOGIN] 요청 실패: {e}", file=sys.stderr)
+            return False
+
+        body_lower = post_resp.text.lower()
+        final_url_lower = post_resp.url.lower()
+
+        fail_indicator = (login_fail_indicator or "").lower()
+        success_indicator = (login_success_indicator or "").lower()
+        success_url_keyword = (login_success_url_keyword or "").lower()
+
+        # 실패 지시자가 있으면 최우선 실패 처리
+        if fail_indicator and fail_indicator in body_lower:
+            print(f"[LOGIN] 실패 — 실패 지시자 감지: {login_fail_indicator}", file=sys.stderr)
+            return False
+
+        # 성공 지시자 기반 판단
+        if success_indicator and success_indicator in body_lower:
+            self.auth_cookies = self.session.cookies.get_dict()
+            print(f"[LOGIN] 성공 — 성공 지시자 감지, 쿠키 {len(self.auth_cookies)}개")
+            return True
+
+        # 리다이렉트 최종 URL 기반 판단
+        if success_url_keyword and success_url_keyword in final_url_lower:
+            self.auth_cookies = self.session.cookies.get_dict()
+            print(f"[LOGIN] 성공 — URL 키워드 감지: {post_resp.url}, 쿠키 {len(self.auth_cookies)}개")
+            return True
+
+        # 명시적 지시자 없음 — 휴리스틱 판단
+        reason = self._heuristic_login_check(post_resp, login_url, login_password_field, pre_post_cookies)
+        if reason:
+            self.auth_cookies = self.session.cookies.get_dict()
+            print(f"[LOGIN] 성공 추정 (휴리스틱) — {reason}, 쿠키 {len(self.auth_cookies)}개")
+            print("[HINT] 정확한 판단을 위해 LOGIN_SUCCESS_INDICATOR 또는 LOGIN_SUCCESS_URL_KEYWORD 설정을 권장합니다")
+            return True
+
+        print("[LOGIN] 로그인 실패 — 성공 근거를 찾지 못했습니다", file=sys.stderr)
+        return False
+
+
     def crawl(self, extra_seeds: list[str] = None) -> list[PageResult]:
+        if os.getenv("LOGIN_URL", LOGIN_URL):
+            if not self.login():
+                print("[WARN] 로그인 실패 — 비로그인 상태로 크롤링을 계속합니다.", file=sys.stderr)
+
         seeds = self._discover_seeds()
         if extra_seeds:
             seeds.extend(extra_seeds)
@@ -444,6 +692,10 @@ class Crawler:
                 ],
                 "links_count": len(r.links),
             })
+        parent = os.path.dirname(path)
+        if parent:
+            os.makedirs(parent, exist_ok=True)
+
         with open(path, "w", encoding="utf-8") as fp:
             json.dump(data, fp, ensure_ascii=False, indent=2)
         print(f"결과 저장: {path}")
@@ -457,7 +709,9 @@ class Crawler:
         get_forms = [(url, f) for url, f in all_forms if f.method == "GET"]
 
         sep = "=" * 60
-        log_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "sum_log.txt")
+        log_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "log")
+        os.makedirs(log_dir, exist_ok=True)
+        log_path = os.path.join(log_dir, "sum_log.txt")
 
         # 로그 파일에 요약 저장
         with open(log_path, "w", encoding="utf-8") as log:
@@ -500,7 +754,7 @@ class Crawler:
 
 
 if __name__ == "__main__":
-    if not BASE_URL or BASE_URL == "http://localhost":
+    if not BASE_URL or BASE_URL == "http://localhost:8080":
         print("[ERROR] TARGET_URL이 .env에 설정되지 않았습니다.", file=sys.stderr)
         sys.exit(1)
 

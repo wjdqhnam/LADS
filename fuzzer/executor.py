@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import time
 from typing import Any
 
@@ -176,6 +177,10 @@ def execute(
             )
 
     if output_file:
+        parent = os.path.dirname(output_file)
+        if parent:
+            os.makedirs(parent, exist_ok=True)
+
         with open(output_file, "w", encoding="utf-8") as f:
             json.dump(results, f, ensure_ascii=False, indent=2)
 
