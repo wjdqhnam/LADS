@@ -54,11 +54,11 @@ INPUT_POINTS = [
     },
     {
         "name":    "xss_qalist_stx",
-        "url":     "http://34.68.27.120:8081/bbs/qalist.php",
+        "url":     "http://34.68.27.120:8081/bbs/board.php",
         "method":  "GET",
         "param":   "stx",
         "type":    "reflected_xss",
-        "note":    "Q&A 검색창 - search.php와 동일 패턴",
+        "note":    "Q&A 게시판 검색창 - board.php?bo_table=qa, search.php와 동일 stx 패턴",
         "vuln_types": ["xss_search"],
     },
     {
@@ -114,12 +114,12 @@ INPUT_POINTS = [
     },
     {
         "name":    "sqli_qalist_sfl",
-        "url":     "http://34.68.27.120:8081/bbs/qalist.php",
+        "url":     "http://34.68.27.120:8081/bbs/board.php",
         "method":  "GET",
         "param":   "sfl",
         "type":    "string",
         "db":      "MySQL",
-        "note":    "Q&A 검색 필드 선택자 - search.php sfl과 동일 패턴",
+        "note":    "Q&A 게시판 검색 필드 선택자 - board.php?bo_table=qa, search.php sfl과 동일 패턴",
         "vuln_types": ["sqli_field"],
     },
 ]
@@ -127,7 +127,7 @@ INPUT_POINTS = [
 COUNT = 5  # 타입당 페이로드 수
 
 
-def run(out_file: str = "payloads_v2.json"):
+def run(out_file: str = "results/payloads_llm.json"):
     print(f"\n{'='*60}")
     print(f"  Gnuboard5 Payload Generator v2")
     print(f"  Target: http://34.68.27.120:8081/")
@@ -193,7 +193,7 @@ def run(out_file: str = "payloads_v2.json"):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--out", default="results/payloads_v2.json")
+    parser.add_argument("--out", default="results/payloads_llm.json")
     args = parser.parse_args()
     run(args.out)
     try:

