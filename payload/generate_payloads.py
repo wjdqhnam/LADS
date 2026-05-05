@@ -168,6 +168,7 @@ def run(out_file: str = "results/payloads_llm.json"):
         print()
 
     # 저장
+    os.makedirs(os.path.dirname(out_file) or ".", exist_ok=True)
     with open(out_file, "w", encoding="utf-8") as f:
         json.dump(all_results, f, ensure_ascii=False, indent=2)
 
