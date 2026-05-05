@@ -124,7 +124,7 @@ INPUT_POINTS = [
     },
 ]
 
-COUNT = 5  # 타입당 페이로드 수
+COUNT = 7  # 타입당 페이로드 수
 
 
 def run(out_file: str = "results/payloads_llm.json"):

