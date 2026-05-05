@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}LADS{% endblock %}</title>
+  <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700;800;900&family=Inter:wght@400;500;600;700;900&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            background: '#f7f9fb',
+            primary: '#091426',
+            surface: '#ffffff',
+            'surface-soft': '#f2f4f6',
+            'surface-line': '#d6dbe3',
+            muted: '#5d6675',
+            error: '#ba1a1a'
+          },
+          fontFamily: {
+            sans: ['Noto Sans KR', 'Inter', 'system-ui', 'sans-serif'],
+            mono: ['ui-monospace', 'SFMono-Regular', 'Consolas', 'monospace']
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    * { letter-spacing: 0; }
+    body { font-family: "Noto Sans KR", Inter, system-ui, sans-serif; }
+    .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 450, 'GRAD' 0, 'opsz' 24; }
+    .nav-link {
+      display: flex; align-items: center; gap: 14px;
+      padding: 16px 24px; color: #64748b; font-size: 15px;
+      transition: background .15s ease, color .15s ease;
+    }
+    .nav-link:hover { background: #f8fafc; color: #334155; }
+    .nav-active {
+      background: #eef2f7; color: #0f172a;
+      border-right: 4px solid #0f172a; font-weight: 800;
+    }
+  </style>
+</head>
+<body class="min-h-screen bg-background text-[15px] text-slate-950 antialiased">
+  {% set path = request.path %}
+  <nav class="fixed left-0 top-0 z-40 hidden h-full w-64 flex-col border-r border-slate-200 bg-white font-medium text-slate-900 md:flex">
+    <form class="p-5" method="POST" action="/runs/new">
+      <button class="flex h-12 w-full items-center justify-center gap-2 rounded-sm bg-slate-800 text-[15px] font-bold text-white hover:bg-slate-900" type="submit">
+        <span class="material-symbols-outlined text-[20px]">add</span>
+        신규 스캔 시작
+      </button>
+    </form>
+
+    <div class="flex-1 overflow-y-auto py-3">
+      <a class="nav-link {% if path == '/' %}nav-active{% endif %}" href="/">
+        <span class="material-symbols-outlined">timeline</span>
+        파이프라인 모니터
+      </a>
+      <a class="nav-link {% if path == '/results' %}nav-active{% endif %}" href="/results">
+        <span class="material-symbols-outlined">fact_check</span>
+        스캔 결과
+      </a>
+      <a class="nav-link {% if path == '/exec_results' %}nav-active{% endif %}" href="/exec_results">
+        <span class="material-symbols-outlined">terminal</span>
+        실행 결과
+      </a>
+      <a class="nav-link {% if path == '/findings' %}nav-active{% endif %}" href="/findings">
+        <span class="material-symbols-outlined">security</span>
+        취약점 목록
+      </a>
+      <a class="nav-link {% if path == '/targets' %}nav-active{% endif %}" href="/targets">
+        <span class="material-symbols-outlined">gps_fixed</span>
+        타깃 환경
+      </a>
+      <a class="nav-link {% if path == '/runs' %}nav-active{% endif %}" href="/runs">
+        <span class="material-symbols-outlined">history</span>
+        실행 이력
+      </a>
+    </div>
+  </nav>
+
+  <div class="min-h-screen md:ml-64">
+    <header class="flex h-14 items-center justify-between border-b border-slate-200 bg-white px-5 md:hidden">
+      <button type="button" onclick="toggleMenu()" aria-label="메뉴 열기">
+        <span class="material-symbols-outlined">menu</span>
+      </button>
+      <span class="text-lg font-black">LADS</span>
+    </header>
+
+    <nav id="mobile-menu" class="hidden border-b border-slate-200 bg-white px-6 py-4 text-[15px] font-bold md:hidden">
+      <div class="grid gap-4">
+        <a href="/">파이프라인 모니터</a>
+        <a href="/results">스캔 결과</a>
+        <a href="/exec_results">실행 결과</a>
+        <a href="/findings">취약점 목록</a>
+        <a href="/targets">타깃 환경</a>
+        <a href="/runs">실행 이력</a>
+      </div>
+    </nav>
+
+    <main class="min-h-screen bg-background px-8 py-8 md:px-10 md:py-10 2xl:px-14">
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+
+  <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

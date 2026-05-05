@@ -72,11 +72,15 @@ def _check_time(elapsed: float, threshold: float = 4.5) -> tuple[bool, str]:
     return False, ""
 
 
-def validate(results: list[dict]) -> list[dict]:
+def validate(results: list[dict], progress_callback=None) -> list[dict]:  # 로딩바 콜백 함수
     """executor 결과 리스트 -> 취약 판정 findings 리스트"""
     findings = []
+    total = len(results)
 
-    for r in results:
+    for idx, r in enumerate(results):
+        if progress_callback:  # 로딩바 콜백 함수
+            progress_callback(idx + 1, total)
+
         if r.get("error") or not r.get("response_body"):
             continue
 
@@ -123,11 +127,12 @@ def validate(results: list[dict]) -> list[dict]:
 def run(
     input_file: str = "execution_results.json",
     output_file: str = "results/findings.json",
+    progress_callback=None,  # 로딩바 콜백 함수
 ) -> list[dict]:
     with open(input_file, encoding="utf-8") as f:
         results = json.load(f)
 
-    findings = validate(results)
+    findings = validate(results, progress_callback=progress_callback)
 
     import os
     os.makedirs(os.path.dirname(output_file) or ".", exist_ok=True)

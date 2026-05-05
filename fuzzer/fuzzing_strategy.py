@@ -13,7 +13,7 @@ def _guess_location(method: str) -> str:
     return "body" if method.upper() == "POST" else "query"
 
 
-def build_tasks(points_meta: Any, payloads: Any, targets: Any | None = None) -> list[dict]:
+def build_tasks(points_meta: Any, payloads: Any, targets: Any | None = None, progress_callback=None) -> list[dict]:  # 로딩바 콜백 함수
     """points+payloads(+targets) -> fuzz task list."""
 
     if not points_meta or not payloads:
@@ -36,7 +36,8 @@ def build_tasks(points_meta: Any, payloads: Any, targets: Any | None = None) -> 
     if not isinstance(points_meta, list):
         return []
 
-    for p in points_meta:
+    total_points = len(points_meta)
+    for idx, p in enumerate(points_meta):
         if not isinstance(p, dict):
             continue
 
@@ -64,6 +65,9 @@ def build_tasks(points_meta: Any, payloads: Any, targets: Any | None = None) -> 
                 if not n or n == param:
                     continue
                 base_params[str(n)] = pr.get("default_value", "")
+
+        if progress_callback:  # 로딩바 콜백 함수
+            progress_callback(idx + 1, total_points)
 
         for vtype, records in point_payloads.items():
             if not isinstance(records, list):

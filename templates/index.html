@@ -1,0 +1,144 @@
+{% extends "base.html" %}
+{% block title %}LADS - 취약점 자동 진단{% endblock %}
+
+{% block content %}
+<div class="flex min-h-[calc(100vh-80px)] flex-col gap-6">
+  <section class="flex shrink-0 flex-col justify-between gap-4 md:flex-row md:items-center">
+    <div>
+      <h1 class="text-[30px] font-black leading-tight text-slate-950">취약점 자동 진단</h1>
+      <div class="mt-2 font-mono text-[13px] text-slate-500">Run: {{ current_run or '-' }}</div>
+    </div>
+    <div class="flex flex-wrap gap-2">
+      <button class="action-primary" id="btn-scan-all" onclick="startFullScan()">
+        <span class="material-symbols-outlined text-[20px]">play_arrow</span>
+        전체 스캔 시작
+      </button>
+      <button class="action-secondary" id="btn-scan-recrawl" onclick="startScanSkipCrawl()">
+        <span class="material-symbols-outlined text-[20px]">refresh</span>
+        크롤 재사용 재스캔
+      </button>
+      <a class="action-secondary" href="/findings">
+        <span class="material-symbols-outlined text-[20px]">bug_report</span>
+        취약점 결과
+      </a>
+    </div>
+  </section>
+
+  <section class="rounded border border-surface-line bg-white p-6">
+    <div class="mb-5 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+      <div>
+        <h2 class="text-[18px] font-black text-slate-950">파이프라인 상태</h2>
+        <p class="mt-1 font-mono text-[12px] text-slate-500">현재 RUN 기준 {{ pipeline_progress.complete }} / {{ pipeline_progress.total }} 단계 완료</p>
+      </div>
+      <div class="text-left md:text-right">
+        <div id="pipeline-percent" class="text-[30px] font-black leading-none text-slate-950">{{ pipeline_progress.percent }}%</div>
+        <div class="mt-1 font-mono text-[11px] font-bold uppercase text-slate-500">Progress</div>
+      </div>
+    </div>
+
+    <div class="mb-6 h-3 overflow-hidden rounded-full bg-slate-100">
+      <div id="pipeline-progress-bar" class="h-full rounded-full bg-slate-950 transition-all duration-300 {% if pipeline_progress.percent >= 100 %}w-full{% elif pipeline_progress.percent >= 80 %}w-4/5{% elif pipeline_progress.percent >= 60 %}w-3/5{% elif pipeline_progress.percent >= 40 %}w-2/5{% elif pipeline_progress.percent >= 20 %}w-1/5{% else %}w-0{% endif %}"></div>
+    </div>
+
+    <div class="grid gap-4 md:grid-cols-5">
+      {% for step in pipeline_steps %}
+      <button class="pipeline-step-card {{ step.state }}" data-task="{{ step.key }}" onclick="runTask('{{ step.key }}')">
+        <span class="pipeline-node">
+          <span class="material-symbols-outlined text-[22px]">{% if step.state == 'complete' %}check{% else %}{{ step.icon }}{% endif %}</span>
+        </span>
+        <span class="pipeline-label">{{ step.label }}</span>
+        <span class="pipeline-status">{% if step.state == 'complete' %}Done{% elif step.state == 'active' %}Ready{% else %}Waiting{% endif %}</span>
+      </button>
+      {% endfor %}
+    </div>
+  </section>
+
+  <section class="grid min-h-[420px] flex-1 gap-5 lg:grid-cols-[minmax(0,1fr)_340px]">
+    <div id="log-card" class="flex min-h-0 flex-col overflow-hidden rounded border border-surface-line bg-white">
+      <div class="flex min-h-14 items-center justify-between border-b border-surface-line bg-surface-soft px-5 py-4">
+        <div class="flex items-center gap-2">
+          <span class="material-symbols-outlined text-[20px] text-slate-600">list_alt</span>
+          <h2 id="log-title" class="text-[18px] font-black">실행 로그</h2>
+        </div>
+        <span id="log-badge" class="inline-flex items-center gap-2 font-mono text-[13px] uppercase text-slate-600">
+          <span class="h-2 w-2 rounded-full bg-emerald-500"></span>
+          대기 중
+        </span>
+      </div>
+      <div id="log-area" class="h-[520px] max-h-[520px] overflow-y-auto bg-[#fafafa] p-5 font-mono text-[13px] leading-6 text-slate-950">
+        <div class="text-slate-600">스캔을 시작하면 여기에 로그가 표시됩니다.</div>
+      </div>
+    </div>
+
+    <aside class="flex min-h-0 flex-col overflow-hidden rounded border border-surface-line bg-white">
+      <div class="flex min-h-14 items-center gap-2 border-b border-surface-line bg-surface-soft px-5 py-4">
+        <span class="material-symbols-outlined text-[20px] text-slate-950">info</span>
+        <h2 class="text-[18px] font-black">산출물 상태</h2>
+      </div>
+      <div class="flex flex-col gap-2 p-5">
+        {% for label, ok in file_status %}
+        <div class="flex items-center justify-between border border-surface-line bg-white px-3 py-3">
+          <span class="text-[15px] text-slate-600">{{ label }}</span>
+          <span class="h-2 w-2 rounded-full {% if ok %}bg-emerald-500{% else %}bg-outline{% endif %}"></span>
+        </div>
+        {% endfor %}
+
+        {% if exec_summary %}
+        <div class="mt-5 border-t border-surface-line pt-5">
+          <div class="mb-2 text-[13px] font-black uppercase tracking-wider text-slate-500">마지막 실행</div>
+          <div class="grid grid-cols-3 gap-2">
+            <div class="rounded bg-surface-soft p-3 text-center"><div class="text-[12px] text-slate-500">전체</div><div class="text-[18px] font-black">{{ exec_summary.total }}</div></div>
+            <div class="rounded bg-emerald-50 p-3 text-center"><div class="text-[12px] text-emerald-700">성공</div><div class="text-[18px] font-black text-emerald-700">{{ exec_summary.ok }}</div></div>
+            <div class="rounded bg-amber-50 p-3 text-center"><div class="text-[12px] text-amber-700">타임아웃</div><div class="text-[18px] font-black text-amber-700">{{ exec_summary.timeout }}</div></div>
+          </div>
+        </div>
+        {% endif %}
+      </div>
+    </aside>
+  </section>
+</div>
+
+<style>
+  .action-primary, .action-secondary {
+    display: inline-flex; height: 42px; align-items: center; gap: 8px;
+    border-radius: 2px; padding: 0 18px; font-size: 15px; font-weight: 800;
+    white-space: nowrap; cursor: pointer;
+  }
+  .action-primary { background: #1e293b; color: #fff; }
+  .action-secondary { border: 1px solid #c5c6cd; background: #fff; color: #091426; }
+  .action-primary:disabled, .action-secondary:disabled { opacity: 0.45; cursor: not-allowed; }
+
+  .pipeline-step-card {
+    display: flex; min-height: 132px; flex-direction: column; align-items: flex-start;
+    justify-content: space-between; gap: 12px; border: 1px solid #e0e3e5;
+    border-radius: 4px; background: #fff; padding: 16px; text-align: left;
+    opacity: 0.52;
+  }
+  .pipeline-step-card.complete, .pipeline-step-card.active { opacity: 1; }
+  .pipeline-step-card.active { border-color: #091426; box-shadow: inset 0 0 0 1px #091426; }
+  .pipeline-node {
+    display: flex; height: 42px; width: 42px; align-items: center; justify-content: center;
+    border: 2px solid #e0e3e5; border-radius: 999px; background: #f7f9fb; color: #75777d;
+  }
+  .pipeline-step-card.complete .pipeline-node { border-color: #091426; background: #091426; color: #fff; }
+  .pipeline-step-card.active .pipeline-node { border-color: #091426; background: #fff; color: #091426; }
+  .pipeline-label { font-size: 15px; font-weight: 800; color: #111827; white-space: nowrap; }
+  .pipeline-status {
+    font-family: ui-monospace, Consolas, monospace; font-size: 11px;
+    font-weight: 700; text-transform: uppercase; color: #75777d;
+  }
+  .pipeline-step-card.complete .pipeline-status { color: #166534; }
+  .pipeline-step-card.active .pipeline-status { color: #d97706; }
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function startFullScan() {
+  _startStream('/stream/all');
+}
+function startScanSkipCrawl() {
+  _startStream('/stream/all?skip_crawl=1');
+}
+</script>
+{% endblock %}

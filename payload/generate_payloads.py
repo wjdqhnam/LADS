@@ -128,7 +128,7 @@ INPUT_POINTS = [
 COUNT = 5  # 타입당 페이로드 수
 
 
-def run(out_file: str = "payloads_v2.json"):
+def run(out_file: str = "payloads_v2.json", progress_callback=None):  # 로딩바 콜백 함수
     print(f"\n{'='*60}")
     print(f"  Gnuboard5 Payload Generator v2")
     print(f"  Target: http://34.68.27.120:8081/")
@@ -136,9 +136,12 @@ def run(out_file: str = "payloads_v2.json"):
 
     client = LLMClient()
     all_results = {}
+    total_points = len(INPUT_POINTS)
 
-    for point in INPUT_POINTS:
+    for idx, point in enumerate(INPUT_POINTS):
         pname = point["name"]
+        if progress_callback:  # 로딩바 콜백 함수
+            progress_callback(idx, total_points)
         print(f"\n[INPUT POINT] {pname}")
         print(f"  {point['method']} {point['url']} | param={point['param']}")
         print(f"  Note: {point['note']}")

@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}LADS - 타깃 환경{% endblock %}
+
+{% block content %}
+<section class="flex min-h-[calc(100vh-104px)] flex-col gap-5">
+  <div class="flex shrink-0 items-center justify-between gap-4">
+    <h1 class="text-[28px] font-black leading-9 text-slate-950">타깃 환경</h1>
+    <span class="font-mono text-[13px] text-slate-600">2 targets</span>
+  </div>
+
+  <div class="grid gap-5 lg:grid-cols-2">
+    {% for target in targets %}
+    <article class="rounded border border-outline-variant bg-white p-5">
+      <div class="flex items-start justify-between gap-4">
+        <div class="flex min-w-0 items-start gap-4">
+          <div class="flex h-14 w-14 shrink-0 items-center justify-center rounded-sm border border-outline-variant bg-surface-container">
+            <span class="material-symbols-outlined text-[26px] text-slate-600">web</span>
+          </div>
+          <div class="min-w-0">
+            <h2 class="truncate text-[18px] font-black text-slate-950">{{ target.name }}</h2>
+            <p class="mt-1 truncate font-mono text-[13px] text-slate-600">{{ target.url }}</p>
+          </div>
+        </div>
+        <span class="inline-flex items-center gap-2 rounded-sm {% if target.status == 'active' %}bg-blue-100 text-slate-700{% else %}border border-outline-variant bg-surface-variant text-slate-700{% endif %} px-3 py-1 font-mono text-[13px] font-bold">
+          <span class="h-[7px] w-[7px] rounded-full {% if target.status == 'active' %}bg-slate-950 animate-pulse{% else %}bg-outline{% endif %}"></span>
+          {{ target.status_label }}
+        </span>
+      </div>
+      <div class="mt-5 grid grid-cols-2 gap-4 border-t border-outline-variant pt-4">
+        <div>
+          <div class="font-mono text-[13px] text-outline">환경 ID</div>
+          <div class="mt-1 text-[15px] font-bold text-slate-950">{{ target.key }}</div>
+        </div>
+        <div>
+          <div class="font-mono text-[13px] text-outline">버전</div>
+          <div class="mt-1 text-[15px] font-bold text-slate-950">{{ target.version }}</div>
+        </div>
+        <div class="col-span-2">
+          <div class="font-mono text-[13px] text-outline">마지막 실행</div>
+          <div class="mt-1 text-[15px] font-bold text-slate-950">{{ target.last_scanned }}</div>
+        </div>
+      </div>
+      {% if not target.is_active %}
+      <form method="POST" action="/settings/target" class="mt-5">
+        <input type="hidden" name="key" value="{{ target.key }}">
+        <button class="w-full rounded border border-outline-variant bg-white py-2 text-[13px] font-semibold text-slate-950 hover:bg-surface-container" type="submit">
+          이 서버를 스캔 대상으로 설정
+        </button>
+      </form>
+      {% else %}
+      <div class="mt-5 h-[5px] overflow-hidden rounded-full bg-blue-100">
+        <div class="h-full w-full rounded-full bg-slate-950"></div>
+      </div>
+      {% endif %}
+    </article>
+    {% endfor %}
+  </div>
+</section>
+{% endblock %}

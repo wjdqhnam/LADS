@@ -336,7 +336,7 @@ class Crawler:
             return None
 
 
-    def crawl(self, extra_seeds: list[str] = None) -> list[PageResult]:
+    def crawl(self, extra_seeds: list[str] = None, progress_callback=None) -> list[PageResult]:  # 로딩바 콜백 함수
         seeds = self._discover_seeds()
         if extra_seeds:
             seeds.extend(extra_seeds)
@@ -412,6 +412,9 @@ class Crawler:
 
             self.results.append(result)
             crawled += 1
+
+            if progress_callback:  # 로딩바 콜백 함수
+                progress_callback(crawled, CrawlConfig.MAX_PAGES)
 
             if self._should_stop_early(crawled):
                 print(f"       \n[STOP] 최근 {CrawlConfig.STAGNATION_LIMIT}페이지 동안 새 입력 구조가 없어 조기 종료")

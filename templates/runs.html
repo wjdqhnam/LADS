@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}LADS - 실행 이력{% endblock %}
+
+{% block content %}
+<section class="flex min-h-[calc(100vh-80px)] flex-col gap-8">
+  <div class="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+    <h1 class="text-[30px] font-black leading-tight text-slate-950">실행 이력</h1>
+    <form method="POST" action="/runs/new">
+      <button class="inline-flex h-11 items-center gap-2 rounded-sm bg-slate-800 px-5 text-[15px] font-extrabold text-white hover:bg-slate-900" type="submit">
+        <span class="material-symbols-outlined text-[20px]">add</span>
+        새 실행 생성
+      </button>
+    </form>
+  </div>
+
+  {% if not runs %}
+  <div class="rounded border border-dashed border-surface-line bg-white px-8 py-16 text-center text-[16px] font-bold text-slate-500">결과 없음</div>
+  {% else %}
+  <div class="flex min-h-0 flex-1 flex-col overflow-hidden rounded border border-surface-line bg-white">
+    <div class="border-b border-surface-line bg-surface-soft px-6 py-4">
+      <h2 class="text-[18px] font-black text-slate-950">실행 목록</h2>
+    </div>
+    <div class="min-h-0 flex-1 overflow-auto px-6 py-5">
+      <table class="w-full min-w-[980px] border-separate border-spacing-0 text-left text-[14px]">
+        <thead>
+          <tr class="text-[13px] font-bold text-slate-500">
+            <th class="border-b border-surface-line px-3 pb-3">실행 ID</th>
+            <th class="border-b border-surface-line px-3 pb-3">시작 시간</th>
+            <th class="border-b border-surface-line px-3 pb-3">크롤링</th>
+            <th class="border-b border-surface-line px-3 pb-3">실행</th>
+            <th class="border-b border-surface-line px-3 pb-3">취약점</th>
+            <th class="border-b border-surface-line px-3 pb-3">상태</th>
+            <th class="border-b border-surface-line px-3 pb-3">관리</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in runs %}
+          <tr class="hover:bg-slate-50">
+            <td class="border-b border-slate-100 px-3 py-3 font-mono text-[12px]">{{ r.id }}</td>
+            <td class="border-b border-slate-100 px-3 py-3">{{ r.ts }}</td>
+            <td class="border-b border-slate-100 px-3 py-3">{% if r.has_crawl %}<span class="rounded bg-emerald-100 px-2 py-1 text-[12px] font-extrabold text-emerald-700">있음</span>{% else %}<span class="rounded bg-slate-100 px-2 py-1 text-[12px] font-extrabold text-slate-600">없음</span>{% endif %}</td>
+            <td class="border-b border-slate-100 px-3 py-3">{% if r.has_exec %}<span class="rounded bg-emerald-100 px-2 py-1 text-[12px] font-extrabold text-emerald-700">있음</span>{% else %}<span class="rounded bg-slate-100 px-2 py-1 text-[12px] font-extrabold text-slate-600">없음</span>{% endif %}</td>
+            <td class="border-b border-slate-100 px-3 py-3">{% if r.has_findings %}<span class="rounded bg-red-100 px-2 py-1 text-[12px] font-extrabold text-red-700">{{ r.findings_cnt }}건</span>{% else %}<span class="rounded bg-slate-100 px-2 py-1 text-[12px] font-extrabold text-slate-600">없음</span>{% endif %}</td>
+            <td class="border-b border-slate-100 px-3 py-3">{% if r.is_current %}<span class="rounded bg-slate-800 px-2 py-1 text-[12px] font-extrabold text-white">현재</span>{% endif %}</td>
+            <td class="border-b border-slate-100 px-3 py-3">
+              <div class="flex flex-wrap gap-2">
+                {% if not r.is_current %}
+                <form method="POST" action="/runs/set/{{ r.id }}"><button class="inline-flex h-8 items-center border border-surface-line bg-white px-3 text-[12px] font-extrabold hover:bg-slate-50" type="submit">선택</button></form>
+                {% endif %}
+                {% if r.has_findings %}<a class="inline-flex h-8 items-center border border-surface-line bg-white px-3 text-[12px] font-extrabold hover:bg-slate-50" href="/findings?run={{ r.id }}">취약점</a>{% endif %}
+                {% if r.has_exec %}<a class="inline-flex h-8 items-center border border-surface-line bg-white px-3 text-[12px] font-extrabold hover:bg-slate-50" href="/exec_results?run={{ r.id }}">실행 결과</a>{% endif %}
+                {% if not r.is_current %}
+                <form method="POST" action="/runs/delete/{{ r.id }}" onsubmit="return confirm('이 실행 기록을 삭제할까요?')"><button class="inline-flex h-8 items-center border border-red-200 bg-white px-3 text-[12px] font-extrabold text-error hover:bg-red-50" type="submit">삭제</button></form>
+                {% endif %}
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
+</section>
+{% endblock %}

@@ -33,7 +33,7 @@ import queue
 import threading
 from pathlib import Path
 
-from flask import Flask, Response, render_template_string, request
+from flask import Flask, Response, render_template, request
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -41,11 +41,17 @@ load_dotenv()
 
 # ── 설정 ─────────────────────────────────────────────────────────
 BASE_URL           = os.getenv("TARGET_URL",        "http://34.68.27.120:8081")
+TARGET_URL_2       = os.getenv("TARGET_URL_2",      "http://34.68.27.120:8080")
 CMS_NAME           = "Gnuboard5 5.3.2.8"
 PAYLOADS_FILE      = os.getenv("PAYLOADS_FILE",     "results/payloads_llm.json")
 SCAN_RESULTS_FILE  = os.getenv("SCAN_RESULTS_FILE", "results/scan_results_llm.json")
 PAYLOADS_META_FILE = os.getenv("PAYLOADS_META_FILE","results/payloads_llm_meta.json")
 RUNS_DIR           = "runs"
+_TARGETS = [
+    {"key": "primary",   "name": "Gnuboard5 (8081)", "url": BASE_URL,    "version": CMS_NAME},
+    {"key": "secondary", "name": "Gnuboard5 (8080)", "url": TARGET_URL_2, "version": "Test Env"},
+]
+_active_target_key: str = "primary"
 
 # ── Run 관리 ──────────────────────────────────────────────────────
 _current_run_id: str | None = None
@@ -134,7 +140,14 @@ def _dbg(hypothesis_id: str, message: str, data: dict | None = None) -> None:
 
 def _tmpl_fingerprint() -> str:
     try:
-        s = (_COMMON_HEAD + _MAIN_HTML + _RESULTS_HTML + _EXEC_HTML).encode("utf-8", errors="ignore")
+        template_dir = Path(__file__).with_name("templates")
+        static_js = Path(__file__).with_name("static").joinpath("js", "app.js")
+        chunks = []
+        for path in sorted(template_dir.glob("*.html")):
+            chunks.append(path.read_text(encoding="utf-8"))
+        if static_js.exists():
+            chunks.append(static_js.read_text(encoding="utf-8"))
+        s = "\n".join(chunks).encode("utf-8", errors="ignore")
         return hashlib.sha256(s).hexdigest()[:12]
     except Exception:
         return "unknown"
@@ -180,16 +193,33 @@ sys.stdout = _RoutingStream(sys.__stdout__)
 
 # ── 태스크 함수 ───────────────────────────────────────────────────
 
+def _emit_progress(pct: int) -> None:
+    q = getattr(_thread_local, "log_queue", None)
+    if q is not None:
+        q.put(f"__PROGRESS__{max(0, min(100, pct))}")
+
+
+def _active_url() -> str:
+    t = next((t for t in _TARGETS if t["key"] == _active_target_key), _TARGETS[0])
+    return t["url"]
+
+
 def _task_crawl():
     from crawler import Crawler
     from target_builder import build_targets, print_summary
 
     crawl_file   = _run_path("crawl_result.json")
     targets_file = _run_path("targets.json")
+    target_url   = _active_url()
 
-    print(f"크롤링 시작: {BASE_URL}")
-    crawler = Crawler(BASE_URL)
-    crawler.crawl()
+    print(f"크롤링 시작: {target_url}")
+    crawler = Crawler(target_url)
+
+    def _crawl_progress(done: int, total: int) -> None:
+        pct = int(done / max(total, 1) * 20)  # 크롤링 구간: 0~20%
+        _emit_progress(pct)
+
+    crawler.crawl(progress_callback=_crawl_progress)
     crawler.save(crawl_file)
     crawler.summary()
 
@@ -210,7 +240,12 @@ def _task_payload():
 
     os.makedirs("results", exist_ok=True)
     print(f"LLM 페이로드 생성 시작 (출력: {PAYLOADS_FILE})")
-    generate_run(out_file=PAYLOADS_FILE)
+
+    def _payload_progress(done: int, total: int) -> None:
+        pct = 20 + int(done / max(total, 1) * 10)  # 페이로드 구간: 20~30%
+        _emit_progress(pct)
+
+    generate_run(out_file=PAYLOADS_FILE, progress_callback=_payload_progress)
 
 
 def _task_scan():
@@ -264,7 +299,12 @@ def _task_fuzz():
             targets = json.load(f)
 
     print(f"meta={len(points_meta)} payload_points={len(payloads)}")
-    tasks = build_tasks(points_meta, payloads, targets)
+
+    def _fuzz_progress(done: int, total: int) -> None:
+        pct = 30 + int(done / max(total, 1) * 5)  # 스캔작업 구간: 30~35%
+        _emit_progress(pct)
+
+    tasks = build_tasks(points_meta, payloads, targets, progress_callback=_fuzz_progress)
 
     with open(fuzz_tasks_file, "w", encoding="utf-8") as f:
         json.dump(tasks, f, ensure_ascii=False, indent=2)
@@ -288,8 +328,17 @@ def _task_execute():
     with open(fuzz_tasks_file, encoding="utf-8") as f:
         tasks = json.load(f)
 
-    print(f"{len(tasks)} 태스크 실행 시작")
-    results = execute(tasks, timeout=10, delay=0.0, output_file=exec_file)
+    total_tasks = len(tasks)
+    print(f"{total_tasks} 요청 실행 시작")
+
+    def _on_progress(done: int, total: int) -> None:
+        # executor 진행률(0~100%) → 전체 파이프라인 35~90% 구간에 매핑
+        pct = 35 + int(done / max(total, 1) * 55)
+        _emit_progress(pct)
+        if done % max(total // 10, 1) == 0 or done == total:
+            print(f"  [{done}/{total}] {int(done/max(total,1)*100)}% 완료")
+
+    results = execute(tasks, timeout=10, delay=0.0, output_file=exec_file, progress_callback=_on_progress)
 
     ok      = sum(1 for r in results if r["error"] is None)
     timeout = sum(1 for r in results if r["error"] == "timeout")
@@ -308,7 +357,12 @@ def _task_validate():
         return
 
     print(f"분석 중: {exec_file}")
-    findings = validate_run(input_file=exec_file, output_file=findings_file)
+
+    def _validate_progress(done: int, total: int) -> None:
+        pct = 90 + int(done / max(total, 1) * 10)  # 결과분석 구간: 90~100%
+        _emit_progress(pct)
+
+    findings = validate_run(input_file=exec_file, output_file=findings_file, progress_callback=_validate_progress)
 
     xss_cnt  = sum(1 for f in findings if "xss"  in (f.get("vuln_type") or "").lower())
     sqli_cnt = sum(1 for f in findings if "sqli" in (f.get("vuln_type") or "").lower())
@@ -319,18 +373,32 @@ def _task_validate():
         print(f"  [{f['vuln_type']:20s}] {f['point']} | {f['payload'][:50]} | {f['evidence']}")
 
 
-def _task_all(skip_crawl: bool = False, skip_payload: bool = False):
+def _task_all(skip_crawl: bool = False):
+    """전체 DAST 파이프라인: 크롤링 → 페이로드 → 스캔 작업 생성 → 활성 스캔 → 결과 분석"""
+    _emit_progress(2)
+
     if skip_crawl:
-        print(f"[건너뜀] 크롤링 재사용")
+        print("[건너뜀] 크롤링 재사용")
+        _emit_progress(20)
     else:
         _task_crawl()
+        _emit_progress(20)
 
-    if skip_payload:
-        print(f"[건너뜀] 페이로드 생성 — {PAYLOADS_FILE} 재사용")
-    else:
+    if not os.path.exists(PAYLOADS_FILE):
+        print("[INFO] 페이로드 파일 없음 — 자동 생성 시작")
         _task_payload()
+    else:
+        print(f"[건너뜀] 페이로드 재사용: {PAYLOADS_FILE}")
+    _emit_progress(30)
 
-    _task_scan()
+    _task_fuzz()
+    _emit_progress(35)
+
+    _task_execute()   # 내부에서 35→90% 구간 실시간 emit
+    _emit_progress(90)
+
+    _task_validate()
+    _emit_progress(100)
 
 
 _TASK_FUNCS = {
@@ -344,25 +412,25 @@ _TASK_FUNCS = {
 }
 
 _TASK_LABELS = {
-    "crawl"   : "Crawl & Map",
-    "payload" : "Generate Payloads",
-    "scan"    : "Run Scan",
-    "fuzz"    : "Plan Fuzzing",
-    "execute" : "Execute Fuzzing",
-    "validate": "Validate Findings",
-    "all"     : "Full Pipeline",
+    "crawl"   : "크롤링",
+    "payload" : "페이로드 준비",
+    "scan"    : "스캔 실행",
+    "fuzz"    : "스캔 작업 생성",
+    "execute" : "활성 스캔",
+    "validate": "결과 분석",
+    "all"     : "전체 진단",
 }
 
 
 # ── SSE 라우트 ────────────────────────────────────────────────────
+
 
 @app.route("/stream/<task>")
 def stream_task(task):
     if task not in _TASK_FUNCS:
         return "알 수 없는 태스크", 404
 
-    skip_crawl   = request.args.get("skip_crawl")   == "1"
-    skip_payload = request.args.get("skip_payload") == "1"
+    skip_crawl = request.args.get("skip_crawl") == "1"
 
     q = queue.Queue()
 
@@ -375,7 +443,7 @@ def stream_task(task):
         _thread_local.log_queue = q
         try:
             if task == "all":
-                _task_all(skip_crawl=skip_crawl, skip_payload=skip_payload)
+                _task_all(skip_crawl=skip_crawl)
             else:
                 _TASK_FUNCS[task]()
         except Exception as exc:
@@ -400,6 +468,9 @@ def stream_task(task):
                 yield f"data: [{label}] 완료\n\n"
                 yield "data: __DONE__\n\n"
                 break
+            if msg.startswith("__PROGRESS__"):
+                yield f"data: {msg}\n\n"
+                continue
             safe = msg.replace("\n", " ")
             yield f"data: {safe}\n\n"
 
@@ -414,12 +485,12 @@ def stream_task(task):
 
 def _get_file_status():
     return [
-        ("crawl_result.json",      os.path.exists(_run_path("crawl_result.json"))),
-        ("targets.json",           os.path.exists(_run_path("targets.json"))),
-        ("payloads_llm.json",      os.path.exists(PAYLOADS_FILE)),
-        ("fuzz_tasks.json",        os.path.exists(_run_path("fuzz_tasks.json"))),
-        ("execution_results.json", os.path.exists(_run_path("execution_results.json"))),
-        ("findings.json",          os.path.exists(_run_path("findings.json"))),
+        ("크롤링 결과", os.path.exists(_run_path("crawl_result.json"))),
+        ("타겟 목록",   os.path.exists(_run_path("targets.json"))),
+        ("페이로드",    os.path.exists(PAYLOADS_FILE)),
+        ("퍼징 작업",   os.path.exists(_run_path("fuzz_tasks.json"))),
+        ("실행 결과",   os.path.exists(_run_path("execution_results.json"))),
+        ("취약점 결과", os.path.exists(_run_path("findings.json"))),
     ]
 
 
@@ -452,9 +523,76 @@ def _get_exec_summary():
         return None
 
 
-# ── HTML 템플릿 ───────────────────────────────────────────────────
+def _get_file_status():
+    return [
+        ("크롤링 결과", os.path.exists(_run_path("crawl_result.json"))),
+        ("타깃 목록",   os.path.exists(_run_path("targets.json"))),
+        ("페이로드",    os.path.exists(PAYLOADS_FILE)),
+        ("퍼징 작업",   os.path.exists(_run_path("fuzz_tasks.json"))),
+        ("실행 결과",   os.path.exists(_run_path("execution_results.json"))),
+        ("취약점 결과", os.path.exists(_run_path("findings.json"))),
+    ]
 
-from ui_templates import _COMMON_HEAD, _MAIN_HTML, _RESULTS_HTML, _EXEC_HTML, _FINDINGS_HTML
+
+def _get_pipeline_steps():
+    checks = [
+        ("crawl",    "크롤링",          "travel_explore", os.path.exists(_run_path("crawl_result.json")) and os.path.exists(_run_path("targets.json"))),
+        ("payload",  "페이로드 준비",  "psychology",     os.path.exists(PAYLOADS_FILE)),
+        ("fuzz",     "스캔 작업 생성", "build",          os.path.exists(_run_path("fuzz_tasks.json"))),
+        ("execute",  "활성 스캔",      "radar",          os.path.exists(_run_path("execution_results.json"))),
+        ("validate", "결과 분석",      "analytics",      os.path.exists(_run_path("findings.json"))),
+    ]
+    active_assigned = False
+    steps = []
+    for key, label, icon, complete in checks:
+        state = "complete" if complete else "pending"
+        if not complete and not active_assigned:
+            state = "active"
+            active_assigned = True
+        steps.append({"key": key, "label": label, "icon": icon, "state": state})
+    return steps
+
+
+def _get_target_envs():
+    result = []
+    for t in _TARGETS:
+        is_active = t["key"] == _active_target_key
+        result.append({
+            "name":         t["name"],
+            "key":          t["key"],
+            "url":          t["url"],
+            "version":      t["version"],
+            "is_active":    is_active,
+            "status":       "active" if is_active else "standby",
+            "status_label": "스캔 대상" if is_active else "대기 중",
+            "last_scanned": _current_run_id or "-" if is_active else "-",
+        })
+    return result
+
+
+# ── placeholder (하위 호환) ────────────────────────────────────────
+def _get_quick_summary():
+    scan_file = _run_path("scan_results.json")
+    if not os.path.exists(scan_file):
+        return None
+    try:
+        with open(scan_file, encoding="utf-8") as f:
+            results = json.load(f)
+        total = len(results)
+        vulns = sum(1 for r in results if r.get("vulnerable"))
+        return {"total": total, "vulns": vulns, "rate": vulns / max(total, 1) * 100}
+    except Exception:
+        return None
+
+
+
+
+def _get_pipeline_progress():
+    steps = _get_pipeline_steps()
+    complete = sum(1 for step in steps if step["state"] == "complete")
+    total = max(len(steps), 1)
+    percent = int(round(complete / total * 100))
+    return {"complete": complete, "total": total, "percent": percent}
 
 
 @app.route("/")
@@ -472,13 +610,16 @@ def index():
         },
     )
     # #endregion agent log
-    return render_template_string(
-        _MAIN_HTML,
+    return render_template(
+        "index.html",
         cms_name     = CMS_NAME,
         base_url     = BASE_URL,
         file_status  = _get_file_status(),
+        pipeline_steps = _get_pipeline_steps(),
+        pipeline_progress = _get_pipeline_progress(),
         summary      = _get_quick_summary(),
         exec_summary = _get_exec_summary(),
+        targets      = _get_target_envs(),
         current_run  = _current_run_id or "",
     )
 
@@ -499,7 +640,7 @@ def __debug_build():
 @app.route("/results")
 def results_page():
     if not os.path.exists(SCAN_RESULTS_FILE):
-        return render_template_string(_RESULTS_HTML, results=None, total=0, n_vuln=0, rate=0.0)
+        return render_template("results.html", results=None, total=0, n_vuln=0, rate=0.0)
     try:
         with open(SCAN_RESULTS_FILE, encoding="utf-8") as f:
             results = json.load(f)
@@ -509,14 +650,15 @@ def results_page():
     total  = len(results)
     n_vuln = sum(1 for r in results if r.get("vulnerable"))
     rate   = n_vuln / max(total, 1) * 100
-    return render_template_string(_RESULTS_HTML, results=results, total=total, n_vuln=n_vuln, rate=rate)
+    return render_template("results.html", results=results, total=total, n_vuln=n_vuln, rate=rate)
 
 
 @app.route("/findings")
 def findings_page():
-    findings_file = _run_path("findings.json")
+    run_id = request.args.get("run") or _current_run_id
+    findings_file = os.path.join(RUNS_DIR, run_id or "default", "findings.json") if run_id else _run_path("findings.json")
     if not os.path.exists(findings_file):
-        return render_template_string(_FINDINGS_HTML, findings=None, xss_cnt=0, sqli_cnt=0)
+        return render_template("findings.html", findings=None, xss_cnt=0, sqli_cnt=0, run_id=run_id, current_run=_current_run_id)
     try:
         with open(findings_file, encoding="utf-8") as f:
             findings = json.load(f)
@@ -524,14 +666,15 @@ def findings_page():
         return f"결과 파일 읽기 오류: {exc}", 500
     xss_cnt  = sum(1 for f in findings if "xss"  in (f.get("vuln_type") or "").lower())
     sqli_cnt = sum(1 for f in findings if "sqli" in (f.get("vuln_type") or "").lower())
-    return render_template_string(_FINDINGS_HTML, findings=findings, xss_cnt=xss_cnt, sqli_cnt=sqli_cnt)
+    return render_template("findings.html", findings=findings, xss_cnt=xss_cnt, sqli_cnt=sqli_cnt, run_id=run_id, current_run=_current_run_id)
 
 
 @app.route("/exec_results")
 def exec_results_page():
-    exec_file = _run_path("execution_results.json")
+    run_id = request.args.get("run") or _current_run_id
+    exec_file = os.path.join(RUNS_DIR, run_id or "default", "execution_results.json") if run_id else _run_path("execution_results.json")
     if not os.path.exists(exec_file):
-        return render_template_string(_EXEC_HTML, results=None, total=0, ok=0, timeout=0, err=0)
+        return render_template("exec_results.html", results=None, total=0, ok=0, timeout=0, err=0, run_id=run_id, current_run=_current_run_id)
     try:
         with open(exec_file, encoding="utf-8") as f:
             results = json.load(f)
@@ -541,13 +684,18 @@ def exec_results_page():
     ok      = sum(1 for r in results if r.get("error") is None)
     timeout = sum(1 for r in results if r.get("error") == "timeout")
     err     = sum(1 for r in results if r.get("error") and r.get("error") != "timeout")
-    return render_template_string(_EXEC_HTML, results=results, total=total, ok=ok, timeout=timeout, err=err)
+    return render_template("exec_results.html", results=results, total=total, ok=ok, timeout=timeout, err=err, run_id=run_id, current_run=_current_run_id)
 
 
 @app.route("/runs")
 def runs_page():
     runs = _list_runs()
-    return render_template_string(_RUNS_HTML, runs=runs, current_run=_current_run_id)
+    return render_template("runs.html", runs=runs, current_run=_current_run_id)
+
+
+@app.route("/targets")
+def targets_page():
+    return render_template("targets.html", targets=_get_target_envs())
 
 
 @app.route("/runs/new", methods=["POST"])
@@ -588,49 +736,76 @@ def delete_run(run_id):
     return redirect("/runs")
 
 
+@app.route("/settings/target", methods=["POST"])
+def set_target():
+    global _active_target_key
+    from flask import redirect
+    key = request.form.get("key", "")
+    if any(t["key"] == key for t in _TARGETS):
+        _active_target_key = key
+    return redirect("/")
+
+
+@app.route("/runs/delete-all", methods=["POST"])
+def delete_all_runs():
+    import shutil
+    from flask import redirect
+    global _current_run_id
+    if os.path.exists(RUNS_DIR):
+        for d in os.listdir(RUNS_DIR):
+            full = os.path.join(RUNS_DIR, d)
+            if os.path.isdir(full) and d.startswith("run_") and d != _current_run_id:
+                shutil.rmtree(full)
+    return redirect("/runs")
+
+
+_COMMON_HEAD = ""
+_MENU_SCRIPT = ""
+
+
+def _nav(title=""):
+    return ""
+
+
 _RUNS_HTML = """\
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ko">
 <head>
-  <title>LADS - Run History</title>
+  <title>LADS - 실행 이력</title>
 """ + _COMMON_HEAD + """
 </head>
 <body>
-<nav class="navbar app-nav px-3 py-3">
-  <div class="container-fluid">
-    <a class="d-flex align-items-center gap-2" href="/"><span class="brand-mark">LD</span><span class="brand-title">LADS</span></a>
-    <span class="text-secondary ms-3 me-auto">Run History</span>
-    <a href="/" class="btn btn-outline-dark btn-sm me-2">Dashboard</a>
-    <form method="POST" action="/runs/new" style="display:inline"><button class="btn btn-primary btn-sm">New Run</button></form>
-  </div>
-</nav>
+""" + _nav("실행 이력") + """
 <main class="page-shell-wide">
   <section class="mb-4">
-    <div class="eyebrow">Assessment Archive</div>
-    <h1 class="page-title">Run History</h1>
-    <p class="page-subtitle">Review saved assessment runs, switch the active run, or remove obsolete records.</p>
+    <div class="eyebrow">진단 기록</div>
+    <h1 class="page-title">실행 이력</h1>
+    <p class="page-subtitle">저장된 진단 기록을 확인하고, 현재 사용할 실행 기록을 선택합니다.</p>
+    <form method="POST" action="/runs/new" class="mt-3">
+      <button class="btn btn-primary">새 실행 생성</button>
+    </form>
   </section>
   {% if not runs %}
-  <div class="empty-state">No run history is available yet.</div>
+  <div class="empty-state">아직 실행 이력이 없습니다.</div>
   {% else %}
   <section class="section-card">
-    <div class="card-header">Assessment Runs</div>
+    <div class="card-header">실행 목록</div>
     <div class="table-responsive">
       <table class="table align-middle">
-        <thead><tr><th>Run ID</th><th>Started</th><th>Crawl</th><th>Execution</th><th>Findings</th><th>Status</th><th>Actions</th></tr></thead>
+        <thead><tr><th>실행 ID</th><th>시작 시각</th><th>크롤링</th><th>실행</th><th>취약점</th><th>상태</th><th>관리</th></tr></thead>
         <tbody>
         {% for r in runs %}
           <tr class="{% if r.is_current %}safe-row{% endif %}">
             <td><code>{{ r.id }}</code></td>
             <td>{{ r.ts }}</td>
-            <td>{% if r.has_crawl %}<span class="badge bg-success">Ready</span>{% else %}<span class="badge bg-secondary">Missing</span>{% endif %}</td>
-            <td>{% if r.has_exec %}<span class="badge bg-success">Ready</span>{% else %}<span class="badge bg-secondary">Missing</span>{% endif %}</td>
-            <td>{% if r.has_findings %}<span class="badge bg-danger">{{ r.findings_cnt }}</span>{% else %}<span class="badge bg-secondary">None</span>{% endif %}</td>
-            <td>{% if r.is_current %}<span class="badge bg-dark">Active</span>{% endif %}</td>
+            <td>{% if r.has_crawl %}<span class="badge bg-success">있음</span>{% else %}<span class="badge bg-secondary">없음</span>{% endif %}</td>
+            <td>{% if r.has_exec %}<span class="badge bg-success">있음</span>{% else %}<span class="badge bg-secondary">없음</span>{% endif %}</td>
+            <td>{% if r.has_findings %}<span class="badge bg-danger">{{ r.findings_cnt }}건</span>{% else %}<span class="badge bg-secondary">없음</span>{% endif %}</td>
+            <td>{% if r.is_current %}<span class="badge bg-dark">현재</span>{% endif %}</td>
             <td><div class="d-flex gap-2 flex-wrap">
-              {% if not r.is_current %}<form method="POST" action="/runs/set/{{ r.id }}"><button class="btn btn-outline-dark btn-sm">Select</button></form>{% endif %}
-              <a href="/findings?run={{ r.id }}" class="btn btn-outline-success btn-sm">Findings</a>
-              {% if not r.is_current %}<form method="POST" action="/runs/delete/{{ r.id }}" onsubmit="return confirm('Delete this run?')"><button class="btn btn-outline-danger btn-sm">Delete</button></form>{% endif %}
+              {% if not r.is_current %}<form method="POST" action="/runs/set/{{ r.id }}"><button class="btn btn-outline-dark btn-sm">선택</button></form>{% endif %}
+              <a href="/findings?run={{ r.id }}" class="btn btn-outline-success btn-sm">결과</a>
+              {% if not r.is_current %}<form method="POST" action="/runs/delete/{{ r.id }}" onsubmit="return confirm('이 실행 기록을 삭제할까요?')"><button class="btn btn-outline-danger btn-sm">삭제</button></form>{% endif %}
             </div></td>
           </tr>
         {% endfor %}
@@ -640,6 +815,7 @@ _RUNS_HTML = """\
   </section>
   {% endif %}
 </main>
+""" + _MENU_SCRIPT + """
 </body>
 </html>
 """
@@ -652,4 +828,6 @@ if __name__ == "__main__":
     _init_run()
     print(f"LADS 대시보드 시작: http://localhost:5000")
     print(f"타겟: {BASE_URL}  |  현재 실행: {_current_run_id}")
-    app.run(host="0.0.0.0", port=5000, debug=False, threaded=True)
+    # debug=True(또는 FLASK_DEBUG=1): 코드·템플릿 변경 시 자동 재시작·반영. 배포 시 FLASK_DEBUG=0 권장.
+    _flask_debug = os.environ.get("FLASK_DEBUG", "1").strip().lower() in ("1", "true", "yes")
+    app.run(host="0.0.0.0", port=5000, debug=_flask_debug, threaded=True)
