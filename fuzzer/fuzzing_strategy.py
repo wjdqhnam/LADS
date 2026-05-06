@@ -1,7 +1,19 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Dict
 from urllib.parse import urlparse
+
+XSS_CONTEXT_HINT: Dict[str, str] = {
+    "attr_value":    '→ " onmouseover=alert(1) x=" 계열 우선',
+    "attr_href":     '→ javascript:alert(1) 계열 우선',
+    "script":        '→ ";alert(1);// 계열 우선',
+    "body":          '→ <img src=x onerror=alert(1)> 계열 우선',
+    "html_comment":  '→ --> <script>alert(1)</script> <!-- 계열 우선',
+    "stx_filtered":  '→ backtick / entity 인코딩 우선',
+    "url_redirect":  '→ javascript:alert(1) 또는 외부 URL 우선',
+    "none":          '→ 반사 없음 (필터링됨)',
+    "unknown":       '→ 컨텍스트 불명확',
+}
 
 
 def _base_url(url: str) -> str:
@@ -64,15 +76,33 @@ def build_tasks(
     if not points_meta or not payloads:
         return []
 
-    target_index: dict[tuple[str, str], dict] = {}
+    # (method, base_url) → {param_name: best_default_value}
+    # 같은 URL 엔트리가 여러 개일 때 덮어쓰지 않고, 비어있는 값보다 채워진 값을 우선
+    from collections import defaultdict
+    target_params: dict[tuple[str, str], dict[str, str]] = defaultdict(dict)
     if isinstance(targets, list):
         for t in targets:
             if not isinstance(t, dict):
                 continue
             action = t.get("action")
             method = (t.get("method") or "").upper()
-            if action and method:
-                target_index[(method, _base_url(str(action)))] = t
+            if not (action and method):
+                continue
+            key = (method, _base_url(str(action)))
+            for pr in t.get("params", []) or []:
+                if not isinstance(pr, dict):
+                    continue
+                n = pr.get("name")
+                v = str(pr.get("default_value") or "")
+                if not n:
+                    continue
+                # 이미 채워진 값이 있으면 유지, 없으면 v로 채움
+                existing = target_params[key].get(n, "")
+                # 비어있으면 무조건 채움, 채워져 있으면 || 없는 단순 값 우선
+                if not existing and v:
+                    target_params[key][n] = v
+                elif existing and v and "||" in existing and "||" not in v:
+                    target_params[key][n] = v
 
     out: list[dict] = []
     tid = 0
@@ -98,16 +128,14 @@ def build_tasks(
 
         inject_location = _guess_location(method)
 
-        base_params: dict[str, Any] = {}
-        t = target_index.get((method, _base_url(str(url))))
-        if isinstance(t, dict):
-            for pr in t.get("params", []) or []:
-                if not isinstance(pr, dict):
-                    continue
-                n = pr.get("name")
-                if not n or n == param:
-                    continue
-                base_params[str(n)] = pr.get("default_value", "")
+        # points_meta에 명시적 base_params가 있으면 우선 사용
+        if p.get("base_params"):
+            base_params: dict[str, Any] = {
+                k: v for k, v in p["base_params"].items() if k != param
+            }
+        else:
+            merged = target_params.get((method, _base_url(str(url))), {})
+            base_params = {k: v for k, v in merged.items() if k != param}
 
         if progress_callback:
             progress_callback(idx + 1, total_points)

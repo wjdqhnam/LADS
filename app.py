@@ -187,28 +187,6 @@ def _task_payload():
     _emit_progress(30)
 
 
-def _task_scan():
-    import scanner
-
-    scan_out = _run_path("scan_results.json")
-    targets_file = _run_path("targets.json")
-    if not os.path.exists(PAYLOADS_FILE):
-        print(f"[ERROR] missing payload file: {PAYLOADS_FILE}")
-        return
-
-    old_argv = sys.argv[:]
-    argv = ["scanner.py", "--payloads", PAYLOADS_FILE, "--out", scan_out]
-    if os.path.exists(targets_file):
-        argv += ["--targets", targets_file]
-    sys.argv = argv
-    try:
-        scanner.main()
-    except SystemExit as exc:
-        if exc.code and exc.code != 0:
-            print(f"[ERROR] scanner exit code: {exc.code}")
-    finally:
-        sys.argv = old_argv
-
 
 def _task_fuzz():
     from fuzzer.fuzzing_strategy import build_tasks
@@ -350,7 +328,6 @@ def _task_all(skip_crawl: bool = False):
 _TASK_FUNCS = {
     "crawl": _task_crawl,
     "payload": _task_payload,
-    "scan": _task_scan,
     "fuzz": _task_fuzz,
     "execute": _task_execute,
     "validate": _task_validate,
@@ -360,7 +337,6 @@ _TASK_FUNCS = {
 _TASK_LABELS = {
     "crawl": "크롤링 및 타깃 구성",
     "payload": "페이로드 생성",
-    "scan": "스캔 실행",
     "fuzz": "퍼징 전략 수립",
     "execute": "퍼징 실행",
     "validate": "취약점 판정",
@@ -563,16 +539,46 @@ def results_page():
 def findings_page():
     run_id = request.args.get("run") or _current_run_id
     findings_file = _run_path("findings.json", run_id=run_id)
-    if not os.path.exists(findings_file):
-        return render_template("findings.html", findings=None, xss_cnt=0, sqli_cnt=0, run_id=run_id, current_run=_current_run_id)
-    try:
-        with open(findings_file, encoding="utf-8") as f:
-            findings = json.load(f)
-    except Exception as exc:
-        return f"결과 파일 읽기 오류: {exc}", 500
+    exec_file = _run_path("execution_results.json", run_id=run_id)
+
+    findings = []
+    if os.path.exists(findings_file):
+        try:
+            with open(findings_file, encoding="utf-8") as f:
+                findings = json.load(f)
+        except Exception as exc:
+            return f"결과 파일 읽기 오류: {exc}", 500
+
     xss_cnt = sum(1 for f in findings if "xss" in (f.get("vuln_type") or "").lower())
     sqli_cnt = sum(1 for f in findings if "sql" in (f.get("vuln_type") or "").lower())
-    return render_template("findings.html", findings=findings, xss_cnt=xss_cnt, sqli_cnt=sqli_cnt, run_id=run_id, current_run=_current_run_id)
+
+    all_results = []
+    safe_cnt = 0
+    if os.path.exists(exec_file):
+        try:
+            findings_by_id = {f.get("id"): f for f in findings}
+            with open(exec_file, encoding="utf-8") as f:
+                exec_results = json.load(f)
+            for r in exec_results:
+                hit = findings_by_id.get(r.get("id"))
+                r["_vulnerable"] = hit is not None
+                r["_evidence"] = hit.get("evidence", "") if hit else ""
+                r["_vuln_type"] = hit.get("vuln_type", "") if hit else (r.get("meta") or {}).get("vuln_type", "")
+            all_results = exec_results
+            safe_cnt = sum(1 for r in all_results if not r.get("_vulnerable") and not r.get("error"))
+        except Exception:
+            pass
+
+    return render_template(
+        "findings.html",
+        findings=findings,
+        xss_cnt=xss_cnt,
+        sqli_cnt=sqli_cnt,
+        safe_cnt=safe_cnt,
+        all_results=all_results,
+        run_id=run_id,
+        current_run=_current_run_id,
+    )
 
 
 @app.route("/exec_results")

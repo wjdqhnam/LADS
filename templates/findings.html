@@ -1,34 +1,104 @@
-{% extends "base.html" %}
-{% block title %}LADS - 취약점 목록{% endblock %}
-
-{% block content %}
+{% extends "base.html" %} {% block title %}LADS - 취약점 목록{% endblock %} {%
+block content %}
 <section class="flex min-h-[calc(100vh-80px)] flex-col gap-8">
   <div class="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
     <div>
-      <h1 class="text-[30px] font-black leading-tight text-slate-950">취약점 상세 진단 결과</h1>
-      <p class="mt-2 font-mono text-[13px] text-slate-500">Run: {{ run_id or '-' }}</p>
+      <h1 class="text-[30px] font-black leading-tight text-slate-950">
+        취약점 상세 진단 결과
+      </h1>
+      <p class="mt-2 font-mono text-[13px] text-slate-500">
+        Run: {{ run_id or '-' }}
+      </p>
     </div>
-    <a class="inline-flex h-11 items-center justify-center gap-2 rounded-sm border border-surface-line bg-white px-5 text-[15px] font-extrabold text-slate-950 hover:bg-slate-50" href="/runs">
+    <a
+      class="inline-flex h-11 items-center justify-center gap-2 rounded-sm border border-surface-line bg-white px-5 text-[15px] font-extrabold text-slate-950 hover:bg-slate-50"
+      href="/runs"
+    >
       <span class="material-symbols-outlined text-[20px]">history</span>
       실행 이력
     </a>
   </div>
 
-  {% if not findings %}
-  <div class="rounded border border-dashed border-surface-line bg-white px-8 py-16 text-center text-[16px] font-bold text-slate-500">결과 없음</div>
+  {% if not findings and not all_results %}
+  <div
+    class="rounded border border-dashed border-surface-line bg-white px-8 py-16 text-center text-[16px] font-bold text-slate-500"
+  >
+    결과 없음
+  </div>
   {% else %}
-  <div class="grid gap-5 md:grid-cols-3">
-    <div class="rounded border border-surface-line bg-white p-6"><span class="block text-[15px] font-bold text-slate-600">취약점</span><strong class="mt-3 block text-[36px] font-black leading-none text-error">{{ findings|length }}</strong></div>
-    <div class="rounded border border-surface-line bg-white p-6"><span class="block text-[15px] font-bold text-slate-600">XSS</span><strong class="mt-3 block text-[36px] font-black leading-none text-amber-600">{{ xss_cnt }}</strong></div>
-    <div class="rounded border border-surface-line bg-white p-6"><span class="block text-[15px] font-bold text-slate-600">SQLi</span><strong class="mt-3 block text-[36px] font-black leading-none text-error">{{ sqli_cnt }}</strong></div>
+
+  <div
+    class="grid gap-5 {% if all_results %}md:grid-cols-4{% else %}md:grid-cols-3{% endif %}"
+  >
+    <div class="rounded border border-surface-line bg-white p-6">
+      <span class="block text-[15px] font-bold text-slate-600">위험 탐지</span>
+      <strong class="mt-3 block text-[36px] font-black leading-none text-error"
+        >{{ findings|length }}</strong
+      >
+    </div>
+    <div class="rounded border border-surface-line bg-white p-6">
+      <span class="block text-[15px] font-bold text-slate-600">XSS</span>
+      <strong
+        class="mt-3 block text-[36px] font-black leading-none text-amber-600"
+        >{{ xss_cnt }}</strong
+      >
+    </div>
+    <div class="rounded border border-surface-line bg-white p-6">
+      <span class="block text-[15px] font-bold text-slate-600">SQLi</span>
+      <strong class="mt-3 block text-[36px] font-black leading-none text-error"
+        >{{ sqli_cnt }}</strong
+      >
+    </div>
+    {% if all_results %}
+    <div class="rounded border border-surface-line bg-white p-6">
+      <span class="block text-[15px] font-bold text-slate-600">안전</span>
+      <strong
+        class="mt-3 block text-[36px] font-black leading-none text-emerald-600"
+        >{{ safe_cnt }}</strong
+      >
+    </div>
+    {% endif %}
   </div>
 
-  <div class="flex min-h-0 flex-1 flex-col overflow-hidden rounded border border-surface-line bg-white">
+  {% if all_results %}
+  <div class="flex gap-2">
+    <button
+      onclick="filterTable('all')"
+      id="btn-all"
+      class="filter-btn rounded-sm border border-slate-800 bg-slate-800 px-4 py-2 text-[13px] font-extrabold text-white"
+    >
+      전체 ({{ all_results|length }})
+    </button>
+    <button
+      onclick="filterTable('danger')"
+      id="btn-danger"
+      class="filter-btn rounded-sm border border-surface-line bg-white px-4 py-2 text-[13px] font-extrabold text-slate-700 hover:bg-red-50 hover:text-error hover:border-red-200"
+    >
+      위험 ({{ findings|length }})
+    </button>
+    <button
+      onclick="filterTable('safe')"
+      id="btn-safe"
+      class="filter-btn rounded-sm border border-surface-line bg-white px-4 py-2 text-[13px] font-extrabold text-slate-700 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-200"
+    >
+      안전 ({{ safe_cnt }})
+    </button>
+  </div>
+  {% endif %}
+
+  <div
+    class="flex min-h-0 flex-1 flex-col overflow-hidden rounded border border-surface-line bg-white"
+  >
     <div class="border-b border-surface-line bg-surface-soft px-6 py-4">
-      <h2 class="text-[18px] font-black text-slate-950">판정 목록</h2>
+      <h2 class="text-[18px] font-black text-slate-950">
+        {% if all_results %}전체 진단 결과{% else %}위험 탐지 목록{% endif %}
+      </h2>
     </div>
     <div class="min-h-0 flex-1 overflow-auto px-6 py-5">
-      <table class="w-full min-w-[1180px] border-separate border-spacing-0 text-left text-[14px]">
+      <table
+        class="w-full min-w-[1200px] border-separate border-spacing-0 text-left text-[14px]"
+        id="results-table"
+      >
         <thead>
           <tr class="text-[13px] font-bold text-slate-500">
             <th class="border-b border-surface-line px-3 pb-3">탐지 상태</th>
@@ -37,25 +107,147 @@
             <th class="border-b border-surface-line px-3 pb-3">파라미터</th>
             <th class="border-b border-surface-line px-3 pb-3">페이로드</th>
             <th class="border-b border-surface-line px-3 pb-3">상태</th>
-            <th class="border-b border-surface-line px-3 pb-3">기술적 근거</th>
+            <th class="border-b border-surface-line px-3 pb-3">근거</th>
           </tr>
         </thead>
         <tbody>
-          {% for f in findings %}
-          <tr class="hover:bg-slate-50">
-            <td class="border-b border-slate-100 px-3 py-3"><span class="inline-flex items-center gap-2 font-extrabold text-error"><span class="h-2 w-2 rounded-full bg-error"></span>위험</span></td>
-            <td class="border-b border-slate-100 px-3 py-3"><span class="rounded bg-error-container px-2 py-1 font-mono text-[12px] text-red-800">{{ f.vuln_type or '-' }}</span></td>
-            <td class="max-w-[280px] truncate border-b border-slate-100 px-3 py-3 font-mono text-[12px] text-slate-600">{{ f.url or f.point }}</td>
-            <td class="border-b border-slate-100 px-3 py-3 font-mono text-[12px]">{{ f.param or '-' }}</td>
-            <td class="max-w-[380px] truncate border-b border-slate-100 px-3 py-3 font-mono text-[12px] text-slate-700">{{ f.payload }}</td>
-            <td class="border-b border-slate-100 px-3 py-3 font-mono text-[12px]">{{ f.status or '-' }}</td>
-            <td class="max-w-[420px] truncate border-b border-slate-100 px-3 py-3 text-slate-600" title="{{ f.evidence }}">{{ f.evidence }}</td>
+          {% if all_results %} {% for r in all_results %}
+          <tr
+            class="hover:bg-slate-50 result-row {% if r._vulnerable %}row-danger{% elif r.error %}row-error{% else %}row-safe{% endif %}"
+          >
+            <td class="border-b border-slate-100 px-3 py-3">
+              {% if r._vulnerable %}
+              <span
+                class="inline-flex items-center gap-2 font-extrabold text-error"
+              >
+                <span class="h-2 w-2 rounded-full bg-error"></span>위험
+              </span>
+              {% elif r.error %}
+              <span
+                class="inline-flex items-center gap-2 font-extrabold text-slate-400"
+              >
+                <span class="h-2 w-2 rounded-full bg-slate-300"></span>오류
+              </span>
+              {% else %}
+              <span
+                class="inline-flex items-center gap-2 font-extrabold text-emerald-600"
+              >
+                <span class="h-2 w-2 rounded-full bg-emerald-500"></span>안전
+              </span>
+              {% endif %}
+            </td>
+            <td class="border-b border-slate-100 px-3 py-3">
+              {% if r._vuln_type %}
+              <span
+                class="rounded px-2 py-1 font-mono text-[12px] {% if 'xss' in r._vuln_type|lower %}bg-amber-100 text-amber-800 {% elif 'sql' in r._vuln_type|lower %}bg-red-100 text-red-800 {% else %}bg-slate-100 text-slate-700{% endif %}"
+              >
+                {{ r._vuln_type }}
+              </span>
+              {% else %}-{% endif %}
+            </td>
+            <td
+              class="max-w-[260px] truncate border-b border-slate-100 px-3 py-3 font-mono text-[12px] text-slate-600"
+              title="{{ r.url }}"
+            >
+              {{ r.url or r.point }}
+            </td>
+            <td
+              class="border-b border-slate-100 px-3 py-3 font-mono text-[12px]"
+            >
+              {{ r.inject_param or '-' }}
+            </td>
+            <td
+              class="max-w-[360px] truncate border-b border-slate-100 px-3 py-3 font-mono text-[12px] text-slate-700"
+              title="{{ r.payload }}"
+            >
+              {{ r.payload }}
+            </td>
+            <td
+              class="border-b border-slate-100 px-3 py-3 font-mono text-[12px]"
+            >
+              {{ r.status or '-' }}
+            </td>
+            <td
+              class="max-w-[380px] truncate border-b border-slate-100 px-3 py-3 text-slate-600"
+              title="{{ r._evidence }}"
+            >
+              {{ r._evidence or '' }}
+            </td>
           </tr>
-          {% endfor %}
+          {% endfor %} {% else %} {% for f in findings %}
+          <tr class="hover:bg-slate-50">
+            <td class="border-b border-slate-100 px-3 py-3">
+              <span
+                class="inline-flex items-center gap-2 font-extrabold text-error"
+              >
+                <span class="h-2 w-2 rounded-full bg-error"></span>위험
+              </span>
+            </td>
+            <td class="border-b border-slate-100 px-3 py-3">
+              <span
+                class="rounded px-2 py-1 font-mono text-[12px] {% if 'xss' in (f.vuln_type or '')|lower %}bg-amber-100 text-amber-800 {% elif 'sql' in (f.vuln_type or '')|lower %}bg-red-100 text-red-800 {% else %}bg-slate-100 text-slate-700{% endif %}"
+              >
+                {{ f.vuln_type or '-' }}
+              </span>
+            </td>
+            <td
+              class="max-w-[260px] truncate border-b border-slate-100 px-3 py-3 font-mono text-[12px] text-slate-600"
+            >
+              {{ f.url or f.point }}
+            </td>
+            <td
+              class="border-b border-slate-100 px-3 py-3 font-mono text-[12px]"
+            >
+              {{ f.param or '-' }}
+            </td>
+            <td
+              class="max-w-[360px] truncate border-b border-slate-100 px-3 py-3 font-mono text-[12px] text-slate-700"
+              title="{{ f.payload }}"
+            >
+              {{ f.payload }}
+            </td>
+            <td
+              class="border-b border-slate-100 px-3 py-3 font-mono text-[12px]"
+            >
+              {{ f.status or '-' }}
+            </td>
+            <td
+              class="max-w-[380px] truncate border-b border-slate-100 px-3 py-3 text-slate-600"
+              title="{{ f.evidence }}"
+            >
+              {{ f.evidence }}
+            </td>
+          </tr>
+          {% endfor %} {% endif %}
         </tbody>
       </table>
     </div>
   </div>
+
   {% endif %}
 </section>
+{% endblock %} {% block scripts %}
+<script>
+  function filterTable(mode) {
+    document.querySelectorAll('.result-row').forEach(function (row) {
+      if (mode === 'all') {
+        row.style.display = ''
+      } else if (mode === 'danger') {
+        row.style.display = row.classList.contains('row-danger') ? '' : 'none'
+      } else if (mode === 'safe') {
+        row.style.display = row.classList.contains('row-safe') ? '' : 'none'
+      }
+    })
+
+    document.querySelectorAll('.filter-btn').forEach(function (btn) {
+      btn.className =
+        'filter-btn rounded-sm border border-surface-line bg-white px-4 py-2 text-[13px] font-extrabold text-slate-700 hover:bg-slate-50'
+    })
+    var active = document.getElementById('btn-' + mode)
+    if (active) {
+      active.className =
+        'filter-btn rounded-sm border border-slate-800 bg-slate-800 px-4 py-2 text-[13px] font-extrabold text-white'
+    }
+  }
+</script>
 {% endblock %}

@@ -7,23 +7,7 @@ from __future__ import annotations
 
 import json
 
-_MYSQL_ERRORS = [
-    "you have an error in your sql syntax",
-    "warning: mysql",
-    "xpath syntax error",
-    "extractvalue(",
-    "updatexml(",
-    "duplicate entry",
-    "column count doesn't match",
-    "the used select statements have a different number",
-    "supplied argument is not a valid mysql",
-    "division by zero",
-    "unknown column",
-    "table 'g5_",
-    # sqli_analyzer 추가분
-    "com.mysql.jdbc.exceptions",
-    "org.gjt.mm.mysql",
-]
+from baseline.sqli import ERROR_PATTERNS as _MYSQL_ERRORS
 
 _XSS_MARKERS = [
     "onerror=alert",

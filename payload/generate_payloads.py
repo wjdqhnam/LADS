@@ -33,6 +33,7 @@ INPUT_POINTS = [
         "type":    "stored_xss",
         "note":    "게시글 제목 - 홈/상세/관리자 3곳 반영, script 차단",
         "vuln_types": ["xss_subject"],
+        "base_params": {"w": "w", "bo_table": "free", "wr_content": "", "html": "1"},
     },
     {
         "name":    "xss_wr_content",
@@ -42,6 +43,7 @@ INPUT_POINTS = [
         "type":    "stored_xss",
         "note":    "게시글 본문 - img/a/b/p 허용, script 차단, 이벤트핸들러 우회 필요",
         "vuln_types": ["xss_content"],
+        "base_params": {"w": "w", "bo_table": "free", "wr_subject": "test", "html": "1"},
     },
     {
         "name":    "xss_search_stx",
@@ -51,6 +53,7 @@ INPUT_POINTS = [
         "type":    "reflected_xss",
         "note":    "검색창 stx - value='' 속성 반영, onfocus=alert(1)→onfocusalert1 필터",
         "vuln_types": ["xss_search"],
+        "base_params": {"sfl": "wr_subject", "sop": "and"},
     },
     {
         "name":    "xss_qalist_stx",
@@ -60,6 +63,7 @@ INPUT_POINTS = [
         "type":    "reflected_xss",
         "note":    "Q&A 검색창 - search.php와 동일 패턴",
         "vuln_types": ["xss_search"],
+        "base_params": {"sfl": "wr_subject", "sop": "and"},
     },
     {
         "name":    "xss_comment",
@@ -69,6 +73,7 @@ INPUT_POINTS = [
         "type":    "stored_xss",
         "note":    "댓글 본문 - http:// URL만 <a href> 변환, javascript: 차단",
         "vuln_types": ["xss_comment"],
+        "base_params": {"bo_table": "free", "wr_id": "1", "w": ""},
     },
 
     # ── SQLi 타겟 ──────────────────────────────────────────────
@@ -82,6 +87,7 @@ INPUT_POINTS = [
         "db":      "MySQL",
         "note":    "검색 필드 선택자 - SQL WHERE {sfl} LIKE '...' 직접 연결",
         "vuln_types": ["sqli_field"],
+        "base_params": {"stx": "test", "sop": "and"},
     },
     {
         "name":    "sqli_search_sst",
@@ -92,6 +98,7 @@ INPUT_POINTS = [
         "db":      "MySQL",
         "note":    "정렬 컬럼 - ORDER BY {sst} 직접 연결, intval 없음",
         "vuln_types": ["sqli_orderby"],
+        "base_params": {"stx": "test", "sfl": "wr_subject", "sop": "and"},
     },
     {
         "name":    "sqli_search_stx",
@@ -102,6 +109,7 @@ INPUT_POINTS = [
         "db":      "MySQL",
         "note":    "검색 키워드 - LIKE '%{stx}%' 문자열 컨텍스트",
         "vuln_types": ["sqli_string"],
+        "base_params": {"sfl": "wr_subject", "sop": "and"},
     },
     {
         "name":    "sqli_login_mb_id",
@@ -112,6 +120,7 @@ INPUT_POINTS = [
         "db":      "MySQL",
         "note":    "로그인 아이디 - 문자열 컨텍스트, 인증 우회 목표",
         "vuln_types": ["sqli_login"],
+        "base_params": {"mb_password": "test", "url": "/"},
     },
     {
         "name":    "sqli_qalist_sfl",
@@ -122,6 +131,7 @@ INPUT_POINTS = [
         "db":      "MySQL",
         "note":    "Q&A 검색 필드 선택자 - search.php sfl과 동일 패턴",
         "vuln_types": ["sqli_field"],
+        "base_params": {"stx": "test", "sop": "and"},
     },
 ]
 
