@@ -49,13 +49,6 @@
 <body class="min-h-screen bg-background text-[15px] text-slate-950 antialiased">
   {% set path = request.path %}
   <nav class="fixed left-0 top-0 z-40 hidden h-full w-64 flex-col border-r border-slate-200 bg-white font-medium text-slate-900 md:flex">
-    <div class="p-5">
-      <a class="flex h-12 w-full items-center justify-center gap-2 rounded-sm bg-slate-800 text-[15px] font-bold text-white hover:bg-slate-900" href="/">
-        <span class="material-symbols-outlined text-[20px]">play_arrow</span>
-        스캔 시작
-      </a>
-    </div>
-
     <div class="flex-1 overflow-y-auto py-3">
       <a class="nav-link {% if path == '/' %}nav-active{% endif %}" href="/">
         <span class="material-symbols-outlined">timeline</span>
@@ -72,6 +65,13 @@
       <a class="nav-link {% if path == '/runs' or path.startswith('/runs/') %}nav-active{% endif %}" href="/runs">
         <span class="material-symbols-outlined">history</span>
         실행 이력
+      </a>
+    </div>
+
+    <div class="p-5">
+      <a class="flex h-12 w-full items-center justify-center gap-2 rounded-sm bg-slate-800 text-[15px] font-bold text-white hover:bg-slate-900" href="/">
+        <span class="material-symbols-outlined text-[20px]">play_arrow</span>
+        스캔 시작
       </a>
     </div>
   </nav>
