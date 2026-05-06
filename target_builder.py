@@ -55,7 +55,7 @@ def build_targets(pages: list[dict]) -> list[dict]:
                     "field_type":    "url_param",
                     "default_value": vals[0] if vals else "",
                     "options":       [],
-                    "injectable":    True,
+                    "injectable":    _injectable(name, "url_param"),
                 }
                 for name, vals in qp.items()
             ]
@@ -77,32 +77,42 @@ def build_targets(pages: list[dict]) -> list[dict]:
         for form in page.get("forms", []):
             params = []
             for f in form.get("fields", []):
-                if f["field_type"] in SKIP_TYPES:
+                field_type = f.get("field_type", "text")
+                name = f.get("name", "")
+                if not name:
+                    continue
+                if field_type in SKIP_TYPES:
                     continue
                 params.append({
-                    "name":          f["name"],
-                    "field_type":    f["field_type"],
+                    "name":          name,
+                    "field_type":    field_type,
                     "default_value": f.get("value", ""),
                     "options":       f.get("options", []),
-                    "injectable":    _injectable(f["name"], f["field_type"]),
+                    "injectable":    _injectable(name, field_type),
                 })
 
             if not params:
                 continue
 
-            sig = _form_sig(form["action"], form["method"],
-                            [p["name"] for p in params])
+            action = form.get("action", "")
+            method = form.get("method", "GET").upper()
+            sig = _form_sig(action, method, [p["name"] for p in params])
             if sig not in seen:
                 seen.add(sig)
                 tid += 1
+                needs_csrf = any(
+                    not p["injectable"] and CSRF_RE.search(p["name"])
+                    for p in params
+                )
                 targets.append({
-                    "id":         f"form_{tid:04d}",
-                    "type":       "form",
-                    "source_url": source,
-                    "action":     form["action"],
-                    "method":     form["method"],
-                    "enctype":    form.get("enctype", "application/x-www-form-urlencoded"),
-                    "params":     params,
+                    "id":                 f"form_{tid:04d}",
+                    "type":               "form",
+                    "source_url":         source,
+                    "action":             action,
+                    "method":             method,
+                    "enctype":            form.get("enctype", "application/x-www-form-urlencoded"),
+                    "needs_csrf_refresh": needs_csrf,
+                    "params":             params,
                 })
 
     return targets
