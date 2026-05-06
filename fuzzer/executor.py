@@ -2,12 +2,42 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import time
 from typing import Any
 
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
+
+
+_HIDDEN_TAG_RE = re.compile(r"<input[^>]+>", re.IGNORECASE | re.DOTALL)
+_INPUT_TYPE_RE = re.compile(r'\btype=["\']([^"\']+)["\']', re.IGNORECASE)
+_INPUT_NAME_RE = re.compile(r'\bname=["\']([^"\']+)["\']', re.IGNORECASE)
+_INPUT_VALUE_RE = re.compile(r'\bvalue=["\']([^"\']*)["\']', re.IGNORECASE)
+_CSRF_NAME_RE = re.compile(r"(csrf|token|nonce|_token|authenticity|captcha)", re.IGNORECASE)
+
+
+def _fetch_fresh_csrf(session: requests.Session, source_url: str, timeout: int) -> dict[str, str]:
+    """GET source_url, extract fresh values for any CSRF hidden inputs."""
+    try:
+        r = session.get(source_url, timeout=timeout, allow_redirects=True)
+        tokens: dict[str, str] = {}
+        for tag in _HIDDEN_TAG_RE.findall(r.text):
+            m_type = _INPUT_TYPE_RE.search(tag)
+            if not (m_type and m_type.group(1).lower() == "hidden"):
+                continue
+            m_name = _INPUT_NAME_RE.search(tag)
+            if not m_name:
+                continue
+            field_name = m_name.group(1)
+            if not _CSRF_NAME_RE.search(field_name):
+                continue
+            m_val = _INPUT_VALUE_RE.search(tag)
+            tokens[field_name] = m_val.group(1) if m_val else ""
+        return tokens
+    except Exception:
+        return {}
 
 
 def _make_session() -> requests.Session:
@@ -82,6 +112,11 @@ def execute(
         base_cookies = dict(t.get("base_cookies") or {})
         base_value = str(t.get("base_value") or "")
 
+        if t.get("needs_csrf_refresh") and method == "POST":
+            src = t.get("source_url", "")
+            if src:
+                base_params.update(_fetch_fresh_csrf(session, src, timeout))
+
         if inject_mode == "append":
             injected = f"{base_value}{payload}"
         else:
@@ -115,15 +150,27 @@ def execute(
         started = time.perf_counter()
         try:
             if method == "POST":
-                resp = session.post(
-                    url,
-                    params=params,
-                    data=data,
-                    headers=headers,
-                    cookies=cookies,
-                    timeout=timeout,
-                    allow_redirects=True,
-                )
+                enctype = str(t.get("enctype") or "").lower()
+                if "multipart" in enctype and data:
+                    resp = session.post(
+                        url,
+                        params=params,
+                        files={k: (None, str(v)) for k, v in data.items()},
+                        headers=headers,
+                        cookies=cookies,
+                        timeout=timeout,
+                        allow_redirects=True,
+                    )
+                else:
+                    resp = session.post(
+                        url,
+                        params=params,
+                        data=data,
+                        headers=headers,
+                        cookies=cookies,
+                        timeout=timeout,
+                        allow_redirects=True,
+                    )
             else:
                 resp = session.get(
                     url,

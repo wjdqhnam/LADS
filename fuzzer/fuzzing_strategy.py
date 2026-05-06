@@ -128,55 +128,45 @@ def build_tasks(
 
         inject_location = _guess_location(method)
 
-        # points_meta에 명시적 base_params가 있으면 우선 사용
-        if p.get("base_params"):
-            base_params: dict[str, Any] = {
-                k: v for k, v in p["base_params"].items() if k != param
-            }
-        else:
-            merged = target_params.get((method, _base_url(str(url))), {})
-            base_params = {k: v for k, v in merged.items() if k != param}
+        # 기본 파라미터(기본값) 구성: targets.json 기반으로 같은 endpoint를 찾아 채움
+        base_params: dict[str, Any] = {}
+        t = target_index.get((method, _base_url(str(url))))
+        if isinstance(t, dict):
+            for pr in t.get("params", []) or []:
+                if not isinstance(pr, dict):
+                    continue
+                n = pr.get("name")
+                if not n or n == param:
+                    continue
+                base_params[str(n)] = pr.get("default_value", "")
 
-        if progress_callback:
-            progress_callback(idx + 1, total_points)
-
-        # ── payload 중복 제거용 집합 (point별로 초기화) ──
-        used_payloads: set[str] = set()
-
-        def _emit(payload: str, vtype: str, rec_type: str | None, family: str | None) -> None:
-            nonlocal tid
-            if not payload or payload in used_payloads:
-                return
-            used_payloads.add(payload)
-            meta = {"vuln_type": vtype, "type": rec_type, "family": family}
-            for mode in ("replace", "append"):
-                out.append({
-                    "id": f"t{tid:06d}_{mode[0]}",
-                    "point": name,
-                    "url": url,
-                    "method": method,
-                    "inject_location": inject_location,
-                    "inject_param": param,
-                    "inject_mode": mode,
-                    "base_params": base_params,
-                    "base_cookies": base_cookies or {},
-                    "payload": payload,
-                    "meta": meta,
-                })
-                tid += 1
-
-        # 1. LLM 페이로드
         for vtype, records in point_payloads.items():
             if not isinstance(records, list):
                 continue
             for rec in records:
                 if not isinstance(rec, dict):
                     continue
-                _emit(rec.get("payload"), vtype, rec.get("type"), rec.get("family"))
+                payload = rec.get("payload")
+                if not payload:
+                    continue
 
-        # 2. Baseline 페이로드 (LLM과 중복 제외)
-        vuln_types = p.get("vuln_types") or []
-        for rec in _get_baseline_records(name, vuln_types):
-            _emit(rec.get("payload"), rec["vtype"], rec.get("type"), rec.get("family"))
+                meta = {"vuln_type": vtype, "type": rec.get("type"), "family": rec.get("family")}
+
+                for mode in ("replace", "append"):
+                    out.append(
+                        {
+                            "id": f"t{tid:06d}_{mode[0]}",
+                            "point": name,
+                            "url": url,
+                            "method": method,
+                            "inject_location": inject_location,
+                            "inject_param": param,
+                            "inject_mode": mode,
+                            "base_params": base_params,
+                            "payload": payload,
+                            "meta": meta,
+                        }
+                    )
+                    tid += 1
 
     return out

