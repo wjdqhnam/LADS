@@ -8,9 +8,10 @@
       <h1 class="text-[30px] font-black leading-tight text-slate-950">퍼징 실행 결과</h1>
       <p class="mt-2 font-mono text-[13px] text-slate-500">Run: {{ run_id or '-' }}</p>
     </div>
-    <a class="inline-flex h-11 items-center justify-center gap-2 rounded-sm border border-surface-line bg-white px-5 text-[15px] font-extrabold text-slate-950 hover:bg-slate-50" href="/runs">
-      <span class="material-symbols-outlined text-[20px]">history</span>
-      실행 이력
+    <a class="inline-flex h-11 items-center justify-center gap-2 rounded-sm border border-surface-line bg-white px-5 text-[15px] font-extrabold text-slate-950 hover:bg-slate-50"
+       href="/runs/{{ run_id }}">
+      <span class="material-symbols-outlined text-[20px]">arrow_back</span>
+      실행 상세로
     </a>
   </div>
 
@@ -29,34 +30,36 @@
       <h2 class="text-[18px] font-black text-slate-950">실행 상세</h2>
     </div>
     <div class="min-h-0 flex-1 overflow-auto px-6 py-5">
-      <table class="w-full min-w-[1280px] border-separate border-spacing-0 text-left text-[14px]">
+      <table class="w-full min-w-[1100px] border-separate border-spacing-0 text-left text-[14px]">
         <thead>
           <tr class="text-[13px] font-bold text-slate-500">
-            <th class="border-b border-surface-line px-3 pb-3">작업 ID</th>
+            <th class="border-b border-surface-line px-3 pb-3">ID</th>
+            <th class="border-b border-surface-line px-3 pb-3">포인트</th>
             <th class="border-b border-surface-line px-3 pb-3">파라미터</th>
-            <th class="border-b border-surface-line px-3 pb-3">범위</th>
-            <th class="border-b border-surface-line px-3 pb-3">방식</th>
             <th class="border-b border-surface-line px-3 pb-3">위치</th>
             <th class="border-b border-surface-line px-3 pb-3">유형</th>
             <th class="border-b border-surface-line px-3 pb-3">페이로드</th>
             <th class="border-b border-surface-line px-3 pb-3">상태</th>
-            <th class="border-b border-surface-line px-3 pb-3">시간</th>
+            <th class="border-b border-surface-line px-3 pb-3">응답시간</th>
             <th class="border-b border-surface-line px-3 pb-3">오류</th>
           </tr>
         </thead>
         <tbody>
           {% for r in results %}
-          <tr class="hover:bg-slate-50">
-            <td class="border-b border-slate-100 px-3 py-3 font-mono text-[12px] text-slate-500">{{ r.task_id }}</td>
-            <td class="border-b border-slate-100 px-3 py-3 font-mono text-[12px]">{{ r.inject_param }}</td>
-            <td class="border-b border-slate-100 px-3 py-3">{{ r.inject_scope }}</td>
-            <td class="border-b border-slate-100 px-3 py-3">{{ r.inject_mode }}</td>
-            <td class="border-b border-slate-100 px-3 py-3">{{ r.inject_location }}</td>
-            <td class="border-b border-slate-100 px-3 py-3">{{ r.vuln_type }}</td>
-            <td class="max-w-[440px] truncate border-b border-slate-100 px-3 py-3 font-mono text-[12px] text-slate-700">{{ r.payload }}</td>
-            <td class="border-b border-slate-100 px-3 py-3 font-mono text-[12px]">{{ r.status_code or '-' }}</td>
-            <td class="border-b border-slate-100 px-3 py-3 font-mono text-[12px]">{% if r.response_time %}{{ "%.3f"|format(r.response_time) }}s{% else %}-{% endif %}</td>
-            <td class="max-w-[260px] truncate border-b border-slate-100 px-3 py-3 text-error">{{ r.error or '' }}</td>
+          <tr class="hover:bg-slate-50 {% if r.error %}bg-red-50{% endif %}">
+            <td class="border-b border-slate-100 px-3 py-3 font-mono text-[12px] text-slate-400">{{ r.id }}</td>
+            <td class="border-b border-slate-100 px-3 py-3 font-mono text-[12px]">{{ r.point }}</td>
+            <td class="border-b border-slate-100 px-3 py-3 font-mono text-[12px] font-bold">{{ r.inject_param or '-' }}</td>
+            <td class="border-b border-slate-100 px-3 py-3 text-[13px]">{{ r.inject_location or '-' }}</td>
+            <td class="border-b border-slate-100 px-3 py-3">
+              {% if r.meta %}
+              <span class="rounded bg-slate-100 px-2 py-1 font-mono text-[11px]">{{ r.meta.vuln_type or '-' }}</span>
+              {% else %}-{% endif %}
+            </td>
+            <td class="max-w-[320px] truncate border-b border-slate-100 px-3 py-3 font-mono text-[12px] text-slate-700" title="{{ r.payload }}">{{ r.payload }}</td>
+            <td class="border-b border-slate-100 px-3 py-3 font-mono text-[12px]">{{ r.status or '-' }}</td>
+            <td class="border-b border-slate-100 px-3 py-3 font-mono text-[12px]">{% if r.elapsed %}{{ "%.3f"|format(r.elapsed) }}s{% else %}-{% endif %}</td>
+            <td class="border-b border-slate-100 px-3 py-3 font-mono text-[12px] text-error">{{ r.error or '' }}</td>
           </tr>
           {% endfor %}
         </tbody>

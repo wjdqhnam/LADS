@@ -376,6 +376,12 @@ def stream_task(task):
     skip_crawl = request.args.get("skip_crawl") == "1"
     q = queue.Queue()
 
+    # 전체 스캔(all)이고 크롤링도 새로 하는 경우 → 새 런 자동 생성
+    if task == "all" and not skip_crawl:
+        global _current_run_id
+        _current_run_id = _make_run_id()
+        os.makedirs(os.path.join(RUNS_DIR, _current_run_id), exist_ok=True)
+
     def run_in_thread():
         acquired = _task_lock.acquire(blocking=False)
         if not acquired:
