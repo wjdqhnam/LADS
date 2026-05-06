@@ -55,8 +55,14 @@ def build_tasks(points_meta: Any, payloads: Any, targets: Any | None = None) -> 
 
         # 기본 파라미터(기본값) 구성: targets.json 기반으로 같은 endpoint를 찾아 채움
         base_params: dict[str, Any] = {}
+        needs_csrf = False
+        source_url = ""
+        enctype = ""
         t = target_index.get((method, _base_url(str(url))))
         if isinstance(t, dict):
+            needs_csrf = bool(t.get("needs_csrf_refresh"))
+            source_url = str(t.get("source_url") or "")
+            enctype = str(t.get("enctype") or "")
             for pr in t.get("params", []) or []:
                 if not isinstance(pr, dict):
                     continue
@@ -90,6 +96,9 @@ def build_tasks(points_meta: Any, payloads: Any, targets: Any | None = None) -> 
                             "base_params": base_params,
                             "payload": payload,
                             "meta": meta,
+                            "needs_csrf_refresh": needs_csrf,
+                            "source_url": source_url,
+                            "enctype": enctype,
                         }
                     )
                     tid += 1
