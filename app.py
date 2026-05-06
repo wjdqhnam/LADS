@@ -49,6 +49,12 @@ _active_target_key = "primary"
 _current_run_id: str | None = None
 
 app = Flask(__name__)
+# 개발 중 템플릿/정적 파일이 "안 바뀌는" 문제 방지용 설정.
+# - debug가 꺼져 있어도 templates 변경이 즉시 반영되도록 함
+# - 정적 파일 캐시를 줄여(0초) 새로고침 시 바로 반영되도록 함
+app.config["TEMPLATES_AUTO_RELOAD"] = True
+app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 0
+app.jinja_env.auto_reload = True
 _task_lock = threading.Lock()
 _thread_local = threading.local()
 
@@ -544,18 +550,7 @@ def index():
 
 @app.route("/results")
 def results_page():
-    scan_file = _run_path("scan_results.json")
-    if not os.path.exists(scan_file):
-        return render_template("results.html", results=None, total=0, n_vuln=0, rate=0.0)
-    try:
-        with open(scan_file, encoding="utf-8") as f:
-            results = json.load(f)
-    except Exception as exc:
-        return f"결과 파일 읽기 오류: {exc}", 500
-    total = len(results)
-    n_vuln = sum(1 for r in results if r.get("vulnerable"))
-    rate = n_vuln / max(total, 1) * 100
-    return render_template("results.html", results=results, total=total, n_vuln=n_vuln, rate=rate)
+    return redirect("/findings")
 
 
 @app.route("/findings")
@@ -619,12 +614,69 @@ def new_run():
     return redirect("/")
 
 
+@app.route("/runs/<run_id>")
+def run_detail(run_id):
+    run_dir = os.path.join(RUNS_DIR, run_id)
+    if not os.path.isdir(run_dir):
+        return "존재하지 않는 런입니다.", 404
+
+    try:
+        ts = datetime.strptime(run_id, "run_%Y%m%d_%H%M%S").strftime("%Y-%m-%d %H:%M:%S")
+    except Exception:
+        ts = run_id
+
+    files = set(os.listdir(run_dir))
+
+    findings, xss_cnt, sqli_cnt = [], 0, 0
+    if "findings.json" in files:
+        try:
+            with open(os.path.join(run_dir, "findings.json"), encoding="utf-8") as f:
+                findings = json.load(f)
+            xss_cnt = sum(1 for fi in findings if "xss" in (fi.get("vuln_type") or "").lower())
+            sqli_cnt = sum(1 for fi in findings if "sql" in (fi.get("vuln_type") or "").lower())
+        except Exception:
+            pass
+
+    exec_results, exec_ok, exec_timeout, exec_err = [], 0, 0, 0
+    if "execution_results.json" in files:
+        try:
+            with open(os.path.join(run_dir, "execution_results.json"), encoding="utf-8") as f:
+                exec_results = json.load(f)
+            exec_ok = sum(1 for r in exec_results if r.get("error") is None)
+            exec_timeout = sum(1 for r in exec_results if r.get("error") == "timeout")
+            exec_err = sum(1 for r in exec_results if r.get("error") and r.get("error") != "timeout")
+        except Exception:
+            pass
+
+    return render_template(
+        "run_detail.html",
+        run_id=run_id,
+        ts=ts,
+        is_current=(run_id == _current_run_id),
+        has_crawl="crawl_result.json" in files,
+        has_targets="targets.json" in files,
+        has_payload=os.path.exists(PAYLOADS_FILE),
+        has_fuzz="fuzz_tasks.json" in files,
+        has_exec="execution_results.json" in files,
+        has_findings="findings.json" in files,
+        findings=findings,
+        xss_cnt=xss_cnt,
+        sqli_cnt=sqli_cnt,
+        exec_results=exec_results,
+        exec_total=len(exec_results),
+        exec_ok=exec_ok,
+        exec_timeout=exec_timeout,
+        exec_err=exec_err,
+        current_run=_current_run_id,
+    )
+
+
 @app.route("/runs/set/<run_id>", methods=["POST"])
 def set_run(run_id):
     global _current_run_id
     if os.path.isdir(os.path.join(RUNS_DIR, run_id)):
         _current_run_id = run_id
-    return redirect("/runs")
+    return redirect(f"/runs/{run_id}")
 
 
 @app.route("/runs/delete/<run_id>", methods=["POST"])
@@ -644,4 +696,11 @@ if __name__ == "__main__":
     os.makedirs("results", exist_ok=True)
     _init_run()
     print("LADS dashboard: http://localhost:5000")
-    app.run(host="0.0.0.0", port=5000, debug=False, threaded=True)
+    _dev = os.getenv("FLASK_DEBUG", "").lower() in ("1", "true", "yes")
+    app.run(
+        host="0.0.0.0",
+        port=5000,
+        debug=_dev,
+        use_reloader=True,
+        threaded=True,
+    )
