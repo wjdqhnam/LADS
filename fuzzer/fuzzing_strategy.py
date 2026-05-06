@@ -13,7 +13,7 @@ def _guess_location(method: str) -> str:
     return "body" if method.upper() == "POST" else "query"
 
 
-def build_tasks(points_meta: Any, payloads: Any, targets: Any | None = None, progress_callback=None) -> list[dict]:  # 로딩바 콜백 함수
+def build_tasks(points_meta: Any, payloads: Any, targets: Any | None = None, base_cookies: dict | None = None, progress_callback=None) -> list[dict]:  # 로딩바 콜백 함수
     """points+payloads(+targets) -> fuzz task list."""
 
     if not points_meta or not payloads:
@@ -92,6 +92,7 @@ def build_tasks(points_meta: Any, payloads: Any, targets: Any | None = None, pro
                             "inject_param": param,
                             "inject_mode": mode,
                             "base_params": base_params,
+                            "base_cookies": base_cookies or {},
                             "payload": payload,
                             "meta": meta,
                         }

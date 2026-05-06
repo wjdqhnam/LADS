@@ -1,6 +1,7 @@
 # Environment files
 .env
 *.env
+.venv
 
 # Python cache
 __pycache__/
@@ -8,13 +9,11 @@ __pycache__/
 
 # Data / result files
 log/
-baseline/
-targets.json
-sum_log.txt
-crawl_result.json
 
-# JSON result files - local only
+# JSON , log files (result and logging) loacal only
 *.json
+*.log
+sum_log.txt
 
-# Debug logs
-debug-*.log
+# 테스트용
+newbase.py

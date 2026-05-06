@@ -9,7 +9,7 @@ from typing import Optional
 from urllib.parse import parse_qs, urljoin, urlparse
 
 import requests
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup  # type: ignore[reportMissingModuleSource]
 from dotenv import load_dotenv
 
 load_dotenv()
