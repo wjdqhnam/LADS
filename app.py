@@ -33,83 +33,23 @@ import queue
 import threading
 from pathlib import Path
 
-from flask import Flask, Response, render_template, request
+from flask import Flask, Response, render_template_string, request
 from dotenv import load_dotenv
 
 load_dotenv()
 
 
 # ── 설정 ─────────────────────────────────────────────────────────
-BASE_URL           = os.getenv("TARGET_URL",        "http://34.68.27.120:8081")
-TARGET_URL_2       = os.getenv("TARGET_URL_2",      "http://34.68.27.120:8080")
-CMS_NAME           = "Gnuboard5 5.3.2.8"
-PAYLOADS_FILE      = os.getenv("PAYLOADS_FILE",     "results/payloads_llm.json")
-SCAN_RESULTS_FILE  = os.getenv("SCAN_RESULTS_FILE", "results/scan_results_llm.json")
-PAYLOADS_META_FILE = os.getenv("PAYLOADS_META_FILE","results/payloads_llm_meta.json")
-RUNS_DIR           = "runs"
-_TARGETS = [
-    {"key": "primary",   "name": "Gnuboard5 (8081)", "url": BASE_URL,    "version": CMS_NAME},
-    {"key": "secondary", "name": "Gnuboard5 (8080)", "url": TARGET_URL_2, "version": "Test Env"},
-]
-_active_target_key: str = "primary"
-
-# ── Run 관리 ──────────────────────────────────────────────────────
-_current_run_id: str | None = None
-
-
-def _make_run_id() -> str:
-    return datetime.now().strftime("run_%Y%m%d_%H%M%S")
-
-
-def _init_run():
-    global _current_run_id
-    os.makedirs(RUNS_DIR, exist_ok=True)
-    existing = sorted(
-        [d for d in os.listdir(RUNS_DIR)
-         if os.path.isdir(os.path.join(RUNS_DIR, d)) and d.startswith("run_")],
-        reverse=True,
-    )
-    if existing:
-        _current_run_id = existing[0]
-    else:
-        _current_run_id = _make_run_id()
-        os.makedirs(os.path.join(RUNS_DIR, _current_run_id), exist_ok=True)
-
-
-def _run_path(filename: str) -> str:
-    return os.path.join(RUNS_DIR, _current_run_id or "default", filename)
-
-
-def _list_runs() -> list[dict]:
-    if not os.path.exists(RUNS_DIR):
-        return []
-    runs = []
-    for d in sorted(os.listdir(RUNS_DIR), reverse=True):
-        full = os.path.join(RUNS_DIR, d)
-        if not os.path.isdir(full) or not d.startswith("run_"):
-            continue
-        files = set(os.listdir(full))
-        try:
-            ts = datetime.strptime(d, "run_%Y%m%d_%H%M%S").strftime("%Y-%m-%d %H:%M:%S")
-        except Exception:
-            ts = d
-        findings_cnt = 0
-        if "findings.json" in files:
-            try:
-                with open(os.path.join(full, "findings.json"), encoding="utf-8") as f:
-                    findings_cnt = len(json.load(f))
-            except Exception:
-                pass
-        runs.append({
-            "id":          d,
-            "ts":          ts,
-            "is_current":  d == _current_run_id,
-            "has_crawl":   "crawl_result.json"      in files,
-            "has_exec":    "execution_results.json"  in files,
-            "has_findings":"findings.json"           in files,
-            "findings_cnt": findings_cnt,
-        })
-    return runs
+BASE_URL          = os.getenv("TARGET_URL",        "http://34.68.27.120:8081")
+CMS_NAME          = "Gnuboard5 5.3.2.8"
+CRAWL_RESULT_FILE = os.getenv("CRAWL_RESULT",      "crawl_result.json")
+TARGETS_FILE      = os.getenv("TARGETS_FILE",      "targets.json")
+PAYLOADS_FILE     = os.getenv("PAYLOADS_FILE",     "results/payloads_llm.json")
+SCAN_RESULTS_FILE = os.getenv("SCAN_RESULTS_FILE", "results/scan_results_llm.json")
+PAYLOADS_META_FILE = os.getenv("PAYLOADS_META_FILE", "results/payloads_llm_meta.json")
+FUZZ_TASKS_FILE    = os.getenv("FUZZ_TASKS_FILE",   "fuzz_tasks.json")
+EXEC_RESULTS_FILE  = os.getenv("EXEC_RESULTS_FILE", "execution_results.json")
+FINDINGS_FILE      = os.getenv("FINDINGS_FILE",     "results/findings.json")
 
 app = Flask(__name__)
 _task_lock    = threading.Lock()
@@ -117,7 +57,9 @@ _thread_local = threading.local()
 
 
 # #region agent log
-_DBG_LOG_PATH = Path(__file__).with_name("debug-3194ca.log")
+_DBG_LOG_DIR  = Path(__file__).parent / "log"
+_DBG_LOG_DIR.mkdir(exist_ok=True)
+_DBG_LOG_PATH = _DBG_LOG_DIR / "debug-3194ca.log"
 _DBG_BUILD_ID = os.getenv("LADS_BUILD_ID") or datetime.now().strftime("%Y%m%d-%H%M%S") + "-" + uuid.uuid4().hex[:8]
 
 
@@ -193,45 +135,26 @@ sys.stdout = _RoutingStream(sys.__stdout__)
 
 # ── 태스크 함수 ───────────────────────────────────────────────────
 
-def _emit_progress(pct: int) -> None:
-    q = getattr(_thread_local, "log_queue", None)
-    if q is not None:
-        q.put(f"__PROGRESS__{max(0, min(100, pct))}")
-
-
-def _active_url() -> str:
-    t = next((t for t in _TARGETS if t["key"] == _active_target_key), _TARGETS[0])
-    return t["url"]
-
-
 def _task_crawl():
     from crawler import Crawler
     from target_builder import build_targets, print_summary
 
-    crawl_file   = _run_path("crawl_result.json")
-    targets_file = _run_path("targets.json")
-    target_url   = _active_url()
-
-    print(f"크롤링 시작: {target_url}")
-    crawler = Crawler(target_url)
-
-    def _crawl_progress(done: int, total: int) -> None:
-        pct = int(done / max(total, 1) * 20)  # 크롤링 구간: 0~20%
-        _emit_progress(pct)
-
-    crawler.crawl(progress_callback=_crawl_progress)
-    crawler.save(crawl_file)
+    print(f"크롤링 시작: {BASE_URL}")
+    crawler = Crawler(BASE_URL)
+    crawler.crawl()
+    crawler.save(CRAWL_RESULT_FILE)
     crawler.summary()
 
-    print(f"타겟 구성 시작: {crawl_file}")
-    with open(crawl_file, encoding="utf-8") as f:
+    print(f"타겟 구성 시작: {CRAWL_RESULT_FILE}")
+    with open(CRAWL_RESULT_FILE, encoding="utf-8") as f:
         pages = json.load(f)
     targets = build_targets(pages)
 
-    with open(targets_file, "w", encoding="utf-8") as f:
+    os.makedirs("results", exist_ok=True)
+    with open(TARGETS_FILE, "w", encoding="utf-8") as f:
         json.dump(targets, f, ensure_ascii=False, indent=2)
 
-    print(f"타겟 구성 완료: {targets_file} ({len(targets)}개)")
+    print(f"타겟 구성 완료: {TARGETS_FILE} ({len(targets)}개)")
     print_summary(targets)
 
 
@@ -240,28 +163,22 @@ def _task_payload():
 
     os.makedirs("results", exist_ok=True)
     print(f"LLM 페이로드 생성 시작 (출력: {PAYLOADS_FILE})")
-
-    def _payload_progress(done: int, total: int) -> None:
-        pct = 20 + int(done / max(total, 1) * 10)  # 페이로드 구간: 20~30%
-        _emit_progress(pct)
-
-    generate_run(out_file=PAYLOADS_FILE, progress_callback=_payload_progress)
+    generate_run(out_file=PAYLOADS_FILE)
 
 
 def _task_scan():
     import scanner
 
-    targets_file = _run_path("targets.json")
-    scan_out     = _run_path("scan_results.json")
-
     if not os.path.exists(PAYLOADS_FILE):
         print(f"[ERROR] {PAYLOADS_FILE} 없음. 페이로드를 먼저 생성하세요.")
         return
 
+    os.makedirs("results", exist_ok=True)
+
     old_argv = sys.argv[:]
-    argv_list = ["scanner.py", "--payloads", PAYLOADS_FILE, "--out", scan_out]
-    if os.path.exists(targets_file):
-        argv_list += ["--targets", targets_file]
+    argv_list = ["scanner.py", "--payloads", PAYLOADS_FILE, "--out", SCAN_RESULTS_FILE]
+    if os.path.exists(TARGETS_FILE):
+        argv_list += ["--targets", TARGETS_FILE]
 
     sys.argv = argv_list
     try:
@@ -276,15 +193,13 @@ def _task_scan():
 def _task_fuzz():
     from fuzzer.fuzzing_strategy import build_tasks
 
-    targets_file    = _run_path("targets.json")
-    fuzz_tasks_file = _run_path("fuzz_tasks.json")
-
     if not os.path.exists(PAYLOADS_FILE):
-        print(f"[ERROR] {PAYLOADS_FILE} 없음. 페이로드 생성을 먼저 실행하세요.")
+        print(f"[ERROR] {PAYLOADS_FILE} 없음.")
+        print(f"        페이로드 생성(② LLM 페이로드 생성)을 먼저 실행하세요.")
         return
 
     if not os.path.exists(PAYLOADS_META_FILE):
-        print(f"[WARN] {PAYLOADS_META_FILE} 없음.")
+        print(f"[WARN] {PAYLOADS_META_FILE} 없음. generate_payloads.py가 meta를 저장하도록 수정되어야 합니다.")
         return
 
     with open(PAYLOADS_META_FILE, encoding="utf-8") as f:
@@ -294,111 +209,73 @@ def _task_fuzz():
         payloads = json.load(f)
 
     targets = None
-    if os.path.exists(targets_file):
-        with open(targets_file, encoding="utf-8") as f:
+    if os.path.exists(TARGETS_FILE):
+        with open(TARGETS_FILE, encoding="utf-8") as f:
             targets = json.load(f)
 
     print(f"meta={len(points_meta)} payload_points={len(payloads)}")
+    tasks = build_tasks(points_meta, payloads, targets)
 
-    def _fuzz_progress(done: int, total: int) -> None:
-        pct = 30 + int(done / max(total, 1) * 5)  # 스캔작업 구간: 30~35%
-        _emit_progress(pct)
-
-    tasks = build_tasks(points_meta, payloads, targets, progress_callback=_fuzz_progress)
-
-    with open(fuzz_tasks_file, "w", encoding="utf-8") as f:
+    with open(FUZZ_TASKS_FILE, "w", encoding="utf-8") as f:
         json.dump(tasks, f, ensure_ascii=False, indent=2)
 
     replace_ = sum(1 for t in tasks if t.get("inject_mode") == "replace")
     append_  = sum(1 for t in tasks if t.get("inject_mode") == "append")
-    print(f"완료: {len(tasks)} 태스크 → {fuzz_tasks_file}")
-    print(f"mode → replace: {replace_}, append: {append_}")
+    print(f"완료: {len(tasks)} 태스크 → {FUZZ_TASKS_FILE}")
+    print(f"         mode  → replace: {replace_}, append: {append_}")
 
 
 def _task_execute():
     from fuzzer.executor import execute
 
-    fuzz_tasks_file = _run_path("fuzz_tasks.json")
-    exec_file       = _run_path("execution_results.json")
-
-    if not os.path.exists(fuzz_tasks_file):
-        print(f"[ERROR] {fuzz_tasks_file} 없음. 전략 수립을 먼저 실행하세요.")
+    if not os.path.exists(FUZZ_TASKS_FILE):
+        print(f"[ERROR] {FUZZ_TASKS_FILE} 없음.  전략 수립을 먼저 실행하세요.")
         return
 
-    with open(fuzz_tasks_file, encoding="utf-8") as f:
+    with open(FUZZ_TASKS_FILE, encoding="utf-8") as f:
         tasks = json.load(f)
 
-    total_tasks = len(tasks)
-    print(f"{total_tasks} 요청 실행 시작")
-
-    def _on_progress(done: int, total: int) -> None:
-        # executor 진행률(0~100%) → 전체 파이프라인 35~90% 구간에 매핑
-        pct = 35 + int(done / max(total, 1) * 55)
-        _emit_progress(pct)
-        if done % max(total // 10, 1) == 0 or done == total:
-            print(f"  [{done}/{total}] {int(done/max(total,1)*100)}% 완료")
-
-    results = execute(tasks, timeout=10, delay=0.0, output_file=exec_file, progress_callback=_on_progress)
+    print(f"{len(tasks)} 태스크 실행 시작")
+    results = execute(tasks, timeout=10, delay=0.0, output_file=EXEC_RESULTS_FILE)
 
     ok      = sum(1 for r in results if r["error"] is None)
     timeout = sum(1 for r in results if r["error"] == "timeout")
     err     = sum(1 for r in results if r["error"] and r["error"] != "timeout")
-    print(f"완료: 성공 {ok} / 타임아웃 {timeout} / 오류 {err} → {exec_file}")
+    print(f"완료: 성공 {ok} / 타임아웃 {timeout} / 오류 {err} → {EXEC_RESULTS_FILE}")
 
 
 def _task_validate():
+    """Step 8.5: Validator - 응답 분석 → 취약점 판정"""
     from fuzzer.validator import run as validate_run
 
-    exec_file     = _run_path("execution_results.json")
-    findings_file = _run_path("findings.json")
-
-    if not os.path.exists(exec_file):
-        print(f"[ERROR] {exec_file} 없음. 퍼징 실행을 먼저 하세요.")
+    if not os.path.exists(EXEC_RESULTS_FILE):
+        print(f"[ERROR] {EXEC_RESULTS_FILE} 없음. Step 8 실행을 먼저 하세요.")
         return
 
-    print(f"분석 중: {exec_file}")
+    print(f"[Validator] {EXEC_RESULTS_FILE} 분석 중...")
+    findings = validate_run(input_file=EXEC_RESULTS_FILE, output_file=FINDINGS_FILE)
 
-    def _validate_progress(done: int, total: int) -> None:
-        pct = 90 + int(done / max(total, 1) * 10)  # 결과분석 구간: 90~100%
-        _emit_progress(pct)
+    xss_cnt  = sum(1 for f in findings if "xss" in (f.get("vuln_type") or "").lower())
+    sqli_cnt = sum(1 for f in findings if "sqli" in (f.get("vuln_type") or "").lower() or "sql" in (f.get("vuln_type") or "").lower())
 
-    findings = validate_run(input_file=exec_file, output_file=findings_file, progress_callback=_validate_progress)
-
-    xss_cnt  = sum(1 for f in findings if "xss"  in (f.get("vuln_type") or "").lower())
-    sqli_cnt = sum(1 for f in findings if "sqli" in (f.get("vuln_type") or "").lower())
-
-    print(f"완료: 취약점 {len(findings)}개 발견 → {findings_file}")
-    print(f"XSS: {xss_cnt}개  /  SQLi: {sqli_cnt}개")
+    print(f"[Validator] 완료: 취약점 {len(findings)}개 발견 → {FINDINGS_FILE}")
+    print(f"           XSS: {xss_cnt}개  /  SQLi: {sqli_cnt}개")
     for f in findings:
         print(f"  [{f['vuln_type']:20s}] {f['point']} | {f['payload'][:50]} | {f['evidence']}")
 
 
-def _task_all(skip_crawl: bool = False):
-    """전체 DAST 파이프라인: 크롤링 → 페이로드 → 스캔 작업 생성 → 활성 스캔 → 결과 분석"""
-    _emit_progress(2)
-
+def _task_all(skip_crawl: bool = False, skip_payload: bool = False):
     if skip_crawl:
-        print("[건너뜀] 크롤링 재사용")
-        _emit_progress(20)
+        print(f"[건너뜀] 크롤링 — {CRAWL_RESULT_FILE} 재사용")
     else:
         _task_crawl()
-        _emit_progress(20)
 
-    if not os.path.exists(PAYLOADS_FILE):
-        print("[INFO] 페이로드 파일 없음 — 자동 생성 시작")
-        _task_payload()
+    if skip_payload:
+        print(f"[건너뜀] 페이로드 생성 — {PAYLOADS_FILE} 재사용")
     else:
-        print(f"[건너뜀] 페이로드 재사용: {PAYLOADS_FILE}")
-    _emit_progress(30)
+        _task_payload()
 
-    _task_fuzz()
-    _emit_progress(35)
-
-    _task_execute()   # 내부에서 35→90% 구간 실시간 emit
-    _emit_progress(90)
-
-    _task_validate()
-    _emit_progress(100)
+    _task_scan()
 
 
 _TASK_FUNCS = {
@@ -412,13 +289,13 @@ _TASK_FUNCS = {
 }
 
 _TASK_LABELS = {
-    "crawl"   : "크롤링",
-    "payload" : "페이로드 준비",
+    "crawl"   : "크롤링 + 타겟 구성",
+    "payload" : "LLM 페이로드 생성",
     "scan"    : "스캔 실행",
-    "fuzz"    : "스캔 작업 생성",
-    "execute" : "활성 스캔",
-    "validate": "결과 분석",
-    "all"     : "전체 진단",
+    "fuzz"    : " · 전략 수립",
+    "execute" : " · 실행",
+    "validate": " · 취약점 판정",
+    "all"     : "전체 파이프라인",
 }
 
 
@@ -427,7 +304,7 @@ _TASK_LABELS = {
 
 @app.route("/stream/<task>")
 def stream_task(task):
-    if task not in _TASK_FUNCS:
+    if task not in tasks.TASK_FUNCS:
         return "알 수 없는 태스크", 404
 
     skip_crawl = request.args.get("skip_crawl") == "1"
@@ -443,9 +320,9 @@ def stream_task(task):
         _thread_local.log_queue = q
         try:
             if task == "all":
-                _task_all(skip_crawl=skip_crawl)
+                _task_all(skip_crawl=skip_crawl, skip_payload=skip_payload)
             else:
-                _TASK_FUNCS[task]()
+                tasks.TASK_FUNCS[task]()
         except Exception as exc:
             q.put(f"[ERROR] {type(exc).__name__}: {exc}")
         finally:
@@ -456,7 +333,7 @@ def stream_task(task):
     threading.Thread(target=run_in_thread, daemon=True).start()
 
     def generate():
-        label = _TASK_LABELS.get(task, task)
+        label = tasks.TASK_LABELS.get(task, task)
         yield f"data: [{label}] 시작\n\n"
         while True:
             try:
@@ -485,21 +362,20 @@ def stream_task(task):
 
 def _get_file_status():
     return [
-        ("크롤링 결과", os.path.exists(_run_path("crawl_result.json"))),
-        ("타겟 목록",   os.path.exists(_run_path("targets.json"))),
-        ("페이로드",    os.path.exists(PAYLOADS_FILE)),
-        ("퍼징 작업",   os.path.exists(_run_path("fuzz_tasks.json"))),
-        ("실행 결과",   os.path.exists(_run_path("execution_results.json"))),
-        ("취약점 결과", os.path.exists(_run_path("findings.json"))),
+        ("crawl_result.json",      os.path.exists(CRAWL_RESULT_FILE)),
+        ("targets.json",           os.path.exists(TARGETS_FILE)),
+        ("payloads_llm.json",      os.path.exists(PAYLOADS_FILE)),
+        ("scan_results_llm.json",  os.path.exists(SCAN_RESULTS_FILE)),
+        ("fuzz_tasks.json",        os.path.exists(FUZZ_TASKS_FILE)),
+        ("execution_results.json", os.path.exists(EXEC_RESULTS_FILE)),
     ]
 
 
 def _get_quick_summary():
-    scan_file = _run_path("scan_results.json")
-    if not os.path.exists(scan_file):
+    if not os.path.exists(SCAN_RESULTS_FILE):
         return None
     try:
-        with open(scan_file, encoding="utf-8") as f:
+        with open(SCAN_RESULTS_FILE, encoding="utf-8") as f:
             results = json.load(f)
         total = len(results)
         vulns = sum(1 for r in results if r.get("vulnerable"))
@@ -509,11 +385,10 @@ def _get_quick_summary():
 
 
 def _get_exec_summary():
-    exec_file = _run_path("execution_results.json")
-    if not os.path.exists(exec_file):
+    if not os.path.exists(EXEC_RESULTS_FILE):
         return None
     try:
-        with open(exec_file, encoding="utf-8") as f:
+        with open(EXEC_RESULTS_FILE, encoding="utf-8") as f:
             results = json.load(f)
         total   = len(results)
         ok      = sum(1 for r in results if r.get("error") is None)
@@ -523,76 +398,398 @@ def _get_exec_summary():
         return None
 
 
-def _get_file_status():
-    return [
-        ("크롤링 결과", os.path.exists(_run_path("crawl_result.json"))),
-        ("타깃 목록",   os.path.exists(_run_path("targets.json"))),
-        ("페이로드",    os.path.exists(PAYLOADS_FILE)),
-        ("퍼징 작업",   os.path.exists(_run_path("fuzz_tasks.json"))),
-        ("실행 결과",   os.path.exists(_run_path("execution_results.json"))),
-        ("취약점 결과", os.path.exists(_run_path("findings.json"))),
-    ]
+# ── HTML 템플릿 ───────────────────────────────────────────────────
+
+_COMMON_HEAD = """\
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet"
+        href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
+  <style>
+    body         { background:#fff; color:#111; }
+    .navbar      { background:#fff !important; border-bottom:1px solid #e5e7eb; }
+    .card        { background:#fff; border:1px solid #e5e7eb; }
+    .card-header { background:#f8fafc; border-bottom:1px solid #e5e7eb; color:#111; }
+    #log-area {
+      background:#fff; color:#111;
+      font-family:'Courier New',monospace;
+      font-size:.82rem;
+      height:420px; overflow-y:auto;
+      padding:12px; white-space:pre-wrap; word-break:break-all;
+    }
+    .badge-ok   { background:#111; }
+    .badge-none { background:#6b7280; }
+    .stat-num   { font-size:2rem; font-weight:700; }
+    .vuln-row td  { background:#f3f4f6!important; }
+    .safe-row td  { background:#fff!important; }
+    table        { color:#111; }
+    th           { color:#111; font-weight:600; }
+    a            { color:#111; text-decoration:underline; }
+    .form-check-label { color:#111; font-size:.85rem; }
+
+    /* Bootstrap 색상 -> 흑백 */
+    .text-info, .text-danger, .text-warning, .text-success, .text-secondary { color:#111 !important; }
+    .bg-info, .bg-danger, .bg-warning, .bg-success, .bg-secondary { background:#111 !important; color:#fff !important; }
+    .btn-danger { background:#111; border-color:#111; }
+  </style>"""
 
 
-def _get_pipeline_steps():
-    checks = [
-        ("crawl",    "크롤링",          "travel_explore", os.path.exists(_run_path("crawl_result.json")) and os.path.exists(_run_path("targets.json"))),
-        ("payload",  "페이로드 준비",  "psychology",     os.path.exists(PAYLOADS_FILE)),
-        ("fuzz",     "스캔 작업 생성", "build",          os.path.exists(_run_path("fuzz_tasks.json"))),
-        ("execute",  "활성 스캔",      "radar",          os.path.exists(_run_path("execution_results.json"))),
-        ("validate", "결과 분석",      "analytics",      os.path.exists(_run_path("findings.json"))),
-    ]
-    active_assigned = False
-    steps = []
-    for key, label, icon, complete in checks:
-        state = "complete" if complete else "pending"
-        if not complete and not active_assigned:
-            state = "active"
-            active_assigned = True
-        steps.append({"key": key, "label": label, "icon": icon, "state": state})
-    return steps
+_MAIN_HTML = """\
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <title>LADS </title>
+""" + _COMMON_HEAD + """
+</head>
+<body>
+
+<nav class="navbar navbar-light mb-4 px-3">
+  <div class="container-fluid">
+    <span class="navbar-brand fw-bold fs-4 me-3">LADS</span>
+  </div>
+</nav>
+
+<div class="container">
+  {% if false %}
+
+  <!-- 결과 요약 -->
+  {% endif %}
+  {% if summary or exec_summary %}
+  <div class="card mb-3">
+    <div class="card-header fw-semibold">결과 요약</div>
+    <div class="card-body">
+      <div class="row text-center">
+        {% if summary %}
+        <div class="col-4">
+          <div class="stat-num text-info">{{ summary.total }}</div>
+          <div class="text-secondary small">스캔 총 테스트</div>
+        </div>
+        <div class="col-4">
+          <div class="stat-num text-danger">{{ summary.vulns }}</div>
+          <div class="text-secondary small">취약 건수</div>
+        </div>
+        <div class="col-4">
+          <div class="stat-num text-warning">{{ "%.1f"|format(summary.rate) }}%</div>
+          <div class="text-secondary small">취약률</div>
+        </div>
+        {% endif %}
+        {% if exec_summary %}
+        <div class="col-12 mt-2 pt-2" style="border-top:1px solid #e5e7eb">
+          <span class="text-info me-3">총 {{ exec_summary.total }}건</span>
+          <span class="text-success me-3">성공 {{ exec_summary.ok }}</span>
+          <span class="text-warning">타임아웃 {{ exec_summary.timeout }}</span>
+        </div>
+        {% endif %}
+      </div>
+      
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- 파이프라인 -->
+  <div class="card mb-3">
+    <div class="card-header fw-semibold">파이프라인</div>
+    <div class="card-body">
+      <div class="d-flex flex-wrap gap-2 mb-3">
+        <button class="btn btn-outline-primary" onclick="runTask('crawl')">크롤링 + 타겟 구성</button>
+        <button class="btn btn-outline-warning" onclick="runTask('payload')">LLM 페이로드 생성</button>
+        <button class="btn btn-outline-secondary" onclick="runTask('fuzz')">퍼징 전략 수립</button>
+        <button class="btn btn-outline-danger" onclick="runTask('execute')">퍼징 실행</button>
+        <button class="btn btn-outline-success" onclick="runTask('validate')">취약점 판정</button>
+      </div>
+      <hr style="border-color:#e5e7eb">
+      <div class="d-flex align-items-center gap-3 flex-wrap">
+        <button class="btn btn-danger" onclick="runTaskAll()">전체 실행</button>
+        <a class="btn btn-outline-dark" href="/exec_results">실행 결과 보기</a>
+        <a class="btn btn-outline-success" href="/findings">취약점 결과 보기</a>
+      </div>
+    </div>
+  </div>
 
 
-def _get_target_envs():
-    result = []
-    for t in _TARGETS:
-        is_active = t["key"] == _active_target_key
-        result.append({
-            "name":         t["name"],
-            "key":          t["key"],
-            "url":          t["url"],
-            "version":      t["version"],
-            "is_active":    is_active,
-            "status":       "active" if is_active else "standby",
-            "status_label": "스캔 대상" if is_active else "대기 중",
-            "last_scanned": _current_run_id or "-" if is_active else "-",
-        })
-    return result
+  <!-- 실행 로그 -->
+  <div class="card mb-4" id="log-card" style="display:none">
+    <div class="card-header d-flex justify-content-between align-items-center">
+      <span class="fw-semibold" id="log-title">실행 로그</span>
+      <span id="log-badge" class="badge bg-warning text-dark">실행 중</span>
+    </div>
+    <div class="card-body p-0">
+      <div id="log-area"></div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+var _es = null;
+
+function runTask(task) {
+  _startStream('/stream/' + task);
+}
+
+function runTaskAll() {
+  _startStream('/stream/all');
+}
+
+var _labels = {
+  crawl:   '크롤링 + 타겟 구성',
+  payload: 'LLM 페이로드 생성',
+  scan:    '스캔 실행',
+  all:     '전체 파이프라인'
+};
+
+function _startStream(url) {
+  if (_es) { _es.close(); _es = null; }
+
+  var logCard  = document.getElementById('log-card');
+  var logArea  = document.getElementById('log-area');
+  var logTitle = document.getElementById('log-title');
+  var logBadge = document.getElementById('log-badge');
+
+  var taskName = url.split('/stream/')[1].split('?')[0];
+  logCard.style.display = 'block';
+  logTitle.textContent  = (_labels[taskName] || taskName) + ' 로그';
+  logBadge.textContent  = '실행 중';
+  logBadge.className    = 'badge bg-warning text-dark';
+  logArea.textContent   = '';
+
+  document.querySelectorAll('button').forEach(function(b) { b.disabled = true; });
+  logCard.scrollIntoView({ behavior: 'smooth' });
+
+  _es = new EventSource(url);
+
+  _es.onmessage = function(e) {
+    if (e.data === '__DONE__') {
+      _es.close(); _es = null;
+      logBadge.textContent = '완료';
+      logBadge.className   = 'badge bg-success';
+      document.querySelectorAll('button').forEach(function(b) { b.disabled = false; });
+      setTimeout(function() { location.reload(); }, 2000);
+      return;
+    }
+    var line = document.createElement('div');
+    if      (e.data.indexOf('[ERROR]') !== -1) line.style.color = '#111';
+    else if (e.data.indexOf('[WARN]')  !== -1) line.style.color = '#111';
+    else if (e.data.indexOf('완료')    !== -1) line.style.color = '#111';
+    else if (e.data.indexOf('')  !== -1) line.style.color = '#111';
+    else if (e.data.indexOf('')  !== -1) line.style.color = '#111';
+    line.textContent = e.data;
+    logArea.appendChild(line);
+    logArea.scrollTop = logArea.scrollHeight;
+  };
+
+  _es.onerror = function() {
+    if (_es) { _es.close(); _es = null; }
+    logBadge.textContent = '오류';
+    logBadge.className   = 'badge bg-danger';
+    document.querySelectorAll('button').forEach(function(b) { b.disabled = false; });
+    var line = document.createElement('div');
+    line.style.color = '#111';
+    line.textContent = '[연결 오류 - 서버를 확인하세요]';
+    logArea.appendChild(line);
+  };
+}
+</script>
+</body>
+</html>"""
 
 
-# ── placeholder (하위 호환) ────────────────────────────────────────
-def _get_quick_summary():
-    scan_file = _run_path("scan_results.json")
-    if not os.path.exists(scan_file):
-        return None
-    try:
-        with open(scan_file, encoding="utf-8") as f:
-            results = json.load(f)
-        total = len(results)
-        vulns = sum(1 for r in results if r.get("vulnerable"))
-        return {"total": total, "vulns": vulns, "rate": vulns / max(total, 1) * 100}
-    except Exception:
-        return None
+_RESULTS_HTML = """\
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <title>LADS - 스캔 결과</title>
+""" + _COMMON_HEAD + """
+</head>
+<body>
+
+<nav class="navbar navbar-light mb-4 px-3">
+  <div class="container-fluid">
+    <span class="navbar-brand fw-bold fs-4 me-3">LADS</span>
+    <span class="text-secondary me-auto">스캔 결과</span>
+    <a href="/" class="btn btn-outline-dark btn-sm">대시보드</a>
+  </div>
+</nav>
+
+<div class="container-fluid px-4">
+{% if not results %}
+  <div class="alert" style="background:#fff;border:1px solid #e5e7eb;color:#111;">
+    스캔 결과가 없습니다. 대시보드에서 스캔을 실행하세요.
+  </div>
+{% else %}
+  <div class="card mb-4">
+    <div class="card-body">
+      <div class="row text-center">
+        <div class="col-4">
+          <div class="stat-num text-info">{{ total }}</div>
+          <div class="text-secondary small">총 테스트</div>
+        </div>
+        <div class="col-4">
+          <div class="stat-num text-danger">{{ n_vuln }}</div>
+          <div class="text-secondary small">취약 건수</div>
+        </div>
+        <div class="col-4">
+          <div class="stat-num text-warning">{{ "%.1f"|format(rate) }}%</div>
+          <div class="text-secondary small">취약률</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-header fw-semibold">상세 결과</div>
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-borderless mb-0" style="font-size:.82rem;">
+          <thead>
+            <tr style="border-bottom:1px solid #e5e7eb;">
+              <th>포인트</th><th>취약점 유형</th><th>페이로드</th>
+              <th>상태코드</th><th>응답 크기</th><th>응답 시간</th><th>판정</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for r in results %}
+            <tr class="{% if r.vulnerable %}vuln-row{% else %}safe-row{% endif %}"
+                style="border-bottom:1px solid #e5e7eb;">
+              <td style="max-width:160px;" class="text-break">{{ r.point }}</td>
+              <td>{{ r.vuln_type }}</td>
+              <td style="max-width:260px;" class="text-break font-monospace">{{ r.payload }}</td>
+              <td>{% if r.response %}{{ r.response.status }}{% else %}-{% endif %}</td>
+              <td>{% if r.response %}{{ r.response.length }}{% else %}-{% endif %}</td>
+              <td>
+                {% if r.response and r.response.elapsed is not none %}
+                  {{ "%.2f"|format(r.response.elapsed) }}s
+                {% else %}-{% endif %}
+              </td>
+              <td>
+                {% if r.vulnerable %}<span class="badge bg-secondary">취약</span>
+                {% else %}<span class="badge bg-secondary">안전</span>{% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+{% endif %}
+</div>
+</body>
+</html>"""
 
 
+_EXEC_HTML = """\
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <title>LADS - 실행 결과 ()</title>
+""" + _COMMON_HEAD + """
+</head>
+<body>
+
+<nav class="navbar navbar-light mb-4 px-3">
+  <div class="container-fluid">
+    <span class="navbar-brand fw-bold fs-4 me-3">LADS</span>
+    <span class="text-secondary me-auto"> · 실행 결과</span>
+    <a href="/" class="btn btn-outline-dark btn-sm">대시보드</a>
+  </div>
+</nav>
+
+<div class="container-fluid px-4">
+{% if not results %}
+  <div class="alert" style="background:#fff;border:1px solid #e5e7eb;color:#111;">
+    실행 결과가 없습니다. 대시보드에서  · 실행을 먼저 실행하세요.
+  </div>
+{% else %}
+  <div class="card mb-4">
+    <div class="card-body">
+      <div class="row text-center">
+        <div class="col-3">
+          <div class="stat-num text-info">{{ total }}</div>
+          <div class="text-secondary small">총 요청</div>
+        </div>
+        <div class="col-3">
+          <div class="stat-num text-success">{{ ok }}</div>
+          <div class="text-secondary small">성공</div>
+        </div>
+        <div class="col-3">
+          <div class="stat-num text-warning">{{ timeout }}</div>
+          <div class="text-secondary small">타임아웃</div>
+        </div>
+        <div class="col-3">
+          <div class="stat-num text-danger">{{ err }}</div>
+          <div class="text-secondary small">오류</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-header fw-semibold">실행 상세 ( Executor 출력)</div>
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-borderless mb-0" style="font-size:.80rem;">
+          <thead>
+            <tr style="border-bottom:1px solid #e5e7eb;">
+              <th>task_id</th><th>파라미터</th><th>scope</th><th>mode</th>
+              <th>위치</th><th>취약점 유형</th><th>페이로드</th>
+              <th>상태코드</th><th>응답길이</th><th>응답시간</th><th>오류</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for r in results %}
+            <tr style="border-bottom:1px solid #e5e7eb;
+                       {% if r.error %}background:#f3f4f6{% endif %}">
+              <td class="font-monospace text-secondary">{{ r.task_id }}</td>
+              <td class="font-monospace">{{ r.inject_param }}</td>
+              <td>
+                <span class="badge {% if r.inject_scope == 'multiple' %}bg-warning text-dark{% else %}bg-secondary{% endif %}">
+                  {{ r.inject_scope }}</span>
+              </td>
+              <td>
+                <span class="badge {% if r.inject_mode == 'append' %}bg-info text-dark{% else %}bg-secondary{% endif %}">
+                  {{ r.inject_mode }}</span>
+              </td>
+              <td>{{ r.inject_location }}</td>
+              <td>{{ r.vuln_type }}</td>
+              <td style="max-width:200px;" class="text-break font-monospace">{{ r.payload }}</td>
+              <td>{{ r.status_code or '-' }}</td>
+              <td>{{ r.response_length or '-' }}</td>
+              <td>{% if r.response_time %}{{ "%.3f"|format(r.response_time) }}s{% else %}-{% endif %}</td>
+              <td style="color:#111;">{{ r.error or '' }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+{% endif %}
+</div>
+</body>
+</html>"""
 
 
-def _get_pipeline_progress():
-    steps = _get_pipeline_steps()
-    complete = sum(1 for step in steps if step["state"] == "complete")
-    total = max(len(steps), 1)
-    percent = int(round(complete / total * 100))
-    return {"complete": complete, "total": total, "percent": percent}
+# ── 라우트 ────────────────────────────────────────────────────────
+
+_MAIN_HTML = _MAIN_HTML.replace("  {% if false %}", "")
+_MAIN_HTML = _MAIN_HTML.replace("  {% endif %}\n  {% if summary or exec_summary %}", "  {% if summary or exec_summary %}")
+_MAIN_HTML = re.sub(
+    r'\s*<div class="card mb-3">\s*<div class="card-header fw-semibold">.*?</div>\s*'
+    r'<div class="card-body">\s*<div class="row mb-1">\s*'
+    r'<div class="col-sm-2 text-secondary">CMS</div>.*?</div>\s*</div>\s*</div>',
+    "",
+    _MAIN_HTML,
+    count=1,
+    flags=re.S,
+)
+_MAIN_HTML = re.sub(
+    r'\s*<div class="card mb-3">\s*<div class="card-header fw-semibold">.*?</div>\s*'
+    r'<div class="card-body">\s*<div class="row g-2">\s*'
+    r'{% for label, ok in file_status %}.*?{% endfor %}\s*</div>\s*</div>\s*</div>',
+    "",
+    _MAIN_HTML,
+    count=1,
+    flags=re.S,
+)
 
 
 @app.route("/")
@@ -613,7 +810,7 @@ def index():
     return render_template(
         "index.html",
         cms_name     = CMS_NAME,
-        base_url     = BASE_URL,
+        base_url     = tasks.BASE_URL,
         file_status  = _get_file_status(),
         pipeline_steps = _get_pipeline_steps(),
         pipeline_progress = _get_pipeline_progress(),
@@ -640,9 +837,9 @@ def __debug_build():
 @app.route("/results")
 def results_page():
     if not os.path.exists(SCAN_RESULTS_FILE):
-        return render_template("results.html", results=None, total=0, n_vuln=0, rate=0.0)
+        return render_template_string(_RESULTS_HTML, results=None, total=0, n_vuln=0, rate=0.0)
     try:
-        with open(SCAN_RESULTS_FILE, encoding="utf-8") as f:
+        with open(tasks.SCAN_RESULTS_FILE, encoding="utf-8") as f:
             results = json.load(f)
     except Exception as exc:
         return f"결과 파일 읽기 오류: {exc}", 500
@@ -650,17 +847,89 @@ def results_page():
     total  = len(results)
     n_vuln = sum(1 for r in results if r.get("vulnerable"))
     rate   = n_vuln / max(total, 1) * 100
-    return render_template("results.html", results=results, total=total, n_vuln=n_vuln, rate=rate)
+    return render_template_string(_RESULTS_HTML, results=results, total=total, n_vuln=n_vuln, rate=rate)
+
+
+_FINDINGS_HTML = """\
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <title>LADS - 취약점 결과</title>
+""" + _COMMON_HEAD + """
+</head>
+<body>
+<nav class="navbar navbar-light mb-4 px-3">
+  <div class="container-fluid">
+    <span class="navbar-brand fw-bold fs-4 me-3">LADS</span>
+    <span class="text-secondary me-auto"> · 취약점 결과</span>
+    <a href="/" class="btn btn-outline-dark btn-sm">대시보드</a>
+  </div>
+</nav>
+<div class="container-fluid px-4">
+{% if not findings %}
+  <div class="alert" style="background:#fff;border:1px solid #e5e7eb;color:#111;">
+    취약점 결과가 없습니다. 대시보드에서 취약점 판정을 먼저 실행하세요.
+  </div>
+{% else %}
+  <div class="card mb-4">
+    <div class="card-body">
+      <div class="row text-center">
+        <div class="col-4">
+          <div class="stat-num text-danger">{{ findings|length }}</div>
+          <div class="text-secondary small">발견된 취약점</div>
+        </div>
+        <div class="col-4">
+          <div class="stat-num text-warning">{{ xss_cnt }}</div>
+          <div class="text-secondary small">XSS</div>
+        </div>
+        <div class="col-4">
+          <div class="stat-num text-danger">{{ sqli_cnt }}</div>
+          <div class="text-secondary small">SQLi</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-header fw-semibold">탐지된 취약점 목록</div>
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-borderless mb-0" style="font-size:.82rem;">
+          <thead>
+            <tr style="border-bottom:1px solid #e5e7eb;">
+              <th>취약점 유형</th><th>대상</th><th>파라미터</th>
+              <th>페이로드</th><th>상태코드</th><th>응답시간</th><th>증거</th>
+            </tr>
+          </thead>
+          <tbody>
+          {% for f in findings %}
+            <tr style="border-bottom:1px solid #f3f4f6; background:#fff8f8;">
+              <td><span class="badge bg-danger">{{ f.vuln_type or '-' }}</span></td>
+              <td class="text-muted" style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ f.url or f.point }}</td>
+              <td><code>{{ f.param }}</code></td>
+              <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:monospace;">{{ f.payload }}</td>
+              <td>{{ f.status }}</td>
+              <td>{{ f.elapsed }}s</td>
+              <td class="text-danger fw-semibold">{{ f.evidence }}</td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+{% endif %}
+</div>
+</body>
+</html>
+"""
 
 
 @app.route("/findings")
 def findings_page():
-    run_id = request.args.get("run") or _current_run_id
-    findings_file = os.path.join(RUNS_DIR, run_id or "default", "findings.json") if run_id else _run_path("findings.json")
-    if not os.path.exists(findings_file):
-        return render_template("findings.html", findings=None, xss_cnt=0, sqli_cnt=0, run_id=run_id, current_run=_current_run_id)
+    if not os.path.exists(FINDINGS_FILE):
+        return render_template_string(_FINDINGS_HTML, findings=None, xss_cnt=0, sqli_cnt=0)
     try:
-        with open(findings_file, encoding="utf-8") as f:
+        with open(FINDINGS_FILE, encoding="utf-8") as f:
             findings = json.load(f)
     except Exception as exc:
         return f"결과 파일 읽기 오류: {exc}", 500
@@ -671,12 +940,10 @@ def findings_page():
 
 @app.route("/exec_results")
 def exec_results_page():
-    run_id = request.args.get("run") or _current_run_id
-    exec_file = os.path.join(RUNS_DIR, run_id or "default", "execution_results.json") if run_id else _run_path("execution_results.json")
-    if not os.path.exists(exec_file):
-        return render_template("exec_results.html", results=None, total=0, ok=0, timeout=0, err=0, run_id=run_id, current_run=_current_run_id)
+    if not os.path.exists(EXEC_RESULTS_FILE):
+        return render_template_string(_EXEC_HTML, results=None, total=0, ok=0, timeout=0, err=0)
     try:
-        with open(exec_file, encoding="utf-8") as f:
+        with open(EXEC_RESULTS_FILE, encoding="utf-8") as f:
             results = json.load(f)
     except Exception as exc:
         return f"결과 파일 읽기 오류: {exc}", 500
@@ -827,7 +1094,5 @@ if __name__ == "__main__":
     os.makedirs("results", exist_ok=True)
     _init_run()
     print(f"LADS 대시보드 시작: http://localhost:5000")
-    print(f"타겟: {BASE_URL}  |  현재 실행: {_current_run_id}")
-    # debug=True(또는 FLASK_DEBUG=1): 코드·템플릿 변경 시 자동 재시작·반영. 배포 시 FLASK_DEBUG=0 권장.
-    _flask_debug = os.environ.get("FLASK_DEBUG", "1").strip().lower() in ("1", "true", "yes")
-    app.run(host="0.0.0.0", port=5000, debug=_flask_debug, threaded=True)
+    print(f"타겟: {BASE_URL}")
+    app.run(host="0.0.0.0", port=5000, debug=False, threaded=True)

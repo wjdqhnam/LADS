@@ -125,7 +125,7 @@ def validate(results: list[dict], progress_callback=None) -> list[dict]:  # 로�
 
 
 def run(
-    input_file: str = "execution_results.json",
+    input_file: str = "results/execution_results.json",
     output_file: str = "results/findings.json",
     progress_callback=None,  # 로딩바 콜백 함수
 ) -> list[dict]:
