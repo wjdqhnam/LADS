@@ -101,7 +101,7 @@ block content %}
       >
         <thead>
           <tr class="text-[13px] font-bold text-slate-500">
-            <th class="border-b border-surface-line px-3 pb-3">탐지 상태</th>
+            <th class="border-b border-surface-line px-3 pb-3 min-w-[96px] whitespace-nowrap">탐지 상태</th>
             <th class="border-b border-surface-line px-3 pb-3">취약점 유형</th>
             <th class="border-b border-surface-line px-3 pb-3">대상</th>
             <th class="border-b border-surface-line px-3 pb-3">파라미터</th>
@@ -115,22 +115,22 @@ block content %}
           <tr
             class="hover:bg-slate-50 result-row {% if r._vulnerable %}row-danger{% elif r.error %}row-error{% else %}row-safe{% endif %}"
           >
-            <td class="border-b border-slate-100 px-3 py-3">
+            <td class="border-b border-slate-100 px-3 py-3 whitespace-nowrap">
               {% if r._vulnerable %}
               <span
-                class="inline-flex items-center gap-2 font-extrabold text-error"
+                class="inline-flex items-center gap-2 font-extrabold text-error whitespace-nowrap"
               >
                 <span class="h-2 w-2 rounded-full bg-error"></span>위험
               </span>
               {% elif r.error %}
               <span
-                class="inline-flex items-center gap-2 font-extrabold text-slate-400"
+                class="inline-flex items-center gap-2 font-extrabold text-slate-400 whitespace-nowrap"
               >
                 <span class="h-2 w-2 rounded-full bg-slate-300"></span>오류
               </span>
               {% else %}
               <span
-                class="inline-flex items-center gap-2 font-extrabold text-emerald-600"
+                class="inline-flex items-center gap-2 font-extrabold text-emerald-600 whitespace-nowrap"
               >
                 <span class="h-2 w-2 rounded-full bg-emerald-500"></span>안전
               </span>
@@ -146,7 +146,7 @@ block content %}
               {% else %}-{% endif %}
             </td>
             <td
-              class="max-w-[260px] truncate border-b border-slate-100 px-3 py-3 font-mono text-[12px] text-slate-600"
+              class="js-expandable max-w-[260px] truncate border-b border-slate-100 px-3 py-3 font-mono text-[12px] text-slate-600 cursor-pointer select-none"
               title="{{ r.url }}"
             >
               {{ r.url or r.point }}
@@ -157,7 +157,7 @@ block content %}
               {{ r.inject_param or '-' }}
             </td>
             <td
-              class="max-w-[360px] truncate border-b border-slate-100 px-3 py-3 font-mono text-[12px] text-slate-700"
+              class="js-expandable max-w-[360px] truncate border-b border-slate-100 px-3 py-3 font-mono text-[12px] text-slate-700 cursor-pointer select-none"
               title="{{ r.payload }}"
             >
               {{ r.payload }}
@@ -176,9 +176,9 @@ block content %}
           </tr>
           {% endfor %} {% else %} {% for f in findings %}
           <tr class="hover:bg-slate-50">
-            <td class="border-b border-slate-100 px-3 py-3">
+            <td class="border-b border-slate-100 px-3 py-3 whitespace-nowrap">
               <span
-                class="inline-flex items-center gap-2 font-extrabold text-error"
+                class="inline-flex items-center gap-2 font-extrabold text-error whitespace-nowrap"
               >
                 <span class="h-2 w-2 rounded-full bg-error"></span>위험
               </span>
@@ -191,7 +191,7 @@ block content %}
               </span>
             </td>
             <td
-              class="max-w-[260px] truncate border-b border-slate-100 px-3 py-3 font-mono text-[12px] text-slate-600"
+              class="js-expandable max-w-[260px] truncate border-b border-slate-100 px-3 py-3 font-mono text-[12px] text-slate-600 cursor-pointer select-none"
             >
               {{ f.url or f.point }}
             </td>
@@ -201,7 +201,7 @@ block content %}
               {{ f.param or '-' }}
             </td>
             <td
-              class="max-w-[360px] truncate border-b border-slate-100 px-3 py-3 font-mono text-[12px] text-slate-700"
+              class="js-expandable max-w-[360px] truncate border-b border-slate-100 px-3 py-3 font-mono text-[12px] text-slate-700 cursor-pointer select-none"
               title="{{ f.payload }}"
             >
               {{ f.payload }}
@@ -227,6 +227,19 @@ block content %}
   {% endif %}
 </section>
 {% endblock %} {% block scripts %}
+<style>
+  /* 기본: 줄바꿈 없이 한 줄(필요 시 ...), 길면 호버(title) 또는 클릭 펼치기 */
+  #results-table th,
+  #results-table td {
+    white-space: nowrap;
+  }
+  #results-table td.js-expandable.is-expanded {
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+    word-break: break-all;
+  }
+</style>
 <script>
   function filterTable(mode) {
     document.querySelectorAll('.result-row').forEach(function (row) {
@@ -249,5 +262,11 @@ block content %}
         'filter-btn rounded-sm border border-slate-800 bg-slate-800 px-4 py-2 text-[13px] font-extrabold text-white'
     }
   }
+
+  document.addEventListener('click', function (e) {
+    var el = e.target && e.target.closest ? e.target.closest('.js-expandable') : null
+    if (!el) return
+    el.classList.toggle('is-expanded')
+  })
 </script>
 {% endblock %}
