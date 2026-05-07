@@ -1,17 +1,7 @@
-"""
-Payload Filter - LLM 생성 페이로드 품질 검증 및 필터링
-
-역할: LLM이 생성한 페이로드가 실제로 쓸만한지 판단
-     (D의 validator는 취약 여부 판단, 이 모듈은 페이로드 자체 품질 판단)
-
-Pipeline:
-    LLM 생성 → payload_parser.py → payload_filter.py → payloads.json → scanner
-"""
-
-import re
+﻿import re
 from typing import List, Dict
 
-# ── 허용된 취약점 타입 ─────────────────────────────────────────────
+# 허용된 취약점 타입
 ALLOWED_TYPES = {
     "SQLI_STRING",
     "SQLI_FIELD",
@@ -31,7 +21,7 @@ ALLOWED_TYPES = {
     "CSV_INJECTION",
 }
 
-# ── LLM 설명 텍스트 패턴 (페이로드가 아닌 것들) ─────────────────────
+# LLM이 섞어넣는 설명 텍스트 노이즈 패턴
 LLM_NOISE_PATTERNS = [
     r"^(note|i cannot|here are|sure|below|example|output|payload)[\s:]",
     r"^(this|the following|as requested|generating)",
@@ -42,14 +32,14 @@ LLM_NOISE_PATTERNS = [
     r"^\s*$",           # 빈 줄
 ]
 
-# ── 타입별 최소 패턴 (이게 없으면 페이로드라고 보기 어려움) ─────────────
+# 타입별 최소 패턴 - 해당 패턴이 없으면 페이로드로 인정 안 함
 TYPE_PATTERNS = {
     "SQLI_STRING":   [r"'", r"--", r"OR", r"AND", r"SLEEP", r"UNION", r"SELECT"],
-    "SQLI_FIELD":    [r"SLEEP", r"EXTRACT", r"UPDATE", r"IF\(", r"CASE"],
+    "SQLI_FIELD":    [r"SLEEP", r"EXTRACT", r"UPDATE", r"IF\(", r"CASE", r"AND\(", r"OR\("],
     "SQLI_ORDERBY":  [r"SLEEP", r"EXTRACT", r"UPDATE", r"CASE", r"IF\("],
     "SQLI_LOGIN":    [r"'", r"--", r"OR", r"AND"],
     "ERROR_BASED":   [r"EXTRACTVALUE|UPDATEXML|FLOOR|RAND|NAME_CONST"],
-    "BOOLEAN":       [r"ASCII|LENGTH|SUBSTR|CASE|EXISTS"],
+    "BOOLEAN":       [r"ASCII|LENGTH|SUBSTR|MID|CASE|EXISTS|REGEXP|OR\(|AND\(|SELECT"],
     "TIME_BASED":    [r"SLEEP|BENCHMARK"],
     "TAUTOLOGY":     [r"OR|AND", r"1=1|'1'='1"],
     "CONDITIONAL":   [r"IF\(|CASE"],
@@ -161,7 +151,7 @@ def report(original: List, filtered: List, rejected: List):
     print()
 
 
-# ── 직접 실행 시 테스트 ──────────────────────────────────────────────
+# 필터링 테스트 (직접 실행 시)
 if __name__ == "__main__":
     from payload_parser import parse
 

