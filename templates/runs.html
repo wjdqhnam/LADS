@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% block title %}LADS - 실행 이력{% endblock %}
+
+{% block content %}
+<section class="flex min-h-[calc(100vh-80px)] flex-col gap-8">
+  <div class="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+    <h1 class="text-[30px] font-black leading-tight text-slate-950">실행 이력</h1>
+  </div>
+
+  {% if not runs %}
+  <div class="rounded border border-dashed border-surface-line bg-white px-8 py-16 text-center text-[16px] font-bold text-slate-500">결과 없음</div>
+  {% else %}
+  <div class="flex min-h-0 flex-1 flex-col overflow-hidden rounded border border-surface-line bg-white">
+    <div class="border-b border-surface-line bg-surface-soft px-6 py-4">
+      <h2 class="text-[18px] font-black text-slate-950">실행 목록</h2>
+    </div>
+    <div class="min-h-0 flex-1 overflow-auto px-6 py-5">
+      <table class="w-full min-w-[800px] border-separate border-spacing-0 text-left text-[14px]">
+        <thead>
+          <tr class="text-[13px] font-bold text-slate-500">
+            <th class="border-b border-surface-line px-3 pb-3">실행 ID</th>
+            <th class="border-b border-surface-line px-3 pb-3">시작 시간</th>
+            <th class="border-b border-surface-line px-3 pb-3">크롤링</th>
+            <th class="border-b border-surface-line px-3 pb-3">실행</th>
+            <th class="border-b border-surface-line px-3 pb-3">취약점</th>
+            <th class="border-b border-surface-line px-3 pb-3"></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in runs %}
+          <tr class="cursor-pointer hover:bg-slate-50" onclick="location.href='/runs/{{ r.id }}'">
+            <td class="border-b border-slate-100 px-3 py-4 font-mono text-[12px]">{{ r.id }}</td>
+            <td class="border-b border-slate-100 px-3 py-4 text-[14px]">{{ r.ts }}</td>
+            <td class="border-b border-slate-100 px-3 py-4">
+              {% if r.has_crawl %}
+              <span class="rounded bg-emerald-100 px-2 py-1 text-[12px] font-extrabold text-emerald-700">완료</span>
+              {% else %}
+              <span class="rounded bg-slate-100 px-2 py-1 text-[12px] font-extrabold text-slate-500">없음</span>
+              {% endif %}
+            </td>
+            <td class="border-b border-slate-100 px-3 py-4">
+              {% if r.has_exec %}
+              <span class="rounded bg-emerald-100 px-2 py-1 text-[12px] font-extrabold text-emerald-700">완료</span>
+              {% else %}
+              <span class="rounded bg-slate-100 px-2 py-1 text-[12px] font-extrabold text-slate-500">없음</span>
+              {% endif %}
+            </td>
+            <td class="border-b border-slate-100 px-3 py-4">
+              {% if r.has_findings and r.findings_cnt > 0 %}
+              <span class="rounded bg-red-100 px-2 py-1 text-[12px] font-extrabold text-red-700">{{ r.findings_cnt }}건</span>
+              {% elif r.has_findings %}
+              <span class="rounded bg-slate-100 px-2 py-1 text-[12px] font-extrabold text-slate-500">0건</span>
+              {% else %}
+              <span class="rounded bg-slate-100 px-2 py-1 text-[12px] font-extrabold text-slate-500">없음</span>
+              {% endif %}
+            </td>
+            <td class="border-b border-slate-100 px-3 py-4" onclick="event.stopPropagation()">
+              <div class="flex gap-2">
+                <a class="inline-flex h-8 items-center gap-1 rounded border border-slate-300 bg-white px-3 text-[12px] font-extrabold hover:bg-slate-50"
+                   href="/runs/{{ r.id }}">
+                  <span class="material-symbols-outlined text-[15px]">open_in_new</span>
+                  상세보기
+                </a>
+                {% if not r.is_current %}
+                <form method="POST" action="/runs/delete/{{ r.id }}"
+                      onsubmit="return confirm('이 실행 기록을 삭제할까요?')">
+                  <button class="inline-flex h-8 items-center border border-red-200 bg-white px-3 text-[12px] font-extrabold text-error hover:bg-red-50"
+                          type="submit">삭제</button>
+                </form>
+                {% endif %}
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
+</section>
+{% endblock %}

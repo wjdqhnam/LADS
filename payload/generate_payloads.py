@@ -33,6 +33,7 @@ INPUT_POINTS = [
         "type":    "stored_xss",
         "note":    "게시글 제목 - 홈/상세/관리자 3곳 반영, script 차단",
         "vuln_types": ["xss_subject"],
+        "base_params": {"w": "w", "bo_table": "free", "wr_content": "", "html": "1"},
     },
     {
         "name":    "xss_wr_content",
@@ -42,6 +43,7 @@ INPUT_POINTS = [
         "type":    "stored_xss",
         "note":    "게시글 본문 - img/a/b/p 허용, script 차단, 이벤트핸들러 우회 필요",
         "vuln_types": ["xss_content"],
+        "base_params": {"w": "w", "bo_table": "free", "wr_subject": "test", "html": "1"},
     },
     {
         "name":    "xss_search_stx",
@@ -51,6 +53,7 @@ INPUT_POINTS = [
         "type":    "reflected_xss",
         "note":    "검색창 stx - value='' 속성 반영, onfocus=alert(1)→onfocusalert1 필터",
         "vuln_types": ["xss_search"],
+        "base_params": {"sfl": "wr_subject", "sop": "and"},
     },
     {
         "name":    "xss_qalist_stx",
@@ -60,6 +63,7 @@ INPUT_POINTS = [
         "type":    "reflected_xss",
         "note":    "Q&A 게시판 검색창 - board.php?bo_table=qa, search.php와 동일 stx 패턴",
         "vuln_types": ["xss_search"],
+        "base_params": {"sfl": "wr_subject", "sop": "and"},
     },
     {
         "name":    "xss_comment",
@@ -69,6 +73,7 @@ INPUT_POINTS = [
         "type":    "stored_xss",
         "note":    "댓글 본문 - http:// URL만 <a href> 변환, javascript: 차단",
         "vuln_types": ["xss_comment"],
+        "base_params": {"bo_table": "free", "wr_id": "1", "w": ""},
     },
 
     # SQLi 타겟
@@ -81,6 +86,7 @@ INPUT_POINTS = [
         "db":      "MySQL",
         "note":    "검색 필드 선택자 - SQL WHERE {sfl} LIKE '...' 직접 연결",
         "vuln_types": ["sqli_field"],
+        "base_params": {"stx": "test", "sop": "and"},
     },
     {
         "name":    "sqli_search_sst",
@@ -91,6 +97,7 @@ INPUT_POINTS = [
         "db":      "MySQL",
         "note":    "정렬 컬럼 - ORDER BY {sst} 직접 연결, intval 없음",
         "vuln_types": ["sqli_orderby"],
+        "base_params": {"stx": "test", "sfl": "wr_subject", "sop": "and"},
     },
     {
         "name":    "sqli_search_stx",
@@ -101,6 +108,7 @@ INPUT_POINTS = [
         "db":      "MySQL",
         "note":    "검색 키워드 - INSTR(LOWER(col),LOWER(stx)) 컨텍스트, PHP 공백분리 → 페이로드 공백금지, a'))))...# 패턴",
         "vuln_types": ["sqli_string"],
+        "base_params": {"sfl": "wr_subject", "sop": "and"},
     },
     {
         "name":    "sqli_login_mb_id",
@@ -111,6 +119,7 @@ INPUT_POINTS = [
         "db":      "MySQL",
         "note":    "로그인 아이디 - 문자열 컨텍스트, 인증 우회 목표",
         "vuln_types": ["sqli_login"],
+        "base_params": {"mb_password": "test", "url": "/"},
     },
     {
         "name":    "sqli_qalist_sfl",
@@ -121,13 +130,14 @@ INPUT_POINTS = [
         "db":      "MySQL",
         "note":    "Q&A 게시판 검색 필드 선택자 - board.php?bo_table=qa, search.php sfl과 동일 패턴",
         "vuln_types": ["sqli_field"],
+        "base_params": {"stx": "test", "sop": "and"},
     },
 ]
 
 COUNT = 7  # 타입당 페이로드 수
 
-
-def run(out_file: str = "results/payloads_llm.json"):
+def run(out_file: str = "results/payloads_llm.json", progress_callback=None):  # 로딩바 콜백 함수
+    
     print(f"\n{'='*60}")
     print(f"  Gnuboard5 Payload Generator v2")
     print(f"  Target: http://34.68.27.120:8081/")
@@ -135,9 +145,12 @@ def run(out_file: str = "results/payloads_llm.json"):
 
     client = LLMClient()
     all_results = {}
+    total_points = len(INPUT_POINTS)
 
-    for point in INPUT_POINTS:
+    for idx, point in enumerate(INPUT_POINTS):
         pname = point["name"]
+        if progress_callback:  # 로딩바 콜백 함수
+            progress_callback(idx, total_points)
         print(f"\n[INPUT POINT] {pname}")
         print(f"  {point['method']} {point['url']} | param={point['param']}")
         print(f"  Note: {point['note']}")
