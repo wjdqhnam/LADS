@@ -71,13 +71,15 @@ def execute(
     timeout: int = 10,
     delay: float = 0.0,
     output_file: str | None = None,
+    progress_callback=None,
 ) -> list[dict]:
     """fuzz task -> HTTP send -> results."""
 
     session = _make_session()
     results: list[dict] = []
+    total = len(tasks)
 
-    for t in tasks:
+    for i, t in enumerate(tasks):
         if delay:
             time.sleep(delay)
 
@@ -222,6 +224,9 @@ def execute(
                     "error": f"exception:{type(e).__name__}",
                 }
             )
+
+        if progress_callback and total > 0:
+            progress_callback(i + 1, total)
 
     if output_file:
         parent = os.path.dirname(output_file)

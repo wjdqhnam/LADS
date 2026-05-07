@@ -1,13 +1,3 @@
-"""
-SQLi / XSS Scanner v4 - ZAP 방식 개선 적용
-: Eyecatcher 컨텍스트 탐지 + Time-based double-check + Boolean 탐지 통합
-
-Usage:
-    python scanner.py
-    python scanner.py --payloads payloads_v2.json --out scan_results_v3.json
-    python scanner.py --point sqli_search_sfl --verbose
-"""
-
 import json
 import time
 import argparse

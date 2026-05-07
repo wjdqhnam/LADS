@@ -17,3 +17,6 @@ sum_log.txt
 
 # 테스트용
 newbase.py
+
+# Debug logs
+debug-*.log
