@@ -30,7 +30,7 @@ def _get_baseline_records(point_name: str, vuln_types: list[str]) -> list[dict]:
     records: list[dict] = []
 
     if "xss" in point_name:
-        from baseline.xss import get_all as xss_get_all
+        from payload.baseline.xss import get_all as xss_get_all
         for bp in xss_get_all():
             records.append({
                 "vtype": vtype,
@@ -40,7 +40,7 @@ def _get_baseline_records(point_name: str, vuln_types: list[str]) -> list[dict]:
             })
 
     elif "sqli" in point_name:
-        from baseline.sqli import get_by_sql_context
+        from payload.baseline.sqli import get_by_sql_context
         if "sfl" in point_name:
             baseline = get_by_sql_context("field_selector", "INSANE")
         elif "sst" in point_name:
@@ -143,7 +143,9 @@ def build_tasks(
                 return
             used_payloads.add(payload)
             meta = {"vuln_type": vtype, "type": rec_type, "family": family}
-            for mode in ("replace", "append"):
+            base_value = str(p.get("base_value") or "")
+            modes = ("replace", "append") if base_value else ("replace",)
+            for mode in modes:
                 out.append({
                     "id": f"t{tid:06d}_{mode[0]}",
                     "point": name,
@@ -154,6 +156,7 @@ def build_tasks(
                     "inject_mode": mode,
                     "base_params": base_params,
                     "base_cookies": base_cookies or {},
+                    "base_value": base_value,
                     "payload": payload,
                     "meta": meta,
                 })

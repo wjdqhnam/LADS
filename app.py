@@ -6,9 +6,7 @@ import subprocess
 import sys
 import threading
 import time
-import uuid
 from datetime import datetime
-from pathlib import Path
 
 
 _DEPS = {
@@ -30,6 +28,15 @@ del _pkg, _mod
 
 from dotenv import load_dotenv
 from flask import Flask, Response, redirect, render_template, request
+from tasks import (
+    _task_crawl as _crawl_impl,
+    _task_payload as _payload_impl,
+    _task_fuzz as _fuzz_impl,
+    _task_execute as _execute_impl,
+    _task_validate as _validate_impl,
+    _task_all as _all_impl,
+    TASK_LABELS as _TASK_LABELS,
+)
 
 load_dotenv()
 
@@ -48,7 +55,7 @@ _TARGETS = [
 _active_target_key = "primary"
 _current_run_id: str | None = None
 
-app = Flask(__name__)
+app = Flask(__name__, template_folder='web/templates', static_folder='web/static')
 # 개발 중 템플릿/정적 파일이 "안 바뀌는" 문제 방지용 설정.
 # - debug가 꺼져 있어도 templates 변경이 즉시 반영되도록 함
 # - 정적 파일 캐시를 줄여(0초) 새로고침 시 바로 반영되도록 함
@@ -59,27 +66,6 @@ _task_lock = threading.Lock()
 _thread_local = threading.local()
 
 
-_DBG_LOG_DIR = Path(__file__).parent / "log"
-_DBG_LOG_DIR.mkdir(exist_ok=True)
-_DBG_LOG_PATH = _DBG_LOG_DIR / "debug-3194ca.log"
-_DBG_BUILD_ID = os.getenv("LADS_BUILD_ID") or datetime.now().strftime("%Y%m%d-%H%M%S") + "-" + uuid.uuid4().hex[:8]
-
-
-def _dbg(hypothesis_id: str, message: str, data: dict | None = None) -> None:
-    try:
-        payload = {
-            "sessionId": "3194ca",
-            "runId": _current_run_id or "startup",
-            "hypothesisId": hypothesis_id,
-            "location": "app.py",
-            "message": message,
-            "data": data or {},
-            "timestamp": int(time.time() * 1000),
-        }
-        with _DBG_LOG_PATH.open("a", encoding="utf-8") as f:
-            f.write(json.dumps(payload, ensure_ascii=False) + "\n")
-    except Exception:
-        pass
 
 
 def _make_run_id() -> str:
@@ -142,205 +128,36 @@ sys.stdout = _RoutingStream(sys.__stdout__)
 
 
 def _task_crawl():
-    from crawler import Crawler
-    from target_builder import build_targets, print_summary
-
-    crawl_file = _run_path("crawl_result.json")
-    targets_file = _run_path("targets.json")
-    target_url = _active_url()
-
-    print(f"[CRAWL] start: {target_url}")
-    crawler = Crawler(target_url)
-
-    def _crawl_progress(done: int, total: int) -> None:
-        _emit_progress(int(done / max(total, 1) * 20))
-
-    crawler.crawl(progress_callback=_crawl_progress)
-    crawler.save(crawl_file)
-    crawler.summary()
-    _emit_progress(20)
-
-    if crawler.auth_cookies:
-        cookies_file = _run_path("auth_cookies.json")
-        with open(cookies_file, "w", encoding="utf-8") as f:
-            json.dump(crawler.auth_cookies, f, ensure_ascii=False, indent=2)
-        print(f"[CRAWL] auth cookies saved: {len(crawler.auth_cookies)} cookies")
-    else:
-        print("[CRAWL] no auth cookies (anonymous crawl)")
-
-    print(f"[CRAWL] build targets: {crawl_file}")
-    with open(crawl_file, encoding="utf-8") as f:
-        pages = json.load(f)
-    targets = build_targets(pages)
-    with open(targets_file, "w", encoding="utf-8") as f:
-        json.dump(targets, f, ensure_ascii=False, indent=2)
-    print(f"[CRAWL] targets saved: {targets_file} ({len(targets)})")
-    print_summary(targets)
+    _crawl_impl(_run_path, _active_url(), _emit_progress)
 
 
 def _task_payload():
-    from payload.generate_payloads import run as generate_run
-
-    os.makedirs("results", exist_ok=True)
-    print(f"[PAYLOAD] generate: {PAYLOADS_FILE}")
-    generate_run(out_file=PAYLOADS_FILE)
-    _emit_progress(30)
-
+    _payload_impl(PAYLOADS_FILE, _emit_progress)
 
 
 def _task_fuzz():
-    from fuzzer.fuzzing_strategy import build_tasks
-
-    targets_file = _run_path("targets.json")
-    fuzz_tasks_file = _run_path("fuzz_tasks.json")
-    if not os.path.exists(PAYLOADS_FILE):
-        print(f"[ERROR] missing payload file: {PAYLOADS_FILE}")
-        return
-    if not os.path.exists(PAYLOADS_META_FILE):
-        print(f"[WARN] missing payload meta file: {PAYLOADS_META_FILE}")
-        return
-
-    with open(PAYLOADS_META_FILE, encoding="utf-8") as f:
-        points_meta = json.load(f)
-    with open(PAYLOADS_FILE, encoding="utf-8") as f:
-        payloads = json.load(f)
-    targets = None
-    if os.path.exists(targets_file):
-        with open(targets_file, encoding="utf-8") as f:
-            targets = json.load(f)
-
-    base_cookies: dict = {}
-    cookies_file = _run_path("auth_cookies.json")
-    if os.path.exists(cookies_file):
-        with open(cookies_file, encoding="utf-8") as f:
-            base_cookies = json.load(f)
-        print(f"[FUZZ] auth cookies loaded: {len(base_cookies)} cookies")
-    else:
-        print("[FUZZ] no auth cookies — requests will be unauthenticated")
-
-    tasks = build_tasks(points_meta, payloads, targets, base_cookies=base_cookies)
-    with open(fuzz_tasks_file, "w", encoding="utf-8") as f:
-        json.dump(tasks, f, ensure_ascii=False, indent=2)
-    print(f"[FUZZ] tasks saved: {fuzz_tasks_file} ({len(tasks)})")
-    _emit_progress(35)
+    _fuzz_impl(_run_path, PAYLOADS_FILE, PAYLOADS_META_FILE, _emit_progress)
 
 
 def _task_execute():
-    from fuzzer.executor import execute
-
-    fuzz_tasks_file = _run_path("fuzz_tasks.json")
-    exec_file = _run_path("execution_results.json")
-    if not os.path.exists(fuzz_tasks_file):
-        print(f"[ERROR] missing fuzz task file: {fuzz_tasks_file}")
-        return
-
-    with open(fuzz_tasks_file, encoding="utf-8") as f:
-        tasks = json.load(f)
-
-    def _execute_progress(done: int, total: int) -> None:
-        _emit_progress(35 + int(done / max(total, 1) * 55))
-
-    print(f"[EXEC] start: {len(tasks)} tasks")
-    results = execute(tasks, timeout=10, delay=0.0, output_file=exec_file, progress_callback=_execute_progress)
-    ok = sum(1 for r in results if r.get("error") is None)
-    timeout = sum(1 for r in results if r.get("error") == "timeout")
-    err = sum(1 for r in results if r.get("error") and r.get("error") != "timeout")
-    print(f"[EXEC] done: ok={ok}, timeout={timeout}, error={err}")
-    _emit_progress(90)
+    _execute_impl(_run_path, _emit_progress)
 
 
 def _task_validate():
-    from fuzzer.validator import run as validate_run
-
-    exec_file = _run_path("execution_results.json")
-    findings_file = _run_path("findings.json")
-    if not os.path.exists(exec_file):
-        print(f"[ERROR] missing execution result file: {exec_file}")
-        return
-
-    def _validate_progress(done: int, total: int) -> None:
-        _emit_progress(90 + int(done / max(total, 1) * 10))
-
-    findings = validate_run(input_file=exec_file, output_file=findings_file, progress_callback=_validate_progress)
-    xss_cnt = sum(1 for f in findings if "xss" in (f.get("vuln_type") or "").lower())
-    sqli_cnt = sum(1 for f in findings if "sql" in (f.get("vuln_type") or "").lower())
-    print(f"[VALIDATE] done: findings={len(findings)}, xss={xss_cnt}, sqli={sqli_cnt}")
-    _emit_progress(100)
+    _validate_impl(_run_path, _emit_progress)
 
 
 def _task_all(skip_crawl: bool = False):
-    _emit_progress(2)
-
-    # Step 1: Crawling
-    if skip_crawl:
-        print("[CRAWL] 이전 크롤링 결과 재사용")
-        _emit_progress(20)
-    else:
-        _task_crawl()
-        _emit_progress(20)
-
-    # Prerequisite: crawl result must exist
-    if not os.path.exists(_run_path("crawl_result.json")):
-        print("[ERROR] 크롤링 결과 파일 없음 — 스캔 중단")
-        return
-
-    # Step 2: Payload — reuse LLM payloads if already generated (API cost)
-    if os.path.exists(PAYLOADS_FILE):
-        try:
-            with open(PAYLOADS_FILE, encoding="utf-8") as _f:
-                _cnt = len(json.load(_f))
-        except Exception:
-            _cnt = 0
-        print(f"[PAYLOAD] 기존 페이로드 재사용 ({_cnt}개) — 새로 생성하려면 파일 삭제 후 재스캔")
-        _emit_progress(30)
-    else:
-        _task_payload()
-        _emit_progress(30)
-
-    # Prerequisite: payload file must exist
-    if not os.path.exists(PAYLOADS_FILE):
-        print("[ERROR] 페이로드 파일 없음 — 스캔 중단")
-        return
-
-    # Step 3: Fuzz task generation
-    _task_fuzz()
-    _emit_progress(35)
-
-    # Prerequisite: fuzz tasks must exist
-    if not os.path.exists(_run_path("fuzz_tasks.json")):
-        print("[ERROR] 퍼징 작업 파일 없음 — 스캔 중단")
-        return
-
-    # Step 4: Execute
-    _task_execute()
-    _emit_progress(90)
-
-    # Prerequisite: execution results must exist
-    if not os.path.exists(_run_path("execution_results.json")):
-        print("[ERROR] 실행 결과 파일 없음 — 스캔 중단")
-        return
-
-    # Step 5: Validate
-    _task_validate()
-    _emit_progress(100)
+    _all_impl(_run_path, _active_url(), PAYLOADS_FILE, PAYLOADS_META_FILE, skip_crawl=skip_crawl, emit_progress=_emit_progress)
 
 
 _TASK_FUNCS = {
-    "crawl": _task_crawl,
-    "payload": _task_payload,
-    "fuzz": _task_fuzz,
-    "execute": _task_execute,
+    "crawl":    _task_crawl,
+    "payload":  _task_payload,
+    "fuzz":     _task_fuzz,
+    "execute":  _task_execute,
     "validate": _task_validate,
-    "all": _task_all,
-}
-
-_TASK_LABELS = {
-    "crawl": "크롤링 및 타깃 구성",
-    "payload": "페이로드 생성",
-    "fuzz": "퍼징 전략 수립",
-    "execute": "퍼징 실행",
-    "validate": "취약점 판정",
-    "all": "전체 진단",
+    "all":      _task_all,
 }
 
 
@@ -515,7 +332,7 @@ def _get_target_envs():
 
 @app.route("/")
 def index():
-    _dbg("H2", "GET /", {"buildId": _DBG_BUILD_ID})
+    print("index")
     return render_template(
         "index.html",
         cms_name=CMS_NAME,

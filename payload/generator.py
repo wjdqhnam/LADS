@@ -11,14 +11,13 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 try:
     from .llm_client import LLMClient
     from .context_builder import SYSTEM_PROMPT, build_prompt
-    from .payload_parser import clean as parse_clean
+    from .parser import clean as parse_clean
 except ImportError:
-    # 직접 실행 시 절대경로 import
     from llm_client import LLMClient
     from context_builder import SYSTEM_PROMPT, build_prompt
-    from payload_parser import clean as parse_clean
+    from parser import clean as parse_clean
 
-from payload_filter import filter_payloads, deduplicate, report as filter_report
+from payload.filter import filter_payloads, deduplicate, report as filter_report
 
 
 
