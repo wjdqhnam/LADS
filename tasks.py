@@ -12,8 +12,8 @@ TASK_LABELS = {
 
 
 def _task_crawl(run_path_fn, target_url, emit_progress=None):
-    from crawler import Crawler
-    from target_builder import build_targets, print_summary
+    from crawl.crawler import Crawler
+    from crawl.target_builder import build_targets, print_summary
 
     def _prog(n):
         if emit_progress: emit_progress(n)
