@@ -1,200 +1,205 @@
 import json
 import os
-import sys
-from dotenv import load_dotenv
 
-load_dotenv()
-
-BASE_URL           = os.getenv("TARGET_URL",         "http://localhost:8080")
-CRAWL_RESULT_FILE  = os.getenv("CRAWL_RESULT",       "results/crawl_result.json")
-TARGETS_FILE       = os.getenv("TARGETS_FILE",        "results/targets.json")
-PAYLOADS_FILE      = os.getenv("PAYLOADS_FILE",       "results/payloads_llm.json")
-SCAN_RESULTS_FILE  = os.getenv("SCAN_RESULTS_FILE",   "results/scan_results_llm.json")
-PAYLOADS_META_FILE = os.getenv("PAYLOADS_META_FILE",  "results/payloads_llm_meta.json")
-FUZZ_TASKS_FILE    = os.getenv("FUZZ_TASKS_FILE",     "results/fuzz_tasks.json")
-EXEC_RESULTS_FILE  = os.getenv("EXEC_RESULTS_FILE",   "results/execution_results.json")
-FINDINGS_FILE      = os.getenv("FINDINGS_FILE",       "results/findings.json")
+TASK_LABELS = {
+    "crawl":    "크롤링 및 타깃 구성",
+    "payload":  "페이로드 생성",
+    "fuzz":     "퍼징 전략 수립",
+    "execute":  "퍼징 실행",
+    "validate": "취약점 판정",
+    "all":      "전체 진단",
+}
 
 
-def _task_crawl():
+def _task_crawl(run_path_fn, target_url, emit_progress=None):
     from crawler import Crawler
     from target_builder import build_targets, print_summary
 
-    print(f"크롤링 시작: {BASE_URL}")
-    crawler = Crawler(BASE_URL)
-    crawler.crawl()
-    crawler.save(CRAWL_RESULT_FILE)
-    crawler.summary()
+    def _prog(n):
+        if emit_progress: emit_progress(n)
 
-    print(f"타겟 구성 시작: {CRAWL_RESULT_FILE}")
-    with open(CRAWL_RESULT_FILE, encoding="utf-8") as f:
+    crawl_file   = run_path_fn("crawl_result.json")
+    targets_file = run_path_fn("targets.json")
+
+    print(f"[CRAWL] start: {target_url}")
+    crawler = Crawler(target_url)
+
+    def _crawl_progress(done, total):
+        _prog(int(done / max(total, 1) * 20))
+
+    crawler.crawl(progress_callback=_crawl_progress)
+    crawler.save(crawl_file)
+    crawler.summary()
+    _prog(20)
+
+    if crawler.auth_cookies:
+        cookies_file = run_path_fn("auth_cookies.json")
+        with open(cookies_file, "w", encoding="utf-8") as f:
+            json.dump(crawler.auth_cookies, f, ensure_ascii=False, indent=2)
+        print(f"[CRAWL] auth cookies saved: {len(crawler.auth_cookies)} cookies")
+    else:
+        print("[CRAWL] no auth cookies (anonymous crawl)")
+
+    with open(crawl_file, encoding="utf-8") as f:
         pages = json.load(f)
     targets = build_targets(pages)
-
-    os.makedirs("results", exist_ok=True)
-    with open(TARGETS_FILE, "w", encoding="utf-8") as f:
+    with open(targets_file, "w", encoding="utf-8") as f:
         json.dump(targets, f, ensure_ascii=False, indent=2)
-
-    print(f"타겟 구성 완료: {TARGETS_FILE} ({len(targets)}개)")
+    print(f"[CRAWL] targets saved: {targets_file} ({len(targets)})")
     print_summary(targets)
 
 
-def _task_payload():
-    from payload.generate_payloads import run as generate_run
+def _task_payload(payloads_file, emit_progress=None):
+    from payload.generator import run as generate_run
+
+    def _prog(n):
+        if emit_progress: emit_progress(n)
 
     os.makedirs("results", exist_ok=True)
-    print(f"LLM 페이로드 생성 시작 (출력: {PAYLOADS_FILE})")
-    generate_run(out_file=PAYLOADS_FILE)
+    print(f"[PAYLOAD] generate: {payloads_file}")
+    generate_run(out_file=payloads_file)
+    _prog(30)
 
 
-def _task_scan():
-    import scanner
+def _task_fuzz(run_path_fn, payloads_file, payloads_meta_file, emit_progress=None):
+    from fuzzer.strategy import build_tasks
 
-    if not os.path.exists(PAYLOADS_FILE):
-        print(f"[ERROR] {PAYLOADS_FILE} 없음. 페이로드를 먼저 생성하세요.")
+    def _prog(n):
+        if emit_progress: emit_progress(n)
+
+    targets_file    = run_path_fn("targets.json")
+    fuzz_tasks_file = run_path_fn("fuzz_tasks.json")
+
+    if not os.path.exists(payloads_file):
+        print(f"[ERROR] missing payload file: {payloads_file}")
+        return
+    if not os.path.exists(payloads_meta_file):
+        print(f"[WARN] missing payload meta file: {payloads_meta_file}")
         return
 
-    os.makedirs("results", exist_ok=True)
-
-    old_argv = sys.argv[:]
-    argv_list = ["scanner.py", "--payloads", PAYLOADS_FILE, "--out", SCAN_RESULTS_FILE]
-    if os.path.exists(TARGETS_FILE):
-        argv_list += ["--targets", TARGETS_FILE]
-
-    sys.argv = argv_list
-    try:
-        scanner.main()
-    except SystemExit as e:
-        if e.code and e.code != 0:
-            print(f"[ERROR] 스캐너 종료: exit code {e.code}")
-    finally:
-        sys.argv = old_argv
-
-
-def _task_fuzz():
-    from fuzzer.fuzzing_strategy import build_tasks
-
-    if not os.path.exists(PAYLOADS_FILE):
-        print(f"[ERROR] {PAYLOADS_FILE} 없음.")
-        print(f"        페이로드 생성(② LLM 페이로드 생성)을 먼저 실행하세요.")
-        return
-
-    if not os.path.exists(PAYLOADS_META_FILE):
-        print(f"[WARN] {PAYLOADS_META_FILE} 없음.")
-        return
-
-    with open(PAYLOADS_META_FILE, encoding="utf-8") as f:
+    with open(payloads_meta_file, encoding="utf-8") as f:
         points_meta = json.load(f)
-
-    with open(PAYLOADS_FILE, encoding="utf-8") as f:
+    with open(payloads_file, encoding="utf-8") as f:
         payloads = json.load(f)
 
     targets = None
-    if os.path.exists(TARGETS_FILE):
-        with open(TARGETS_FILE, encoding="utf-8") as f:
+    if os.path.exists(targets_file):
+        with open(targets_file, encoding="utf-8") as f:
             targets = json.load(f)
 
-    print(f"meta={len(points_meta)} payload_points={len(payloads)}")
-    tasks = build_tasks(points_meta, payloads, targets)
+    base_cookies: dict = {}
+    cookies_file = run_path_fn("auth_cookies.json")
+    if os.path.exists(cookies_file):
+        with open(cookies_file, encoding="utf-8") as f:
+            base_cookies = json.load(f)
+        print(f"[FUZZ] auth cookies loaded: {len(base_cookies)} cookies")
+    else:
+        print("[FUZZ] no auth cookies — requests will be unauthenticated")
 
-    with open(FUZZ_TASKS_FILE, "w", encoding="utf-8") as f:
+    tasks = build_tasks(points_meta, payloads, targets, base_cookies=base_cookies)
+    with open(fuzz_tasks_file, "w", encoding="utf-8") as f:
         json.dump(tasks, f, ensure_ascii=False, indent=2)
-
-    replace_ = sum(1 for t in tasks if t.get("inject_mode") == "replace")
-    append_  = sum(1 for t in tasks if t.get("inject_mode") == "append")
-    print(f"완료: {len(tasks)} 태스크 → {FUZZ_TASKS_FILE}")
-    print(f"         mode  → replace: {replace_}, append: {append_}")
+    print(f"[FUZZ] tasks saved: {fuzz_tasks_file} ({len(tasks)})")
+    _prog(35)
 
 
-def _task_execute():
+def _task_execute(run_path_fn, emit_progress=None):
     from fuzzer.executor import execute
 
-    if not os.path.exists(FUZZ_TASKS_FILE):
-        print(f"[ERROR] {FUZZ_TASKS_FILE} 없음. 전략 수립을 먼저 실행하세요.")
+    def _prog(n):
+        if emit_progress: emit_progress(n)
+
+    fuzz_tasks_file = run_path_fn("fuzz_tasks.json")
+    exec_file       = run_path_fn("execution_results.json")
+
+    if not os.path.exists(fuzz_tasks_file):
+        print(f"[ERROR] missing fuzz task file: {fuzz_tasks_file}")
         return
 
-    with open(FUZZ_TASKS_FILE, encoding="utf-8") as f:
+    with open(fuzz_tasks_file, encoding="utf-8") as f:
         tasks = json.load(f)
 
-    print(f"{len(tasks)} 태스크 실행 시작")
-    results = execute(tasks, timeout=10, delay=0.0, output_file=EXEC_RESULTS_FILE)
+    def _execute_progress(done, total):
+        _prog(35 + int(done / max(total, 1) * 55))
 
-    ok      = sum(1 for r in results if r["error"] is None)
-    timeout = sum(1 for r in results if r["error"] == "timeout")
-    err     = sum(1 for r in results if r["error"] and r["error"] != "timeout")
-    print(f"완료: 성공 {ok} / 타임아웃 {timeout} / 오류 {err} → {EXEC_RESULTS_FILE}")
+    print(f"[EXEC] start: {len(tasks)} tasks")
+    results = execute(tasks, timeout=10, delay=0.0, output_file=exec_file, progress_callback=_execute_progress)
+    ok      = sum(1 for r in results if r.get("error") is None)
+    timeout = sum(1 for r in results if r.get("error") == "timeout")
+    err     = sum(1 for r in results if r.get("error") and r.get("error") != "timeout")
+    print(f"[EXEC] done: ok={ok}, timeout={timeout}, error={err}")
+    _prog(90)
 
 
-def _task_validate():
-    from fuzzer.validator import run as validate_run
+def _task_validate(run_path_fn, emit_progress=None):
+    from validator import run as validate_run
 
-    if not os.path.exists(EXEC_RESULTS_FILE):
-        print(f"[ERROR] {EXEC_RESULTS_FILE} 없음. 실행을 먼저 하세요.")
+    def _prog(n):
+        if emit_progress: emit_progress(n)
+
+    exec_file     = run_path_fn("execution_results.json")
+    findings_file = run_path_fn("findings.json")
+
+    if not os.path.exists(exec_file):
+        print(f"[ERROR] missing execution result file: {exec_file}")
         return
 
-    print(f"[Validator] {EXEC_RESULTS_FILE} 분석 중...")
-    findings = validate_run(input_file=EXEC_RESULTS_FILE, output_file=FINDINGS_FILE)
+    def _validate_progress(done, total):
+        _prog(90 + int(done / max(total, 1) * 10))
 
-    xss_cnt  = sum(1 for f in findings if "xss"  in (f.get("vuln_type") or "").lower())
-    sqli_cnt = sum(1 for f in findings if "sqli" in (f.get("vuln_type") or "").lower()
-                                       or "sql"  in (f.get("vuln_type") or "").lower())
-
-    print(f"[Validator] 완료: 취약점 {len(findings)}개 발견 → {FINDINGS_FILE}")
-    print(f"           XSS: {xss_cnt}개  /  SQLi: {sqli_cnt}개")
-    for f in findings:
-        print(f"  [{f['vuln_type']:20s}] {f['point']} | {f['payload'][:50]} | {f['evidence']}")
+    findings = validate_run(input_file=exec_file, output_file=findings_file, progress_callback=_validate_progress)
+    xss_cnt  = sum(1 for f in findings if "xss" in (f.get("vuln_type") or "").lower())
+    sqli_cnt = sum(1 for f in findings if "sql" in (f.get("vuln_type") or "").lower())
+    print(f"[VALIDATE] done: findings={len(findings)}, xss={xss_cnt}, sqli={sqli_cnt}")
+    _prog(100)
 
 
-def _task_all(skip_crawl: bool = False, skip_payload: bool = False):
+def _task_all(run_path_fn, target_url, payloads_file, payloads_meta_file, skip_crawl=False, emit_progress=None):
+    def _prog(n):
+        if emit_progress: emit_progress(n)
+
+    _prog(2)
+
     if skip_crawl:
-        print(f"[건너뜀] 크롤링 — {CRAWL_RESULT_FILE} 재사용")
+        print("[CRAWL] 이전 크롤링 결과 재사용")
+        _prog(20)
     else:
-        _task_crawl()
+        _task_crawl(run_path_fn, target_url, emit_progress)
+        _prog(20)
 
-    if skip_payload:
-        print(f"[건너뜀] 페이로드 생성 — {PAYLOADS_FILE} 재사용")
+    if not os.path.exists(run_path_fn("crawl_result.json")):
+        print("[ERROR] 크롤링 결과 파일 없음 — 스캔 중단")
+        return
+
+    if os.path.exists(payloads_file):
+        try:
+            with open(payloads_file, encoding="utf-8") as _f:
+                _cnt = len(json.load(_f))
+        except Exception:
+            _cnt = 0
+        print(f"[PAYLOAD] 기존 페이로드 재사용 ({_cnt}개) — 새로 생성하려면 파일 삭제 후 재스캔")
+        _prog(30)
     else:
-        _task_payload()
+        _task_payload(payloads_file, emit_progress)
+        _prog(30)
 
-    _task_scan()
-    _task_fuzz()
-    _task_execute()
-    _task_validate()
+    if not os.path.exists(payloads_file):
+        print("[ERROR] 페이로드 파일 없음 — 스캔 중단")
+        return
 
+    _task_fuzz(run_path_fn, payloads_file, payloads_meta_file, emit_progress)
+    _prog(35)
 
-def reload_config():
-    """설정 저장 후 환경변수 갱신 — app.py /config POST에서 호출"""
-    global BASE_URL, CRAWL_RESULT_FILE, TARGETS_FILE, PAYLOADS_FILE
-    global SCAN_RESULTS_FILE, PAYLOADS_META_FILE, FUZZ_TASKS_FILE
-    global EXEC_RESULTS_FILE, FINDINGS_FILE
-    load_dotenv(override=True)
-    BASE_URL           = os.getenv("TARGET_URL",         "http://34.68.27.120:8081")
-    CRAWL_RESULT_FILE  = os.getenv("CRAWL_RESULT",       "results/crawl_result.json")
-    TARGETS_FILE       = os.getenv("TARGETS_FILE",        "results/targets.json")
-    PAYLOADS_FILE      = os.getenv("PAYLOADS_FILE",       "results/payloads_llm.json")
-    SCAN_RESULTS_FILE  = os.getenv("SCAN_RESULTS_FILE",   "results/scan_results_llm.json")
-    PAYLOADS_META_FILE = os.getenv("PAYLOADS_META_FILE",  "results/payloads_llm_meta.json")
-    FUZZ_TASKS_FILE    = os.getenv("FUZZ_TASKS_FILE",     "results/fuzz_tasks.json")
-    EXEC_RESULTS_FILE  = os.getenv("EXEC_RESULTS_FILE",   "results/execution_results.json")
-    FINDINGS_FILE      = os.getenv("FINDINGS_FILE",       "results/findings.json")
+    if not os.path.exists(run_path_fn("fuzz_tasks.json")):
+        print("[ERROR] 퍼징 작업 파일 없음 — 스캔 중단")
+        return
 
+    _task_execute(run_path_fn, emit_progress)
+    _prog(90)
 
-TASK_FUNCS = {
-    "crawl"   : _task_crawl,
-    "payload" : _task_payload,
-    "scan"    : _task_scan,
-    "fuzz"    : _task_fuzz,
-    "execute" : _task_execute,
-    "validate": _task_validate,
-    "all"     : _task_all,
-}
+    if not os.path.exists(run_path_fn("execution_results.json")):
+        print("[ERROR] 실행 결과 파일 없음 — 스캔 중단")
+        return
 
-TASK_LABELS = {
-    "crawl"   : "크롤링 + 타겟 구성",
-    "payload" : "LLM 페이로드 생성",
-    "scan"    : "스캔 실행",
-    "fuzz"    : "퍼징 · 전략 수립",
-    "execute" : "퍼징 · 실행",
-    "validate": "퍼징 · 취약점 판정",
-    "all"     : "전체 파이프라인",
-}
+    _task_validate(run_path_fn, emit_progress)
+    _prog(100)

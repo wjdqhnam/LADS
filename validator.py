@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import json
 
-from baseline.sqli import ERROR_PATTERNS as _MYSQL_ERRORS
+from payload.baseline.sqli import ERROR_PATTERNS as _MYSQL_ERRORS
 
 _XSS_MARKERS = [
     "onerror=alert",
