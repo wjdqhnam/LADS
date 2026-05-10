@@ -1,24 +1,92 @@
-def validate_xss(test_result):
-    """XSS (Stored, Reflected 및 우회) 검증"""
-    payload = test_result.get("payload", "").lower()
-    response_body = test_result.get("response", {}).get("body", "").lower()
-    xss_context = test_result.get("xss_context", "unknown")
-    
-    if not response_body:
-        return False, "검증 불가 (응답 데이터 누락)"
+from __future__ import annotations
 
-    # 1. HTML 인코딩 여부 우선 확인 (필터링됨)
-    if "&lt;" in response_body and (payload.startswith("<") or "onclick" in payload):
-         return False, "안전함 (페이로드가 HTML 인코딩됨)"
+from typing import Optional
 
-    # 2. 페이로드 생존 확인 (scanner.py의 XSS_MARKERS 개념 적용)
-    if payload in response_body:
-        return True, f"XSS 성공 (컨텍스트: {xss_context}, 페이로드 반사 확인)"
+XSS_MARKERS = (
+    "onerror=alert",
+    "onload=alert",
+    "onerror=eval",
+    "ontoggle=alert",
+    "onmouseover=alert",
+    "onfocus=alert",
+    "onstart=alert",
+    "onanimationstart=alert",
+    "src=x onerror",
+    "<script>alert",
+    "javascript:alert",
+    "href=javascript:",
+    "<svg/onload",
+    "<svg onload",
+    "<details open ontoggle",
+    "onerror=prompt",
+    # 백틱 변형
+    "onerror=alert`",
+    "onmouseover=alert`",
+)
 
-    # 3. 부분 키워드 실행 가능성 확인
-    critical_keywords = ["onerror=", "onload=", "eval(", "<svg"]
-    for kw in critical_keywords:
-        if kw in payload and kw in response_body:
-            return True, f"XSS 성공 (위험 키워드 '{kw}' 실행 가능 환경)"
+# 인코딩 흔적 — 마커 주변에 보이면 안전한 것으로 간주
+_ENCODED_TOKENS = ("&lt;", "&gt;", "&quot;", "&#x3c;", "&#60;", "&#x3e;", "&#62;")
 
-    return False, "안전함 (XSS 필터링됨)"
+
+# ── 입력 정규화 ──────────────────────────────────────────────────
+def _extract_body(test_result: dict) -> str:
+    if "response" in test_result and isinstance(test_result["response"], dict):
+        return test_result["response"].get("body") or ""
+    return test_result.get("response_body") or ""
+
+
+# ── 헬퍼 ─────────────────────────────────────────────────────────
+def _is_encoded(body: str, idx: int, marker_len: int, window: int = 10) -> bool:
+    start = max(0, idx - window)
+    end   = idx + marker_len + window
+    surrounding = body[start:end]
+    return any(tok in surrounding for tok in _ENCODED_TOKENS)
+
+
+def _check_markers(body_lower: str, body_raw: str) -> Optional[str]:
+    for marker in XSS_MARKERS:
+        idx = body_lower.find(marker)
+        if idx == -1:
+            continue
+        if _is_encoded(body_raw, idx, len(marker)):
+            continue
+        return f"위험 마커 노출 ('{marker}')"
+    return None
+
+
+def _check_payload_reflection(payload: str, body_lower: str) -> Optional[str]:
+    if not payload:
+        return None
+    pl = payload.lower().strip()
+    if len(pl) < 4:                     # 너무 짧은 문자열은 우연 매치 가능
+        return None
+    if pl in body_lower:
+        return f"페이로드 반사 (payload 본문 내 그대로 노출)"
+    return None
+
+
+# ── 메인 진입점 ──────────────────────────────────────────────────
+def validate_xss(test_result: dict) -> tuple[bool, str]:
+
+    if not test_result:
+        return False, "검증 불가 (입력 없음)"
+
+    body_raw = _extract_body(test_result)
+    if not body_raw:
+        return False, "검증 불가 (응답 본문 없음)"
+
+    body_lower = body_raw.lower()
+    payload    = (test_result.get("payload") or "")
+    context    = test_result.get("xss_context") or "unknown"
+
+    # 1) 위험 마커 — 인코딩 가드 포함
+    msg = _check_markers(body_lower, body_raw)
+    if msg:
+        return True, f"XSS 성공 [{context}] {msg}"
+
+    # 2) 페이로드 반사 — 마커에 안 잡힌 변형 페이로드 보완
+    msg = _check_payload_reflection(payload, body_lower)
+    if msg:
+        return True, f"XSS 성공 [{context}] {msg}"
+
+    return False, "안전함 (XSS 시그니처 미검출 / 인코딩됨)"
