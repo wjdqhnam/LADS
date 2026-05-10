@@ -2,7 +2,7 @@ def validate_bac(test_result):
     """Broken Access Control 검증"""
     request_info = test_result.get("request_info", {})
     response = test_result.get("response", {})
-    
+
     url = request_info.get("url", "").lower()
     role = request_info.get("role", "guest")
     status = response.get("status", 0)
@@ -22,5 +22,5 @@ def validate_bac(test_result):
                 admin_indicators = ["admin", "관리자", "회원관리", "설정", "dashboard"]
                 if any(ind in body for ind in admin_indicators):
                     return True, f"BAC 성공 (비인가 계정 '{role}'으로 관리자 기능 접근)"
-    
+
     return False, "안전함 (권한 통제 정상)"
