@@ -7,6 +7,7 @@ TASK_LABELS = {
     "fuzz":     "퍼징 전략 수립",
     "execute":  "퍼징 실행",
     "validate": "취약점 판정",
+    "misconfig": "설정 오류 점검",
     "all":      "전체 진단",
 }
 
@@ -154,6 +155,27 @@ def _task_validate(run_path_fn, emit_progress=None):
     _prog(100)
 
 
+def _task_misconfig(run_path_fn, target_url, emit_progress=None):
+    from misconfig.checker import run as misconfig_run
+
+    def _prog(n):
+        if emit_progress: emit_progress(n)
+
+    findings_file = run_path_fn("findings.json")
+
+    print(f"[MISCONFIG] target: {target_url}")
+    findings = misconfig_run(
+        base_url=target_url,
+        output_file=findings_file,
+        progress_callback=lambda done, total: _prog(int(done / max(total, 1) * 100)),
+        append=True,
+    )
+    confirmed = sum(1 for f in findings if f.get("type") == "MISCONFIG_CONFIRMED")
+    warnings  = sum(1 for f in findings if f.get("type") == "MISCONFIG_WARNING")
+    print(f"[MISCONFIG] confirmed={confirmed}, warning={warnings}")
+    _prog(100)
+
+
 def _task_all(run_path_fn, target_url, payloads_file, payloads_meta_file, skip_crawl=False, emit_progress=None):
     def _prog(n):
         if emit_progress: emit_progress(n)
@@ -202,4 +224,7 @@ def _task_all(run_path_fn, target_url, payloads_file, payloads_meta_file, skip_c
         return
 
     _task_validate(run_path_fn, emit_progress)
+    _prog(95)
+
+    _task_misconfig(run_path_fn, target_url, emit_progress)
     _prog(100)
