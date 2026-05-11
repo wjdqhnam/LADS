@@ -1,10 +1,3 @@
-"""
-baseline/sqli.py - 범용 SQLi 베이스라인 페이로드
-
-CMS 무관. 문자열/숫자/ORDER BY/필드명/로그인 컨텍스트별로 구성.
-타입명은 payload_filter.py ALLOWED_TYPES 기준.
-"""
-
 from typing import Dict, List, Optional
 
 Payload = Dict[str, str]

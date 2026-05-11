@@ -1,9 +1,4 @@
 """
-baseline/xss.py - 범용 XSS 베이스라인 페이로드
-
-LLM 생성 페이로드의 보완재. 필터/우회/컨텍스트별 정석 XSS 페이로드를
-다량 수록. CMS/프레임워크 특화 내용 없음 — 어떤 웹앱에서도 사용 가능.
-
 컨텍스트 분류
   attr_value    : value="" 또는 name="" 속성값 내부
   attr_href     : href / src / action 등 URL 속성
