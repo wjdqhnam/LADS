@@ -3,7 +3,10 @@ import argparse
 import sys
 import os
 from dotenv import load_dotenv
-load_dotenv()
+
+# LADS 루트의 env_example.env에서 API 키 로드
+_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+load_dotenv(os.path.join(_ROOT, "env_example.env"))
 
 # 직접 실행(python generate_payloads.py) 시 LADS 루트를 경로에 추가
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -135,8 +138,8 @@ INPUT_POINTS = [
 
 COUNT = 7  # 타입당 페이로드 수
 
-def run(out_file: str = "results/payloads_llm.json", progress_callback=None):  # 로딩바 콜백 함수
-    
+
+def run(out_file: str = "results/payloads_llm.json", progress_callback=None):
     print(f"\n{'='*60}")
     print(f"  Gnuboard5 Payload Generator v2")
     print(f"  Target: http://34.68.27.120:8081/")
@@ -184,11 +187,23 @@ def run(out_file: str = "results/payloads_llm.json", progress_callback=None):  #
     with open(out_file, "w", encoding="utf-8") as f:
         json.dump(all_results, f, ensure_ascii=False, indent=2)
 
-    # Step 7에서 사용할 입력 지점 메타 저장
-    meta_out = os.getenv("PAYLOADS_META_FILE", "results/payloads_llm_meta.json")
-    os.makedirs(os.path.dirname(meta_out) or ".", exist_ok=True)
-    with open(meta_out, "w", encoding="utf-8") as f:
-        json.dump(INPUT_POINTS, f, ensure_ascii=False, indent=2)
+    # 메타 저장 (경로: env var, 내용: 상세 필드)
+    meta_file = os.getenv("PAYLOADS_META_FILE", "results/payloads_llm_meta.json")
+    os.makedirs(os.path.dirname(meta_file) or ".", exist_ok=True)
+    meta_list = [
+        {
+            "name":       point["name"],
+            "url":        point["url"],
+            "method":     point["method"],
+            "param":      point["param"],
+            "type":       point.get("type", ""),
+            "note":       point.get("note", ""),
+            "vuln_types": point.get("vuln_types", []),
+        }
+        for point in INPUT_POINTS
+    ]
+    with open(meta_file, "w", encoding="utf-8") as f:
+        json.dump(meta_list, f, ensure_ascii=False, indent=2)
 
     all_records = [
         r
@@ -200,6 +215,7 @@ def run(out_file: str = "results/payloads_llm.json", progress_callback=None):  #
 
     print(f"{'='*60}")
     print(f"  저장 완료 -> {out_file}")
+    print(f"  메타 저장 -> {meta_file}")
     print(f"  총 페이로드: {total}")
     print(f"{'='*60}\n")
 

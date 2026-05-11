@@ -8,6 +8,7 @@ ALLOWED_TYPES = {
     "SQLI_ORDERBY",
     "SQLI_LOGIN",
     "ERROR_BASED",
+    "SQLI_ERROR",
     "BOOLEAN",
     "TIME_BASED",
     "TAUTOLOGY",
