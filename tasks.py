@@ -133,7 +133,7 @@ def _task_execute(run_path_fn, emit_progress=None):
 
 
 def _task_validate(run_path_fn, emit_progress=None):
-    from validator import run as validate_run
+    from analyzer import run as validate_run
 
     def _prog(n):
         if emit_progress: emit_progress(n)
