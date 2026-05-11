@@ -52,14 +52,14 @@ def _make_session() -> requests.Session:
             "Accept": "*/*",
         }
     )
+    # status_forcelist 제거: 서버 5xx는 SQLi 결과일 수 있어 재시도 금지
+    # connect 재시도만 최소한으로 허용 (네트워크 순단 대응)
     retry = Retry(
-        total=2,
-        connect=2,
-        read=2,
-        status=2,
-        backoff_factor=0.4,
-        status_forcelist=[429, 500, 502, 503, 504],
-        allowed_methods=["GET", "POST"],
+        total=1,
+        connect=1,
+        read=0,
+        status=0,
+        backoff_factor=0,
     )
     s.mount("http://", HTTPAdapter(max_retries=retry))
     s.mount("https://", HTTPAdapter(max_retries=retry))
@@ -206,8 +206,9 @@ def execute(
                     "url": url,
                     "method": method,
                     "status": None,
-                    "length": None,
+                    "length": 0,
                     "elapsed": round(elapsed, 3),
+                    "response_body": None,
                     "error": "timeout",
                 }
             )
@@ -219,8 +220,9 @@ def execute(
                     "url": url,
                     "method": method,
                     "status": None,
-                    "length": None,
+                    "length": 0,
                     "elapsed": round(elapsed, 3),
+                    "response_body": None,
                     "error": f"exception:{type(e).__name__}",
                 }
             )
