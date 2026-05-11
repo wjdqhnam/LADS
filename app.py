@@ -34,6 +34,7 @@ from tasks import (
     _task_fuzz as _fuzz_impl,
     _task_execute as _execute_impl,
     _task_validate as _validate_impl,
+    _task_misconfig as _misconfig_impl,
     _task_all as _all_impl,
     TASK_LABELS as _TASK_LABELS,
 )
@@ -147,6 +148,10 @@ def _task_validate():
     _validate_impl(_run_path, _emit_progress)
 
 
+def _task_misconfig():
+    _misconfig_impl(_run_path, _active_url(), _emit_progress)
+
+
 def _task_all(skip_crawl: bool = False):
     _all_impl(_run_path, _active_url(), PAYLOADS_FILE, PAYLOADS_META_FILE, skip_crawl=skip_crawl, emit_progress=_emit_progress)
 
@@ -157,6 +162,7 @@ _TASK_FUNCS = {
     "fuzz":     _task_fuzz,
     "execute":  _task_execute,
     "validate": _task_validate,
+    "misconfig": _task_misconfig,
     "all":      _task_all,
 }
 
