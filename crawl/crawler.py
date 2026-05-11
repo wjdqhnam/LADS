@@ -14,9 +14,11 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+# 대상 URL 및 결과 저장 경로
 BASE_URL = os.getenv("TARGET_URL", "http://localhost:8080")
 OUTPUT_FILE = os.getenv("OUTPUT_FILE", "results/crawl_result.json")
 
+# 로그인 관련 환경 변수
 LOGIN_URL = os.getenv("LOGIN_URL", "")
 LOGIN_METHOD = os.getenv("LOGIN_METHOD", "POST").upper()
 LOGIN_ID_FIELD = os.getenv("LOGIN_ID_FIELD", "")
@@ -27,6 +29,7 @@ LOGIN_SUCCESS_INDICATOR = os.getenv("LOGIN_SUCCESS_INDICATOR", "")
 LOGIN_SUCCESS_URL_KEYWORD = os.getenv("LOGIN_SUCCESS_URL_KEYWORD", "")
 LOGIN_FAIL_INDICATOR = os.getenv("LOGIN_FAIL_INDICATOR", "")
 
+# 크롤링 시작점 (그누보드 기준 주요 경로)
 SEED_PATHS = [
     "/",
     "/bbs/login.php",
@@ -40,6 +43,7 @@ SEED_PATHS = [
     "/bbs/memo.php",
 ]
 
+# 크롤링에서 제외할 URL 패턴 (로그아웃, 정적 파일 등)
 EXCLUDE_PATTERNS = [
     r"logout",
     r"signout",
@@ -47,14 +51,20 @@ EXCLUDE_PATTERNS = [
 ]
 
 
+# 크롤링 동작 설정값
 class CrawlConfig:
-    MAX_PAGES = int(os.getenv("CRAWL_MAX_PAGES", "500"))
-    MIN_PAGES = int(os.getenv("CRAWL_MIN_PAGES", "100"))
-    STAGNATION_LIMIT = int(os.getenv("CRAWL_STAGNATION_LIMIT", "50"))
-    DELAY = float(os.getenv("CRAWL_DELAY", "0.3"))
-    TIMEOUT = int(os.getenv("CRAWL_TIMEOUT", "10"))
+    MAX_PAGES = int(os.getenv("CRAWL_MAX_PAGES", "500"))               # 최대 크롤링 페이지 수
+    MIN_PAGES = int(os.getenv("CRAWL_MIN_PAGES", "100"))               # 조기 종료 검사 시작 기준
+    STAGNATION_LIMIT = int(os.getenv("CRAWL_STAGNATION_LIMIT", "50"))  # 새 입력 구조 없이 허용할 최대 페이지 수
+    DELAY = float(os.getenv("CRAWL_DELAY", "0.3"))                     # 요청 간 딜레이 (초)
+    TIMEOUT = int(os.getenv("CRAWL_TIMEOUT", "10"))                    # HTTP 요청 타임아웃 (초)
 
 
+# =============================================================================
+# 모델
+# =============================================================================
+
+# 폼 내 단일 입력 필드
 @dataclass
 class FormField:
     name: str
@@ -63,6 +73,7 @@ class FormField:
     options: list = field(default_factory=list)
 
 
+# HTML <form> 하나를 표현
 @dataclass
 class Form:
     action: str
@@ -71,6 +82,7 @@ class Form:
     enctype: str = "application/x-www-form-urlencoded"
 
 
+# 페이지 크롤링 결과 (URL, 상태코드, 폼, 링크, 쿼리 파라미터 등)
 @dataclass
 class PageResult:
     url: str
@@ -82,11 +94,15 @@ class PageResult:
     is_error_page: bool = False
 
 
+# =============================================================================
+# 크롤러
+# =============================================================================
 class Crawler:
     def __init__(self, base_url: str = BASE_URL):
         self.base_url = base_url.rstrip("/")
         self.parsed_base = urlparse(self.base_url)
         self.session = requests.Session()
+        # 브라우저처럼 보이도록 User-Agent 설정
         self.session.headers.update({
             "User-Agent": (
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -97,23 +113,35 @@ class Crawler:
             "Accept-Language": "ko-KR,ko;q=0.9,en;q=0.8",
         })
         self.auth_cookies: dict = {}
-        self.visited: set[str] = set()
-        self.queue: deque[str] = deque()
-        self.results: list[PageResult] = []
-        self.seen_input_structures: set[tuple] = set()
-        self.no_new_input_pages = 0
+        self.visited: set[str] = set()           # 이미 방문한 URL
+        self.queue: deque[str] = deque()          # 방문 예정 URL 큐
+        self.results: list[PageResult] = []       # 크롤링 결과 누적
+        self.seen_input_structures: set[tuple] = set()  # 중복 입력 구조 필터용 시그니처
+        self.no_new_input_pages = 0              # 새 입력 구조 없는 연속 페이지 수
 
+
+    # --- 
+    # URL 필터링 유틸리티 
+    # ---
     def _is_in_scope(self, url: str) -> bool:
+        # 같은 도메인인지 확인
         parsed = urlparse(url)
         return parsed.scheme in ("http", "https") and parsed.netloc == self.parsed_base.netloc
 
     def _is_excluded(self, url: str) -> bool:
+        # 제외 패턴에 해당하는 URL인지 확인
         return any(re.search(pattern, url, re.IGNORECASE) for pattern in EXCLUDE_PATTERNS)
 
     def _normalize(self, url: str) -> str:
+        # 프래그먼트(#...) 제거해 URL 정규화
         return urlparse(url)._replace(fragment="").geturl()
 
+
+    # --- 
+    # 중복 입력 구조 감지용 시그니처 
+    # ---
     def _query_signature(self, url: str) -> Optional[tuple]:
+        # 쿼리 파라미터 키 조합으로 GET 입력 구조 식별
         parsed = urlparse(url)
         params = parse_qs(parsed.query, keep_blank_values=True)
         if not params:
@@ -121,6 +149,7 @@ class Crawler:
         return ("QUERY", "GET", parsed.path or "/", tuple(sorted(params.keys())))
 
     def _form_signature(self, form: Form) -> tuple:
+        # 폼 액션 + 메서드 + 필드명 조합으로 폼 구조 식별
         parsed = urlparse(form.action)
         return (
             "FORM",
@@ -130,16 +159,23 @@ class Crawler:
         )
 
     def _should_stop_early(self, crawled: int) -> bool:
+        # MIN_PAGES 이상 크롤 후 새 입력 구조가 STAGNATION_LIMIT 연속으로 없으면 조기 종료
         return crawled >= CrawlConfig.MIN_PAGES and self.no_new_input_pages >= CrawlConfig.STAGNATION_LIMIT
 
     def _fetch(self, url: str) -> Optional[requests.Response]:
+        # GET 요청, 실패 시 None 반환
         try:
             return self.session.get(url, timeout=CrawlConfig.TIMEOUT, allow_redirects=True)
         except requests.RequestException as exc:
             print(f"[ERROR] fetch failed: {url} ({exc})", file=sys.stderr)
             return None
 
+
+    # ==========================================================================
+    # 로그인
+    # ==========================================================================
     def _extract_hidden_inputs(self, form_tag) -> dict:
+        # CSRF 토큰 등 hidden input 값을 페이로드에 포함시키기 위해 추출
         hidden = {}
         if not form_tag:
             return hidden
@@ -150,7 +186,10 @@ class Crawler:
         return hidden
 
     def _infer_login_fields(self, form_tag, id_field: str = "", password_field: str = "") -> Optional[tuple[str, str]]:
+        # env에 필드명이 없으면 name/id/placeholder/autocomplete 속성으로 아이디,비밀번호 필드 추론
         inputs = form_tag.find_all("input")
+
+        # 비밀번호 필드 찾기 (type=password 또는 키워드 매칭)
         password_name = password_field if password_field and form_tag.find("input", {"name": password_field}) else ""
         if not password_name:
             for inp in inputs:
@@ -161,6 +200,7 @@ class Crawler:
                     password_name = name
                     break
 
+        # 아이디 필드 찾기 (점수 기반 — 이메일/텍스트 타입 + 관련 키워드 우선)
         id_name = id_field if id_field and form_tag.find("input", {"name": id_field}) else ""
         if not id_name:
             candidates = []
@@ -182,6 +222,7 @@ class Crawler:
         return None
 
     def _find_login_form(self, soup: BeautifulSoup, id_field: str = "", password_field: str = ""):
+        # 페이지에서 로그인 폼 탐색 (env 지정 필드 -> 추론 순서로 시도)
         forms = soup.find_all("form")
         if id_field and password_field:
             for form in forms:
@@ -193,18 +234,19 @@ class Crawler:
         return forms[0] if forms else None
 
     def login(self) -> bool:
-        login_url = os.getenv("LOGIN_URL", LOGIN_URL)
+        # 로그인 페이지에서 폼을 찾아 자동 로그인 수행, 성공 여부 반환
+        login_url = LOGIN_URL
         if not login_url:
             return False
 
-        login_method = os.getenv("LOGIN_METHOD", LOGIN_METHOD).upper()
-        login_id_field = os.getenv("LOGIN_ID_FIELD", LOGIN_ID_FIELD)
-        login_password_field = os.getenv("LOGIN_PASSWORD_FIELD", LOGIN_PASSWORD_FIELD)
-        login_id = os.getenv("LOGIN_ID", LOGIN_ID)
-        login_password = os.getenv("LOGIN_PASSWORD", LOGIN_PASSWORD)
-        success_indicator = os.getenv("LOGIN_SUCCESS_INDICATOR", LOGIN_SUCCESS_INDICATOR).lower()
-        success_url_keyword = os.getenv("LOGIN_SUCCESS_URL_KEYWORD", LOGIN_SUCCESS_URL_KEYWORD).lower()
-        fail_indicator = os.getenv("LOGIN_FAIL_INDICATOR", LOGIN_FAIL_INDICATOR).lower()
+        login_method = LOGIN_METHOD
+        login_id_field = LOGIN_ID_FIELD
+        login_password_field = LOGIN_PASSWORD_FIELD
+        login_id = LOGIN_ID
+        login_password = LOGIN_PASSWORD
+        success_indicator = LOGIN_SUCCESS_INDICATOR.lower()
+        success_url_keyword = LOGIN_SUCCESS_URL_KEYWORD.lower()
+        fail_indicator = LOGIN_FAIL_INDICATOR.lower()
 
         try:
             get_resp = self.session.get(login_url, timeout=CrawlConfig.TIMEOUT, allow_redirects=True)
@@ -224,6 +266,7 @@ class Crawler:
             return False
         login_id_field, login_password_field = inferred
 
+        # hidden 필드(CSRF 등) 포함해 페이로드 구성
         payload = self._extract_hidden_inputs(form_tag)
         payload[login_id_field] = login_id
         payload[login_password_field] = login_password
@@ -238,6 +281,7 @@ class Crawler:
             print(f"[LOGIN] request failed: {exc}", file=sys.stderr)
             return False
 
+        # 성공/실패 판단: 실패 키워드 → 성공 키워드 → 최종 URL → 쿠키 존재 순서로 확인
         body_lower = post_resp.text.lower()
         final_url_lower = post_resp.url.lower()
         if fail_indicator and fail_indicator in body_lower:
@@ -259,12 +303,14 @@ class Crawler:
         return False
 
     def _discover_seeds(self) -> list[str]:
+        # SEED_PATHS를 base_url에 붙여 초기 방문 URL 목록 생성
         seeds = {self._normalize(self.base_url + "/")}
         for path in SEED_PATHS:
             seeds.add(self._normalize(urljoin(self.base_url + "/", path)))
         return list(seeds)
 
     def _parse_form(self, form_tag, page_url: str) -> Form:
+        # <form> 태그에서 action, method, 필드 목록 추출
         action = urljoin(page_url, form_tag.get("action") or page_url)
         method = (form_tag.get("method") or "GET").upper()
         enctype = form_tag.get("enctype") or "application/x-www-form-urlencoded"
@@ -280,6 +326,7 @@ class Crawler:
         return Form(action=action, method=method, fields=fields, enctype=enctype)
 
     def crawl(self, extra_seeds: list[str] | None = None, progress_callback=None) -> list[PageResult]:
+        # 로그인 → 시드 URL 큐 적재 → BFS 크롤링 수행
         if os.getenv("LOGIN_URL", LOGIN_URL):
             if not self.login():
                 print("[WARN] login failed; continuing anonymously", file=sys.stderr)
@@ -305,10 +352,13 @@ class Crawler:
                 continue
 
             result = PageResult(url=url, status_code=resp.status_code)
+
+            # URL 쿼리 파라미터 저장
             parsed = urlparse(url)
             if parsed.query:
                 result.query_params = parse_qs(parsed.query, keep_blank_values=True)
 
+            # HTML 응답인 경우 폼과 링크 파싱
             content_type = resp.headers.get("content-type", "")
             if "html" in content_type.lower() or "<html" in resp.text[:500].lower():
                 soup = BeautifulSoup(resp.text, "lxml")
@@ -327,12 +377,21 @@ class Crawler:
                         if link not in self.visited:
                             self.queue.append(link)
 
+            # 새 입력 구조 발견 여부로 stagnation 카운터 업데이트
+            pre_size = len(self.seen_input_structures)
+
             query_sig = self._query_signature(url)
             if query_sig:
                 self.seen_input_structures.add(query_sig)
 
             self.results.append(result)
             crawled += 1
+
+            if len(self.seen_input_structures) == pre_size:
+                self.no_new_input_pages += 1
+            else:
+                self.no_new_input_pages = 0
+
             if progress_callback:
                 progress_callback(crawled, CrawlConfig.MAX_PAGES)
             if self._should_stop_early(crawled):
@@ -343,12 +402,14 @@ class Crawler:
         return self.results
 
     def save(self, path: str = OUTPUT_FILE) -> None:
+        # 크롤링 결과를 JSON 파일로 저장
         os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
         with open(path, "w", encoding="utf-8") as f:
             json.dump([asdict(result) for result in self.results], f, ensure_ascii=False, indent=2)
         print(f"[CRAWLER] saved: {path}")
 
     def summary(self) -> None:
+        # 크롤링 통계 출력 (페이지 수, 폼 수, 쿼리 파라미터 보유 페이지 수)
         forms = sum(len(page.forms) for page in self.results)
         queries = sum(1 for page in self.results if page.query_params)
         print(f"[CRAWLER] pages={len(self.results)}, forms={forms}, query_pages={queries}")
