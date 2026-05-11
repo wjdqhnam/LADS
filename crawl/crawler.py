@@ -12,22 +12,13 @@ import requests
 from bs4 import BeautifulSoup  # type: ignore[reportMissingModuleSource]
 from dotenv import load_dotenv
 
+from crawl.auth import LOGIN_URL, login as _do_login
+
 load_dotenv()
 
 # 대상 URL 및 결과 저장 경로
 BASE_URL = os.getenv("TARGET_URL", "http://localhost:8080")
 OUTPUT_FILE = os.getenv("OUTPUT_FILE", "results/crawl_result.json")
-
-# 로그인 관련 환경 변수
-LOGIN_URL = os.getenv("LOGIN_URL", "")
-LOGIN_METHOD = os.getenv("LOGIN_METHOD", "POST").upper()
-LOGIN_ID_FIELD = os.getenv("LOGIN_ID_FIELD", "")
-LOGIN_PASSWORD_FIELD = os.getenv("LOGIN_PASSWORD_FIELD", "")
-LOGIN_ID = os.getenv("LOGIN_ID", "")
-LOGIN_PASSWORD = os.getenv("LOGIN_PASSWORD", "")
-LOGIN_SUCCESS_INDICATOR = os.getenv("LOGIN_SUCCESS_INDICATOR", "")
-LOGIN_SUCCESS_URL_KEYWORD = os.getenv("LOGIN_SUCCESS_URL_KEYWORD", "")
-LOGIN_FAIL_INDICATOR = os.getenv("LOGIN_FAIL_INDICATOR", "")
 
 # 크롤링 시작점 (그누보드 기준 주요 경로)
 SEED_PATHS = [
@@ -174,133 +165,12 @@ class Crawler:
     # ==========================================================================
     # 로그인
     # ==========================================================================
-    def _extract_hidden_inputs(self, form_tag) -> dict:
-        # CSRF 토큰 등 hidden input 값을 페이로드에 포함시키기 위해 추출
-        hidden = {}
-        if not form_tag:
-            return hidden
-        for inp in form_tag.find_all("input", {"type": "hidden"}):
-            name = inp.get("name")
-            if name:
-                hidden[name] = inp.get("value", "")
-        return hidden
-
-    def _infer_login_fields(self, form_tag, id_field: str = "", password_field: str = "") -> Optional[tuple[str, str]]:
-        # env에 필드명이 없으면 name/id/placeholder/autocomplete 속성으로 아이디,비밀번호 필드 추론
-        inputs = form_tag.find_all("input")
-
-        # 비밀번호 필드 찾기 (type=password 또는 키워드 매칭)
-        password_name = password_field if password_field and form_tag.find("input", {"name": password_field}) else ""
-        if not password_name:
-            for inp in inputs:
-                name = inp.get("name", "")
-                input_type = inp.get("type", "text").lower()
-                haystack = " ".join([name, inp.get("id", ""), inp.get("placeholder", ""), inp.get("autocomplete", "")]).lower()
-                if name and (input_type == "password" or "pass" in haystack or "passwd" in haystack or "pw" in haystack):
-                    password_name = name
-                    break
-
-        # 아이디 필드 찾기 (점수 기반 — 이메일/텍스트 타입 + 관련 키워드 우선)
-        id_name = id_field if id_field and form_tag.find("input", {"name": id_field}) else ""
-        if not id_name:
-            candidates = []
-            for idx, inp in enumerate(inputs):
-                name = inp.get("name", "")
-                input_type = inp.get("type", "text").lower()
-                if not name or name == password_name or input_type in {"hidden", "password", "submit", "button", "checkbox", "radio"}:
-                    continue
-                haystack = " ".join([name, inp.get("id", ""), inp.get("placeholder", ""), inp.get("autocomplete", "")]).lower()
-                score = 2 if input_type in {"text", "email", "tel"} else 0
-                if any(token in haystack for token in ["login", "user", "userid", "username", "email", "member", "mb_id", "id"]):
-                    score += 5
-                candidates.append((score, -idx, name))
-            if candidates:
-                id_name = max(candidates)[2]
-
-        if id_name and password_name:
-            return id_name, password_name
-        return None
-
-    def _find_login_form(self, soup: BeautifulSoup, id_field: str = "", password_field: str = ""):
-        # 페이지에서 로그인 폼 탐색 (env 지정 필드 -> 추론 순서로 시도)
-        forms = soup.find_all("form")
-        if id_field and password_field:
-            for form in forms:
-                if form.find("input", {"name": id_field}) and form.find("input", {"name": password_field}):
-                    return form
-        for form in forms:
-            if self._infer_login_fields(form, id_field, password_field):
-                return form
-        return forms[0] if forms else None
-
     def login(self) -> bool:
-        # 로그인 페이지에서 폼을 찾아 자동 로그인 수행, 성공 여부 반환
-        login_url = LOGIN_URL
-        if not login_url:
-            return False
-
-        login_method = LOGIN_METHOD
-        login_id_field = LOGIN_ID_FIELD
-        login_password_field = LOGIN_PASSWORD_FIELD
-        login_id = LOGIN_ID
-        login_password = LOGIN_PASSWORD
-        success_indicator = LOGIN_SUCCESS_INDICATOR.lower()
-        success_url_keyword = LOGIN_SUCCESS_URL_KEYWORD.lower()
-        fail_indicator = LOGIN_FAIL_INDICATOR.lower()
-
-        try:
-            get_resp = self.session.get(login_url, timeout=CrawlConfig.TIMEOUT, allow_redirects=True)
-        except requests.RequestException as exc:
-            print(f"[LOGIN] GET failed: {exc}", file=sys.stderr)
-            return False
-
-        soup = BeautifulSoup(get_resp.text, "lxml")
-        form_tag = self._find_login_form(soup, login_id_field, login_password_field)
-        if not form_tag:
-            print("[LOGIN] login form not found", file=sys.stderr)
-            return False
-
-        inferred = self._infer_login_fields(form_tag, login_id_field, login_password_field)
-        if not inferred:
-            print("[LOGIN] could not infer login fields", file=sys.stderr)
-            return False
-        login_id_field, login_password_field = inferred
-
-        # hidden 필드(CSRF 등) 포함해 페이로드 구성
-        payload = self._extract_hidden_inputs(form_tag)
-        payload[login_id_field] = login_id
-        payload[login_password_field] = login_password
-        post_url = urljoin(login_url, form_tag.get("action")) if form_tag.get("action") else login_url
-
-        try:
-            if login_method == "GET":
-                post_resp = self.session.get(post_url, params=payload, timeout=CrawlConfig.TIMEOUT, allow_redirects=True)
-            else:
-                post_resp = self.session.post(post_url, data=payload, timeout=CrawlConfig.TIMEOUT, allow_redirects=True)
-        except requests.RequestException as exc:
-            print(f"[LOGIN] request failed: {exc}", file=sys.stderr)
-            return False
-
-        # 성공/실패 판단: 실패 키워드 → 성공 키워드 → 최종 URL → 쿠키 존재 순서로 확인
-        body_lower = post_resp.text.lower()
-        final_url_lower = post_resp.url.lower()
-        if fail_indicator and fail_indicator in body_lower:
-            print("[LOGIN] failed by fail indicator", file=sys.stderr)
-            return False
-        if success_indicator and success_indicator in body_lower:
-            self.auth_cookies = self.session.cookies.get_dict()
-            print(f"[LOGIN] success by indicator, cookies={len(self.auth_cookies)}")
-            return True
-        if success_url_keyword and success_url_keyword in final_url_lower:
-            self.auth_cookies = self.session.cookies.get_dict()
-            print(f"[LOGIN] success by final URL, cookies={len(self.auth_cookies)}")
-            return True
-        if self.session.cookies.get_dict():
-            self.auth_cookies = self.session.cookies.get_dict()
-            print(f"[LOGIN] success assumed by cookies, cookies={len(self.auth_cookies)}")
-            return True
-        print("[LOGIN] no success evidence found", file=sys.stderr)
-        return False
+        # auth.py의 login() 호출 후 쿠키를 인스턴스에 저장
+        success, cookies = _do_login(self.session)
+        if success:
+            self.auth_cookies = cookies
+        return success
 
     def _discover_seeds(self) -> list[str]:
         # SEED_PATHS를 base_url에 붙여 초기 방문 URL 목록 생성
