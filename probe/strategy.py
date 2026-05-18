@@ -68,7 +68,7 @@ def build_tasks(
     base_cookies: dict | None = None,
     progress_callback=None,
 ) -> list[dict]:
-    """points + LLM payloads + baseline payloads -> fuzz task list."""
+    # points + LLM payloads + baseline payloads -> probe task list
 
     if not points_meta or not payloads:
         return []

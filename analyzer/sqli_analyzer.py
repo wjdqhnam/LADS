@@ -141,8 +141,8 @@ def detect_boolean_group(results: list[dict]) -> list[dict]:
         if not true_items or not false_items:
             continue
 
-        avg_true  = sum(len(r.get("length")) for r in true_items)  / len(true_items)
-        avg_false = sum(len(r.get("length")) for r in false_items) / len(false_items)
+        avg_true  = sum(r.get("length") for r in true_items)  / len(true_items)
+        avg_false = sum(r.get("length") for r in false_items) / len(false_items)
         max_len   = max(avg_true, avg_false, 1)
         diff      = abs(avg_true - avg_false) / max_len
 

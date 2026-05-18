@@ -4,7 +4,7 @@ import os
 TASK_LABELS = {
     "crawl":    "크롤링 및 타깃 구성",
     "payload":  "페이로드 생성",
-    "fuzz":     "퍼징 전략 수립",
+    "probe":    "주입 테스트 준비",
     "execute":  "퍼징 실행",
     "validate": "취약점 판정",
     "misconfig": "설정 오류 점검",
@@ -41,6 +41,16 @@ def _task_crawl(run_path_fn, target_url, emit_progress=None):
     else:
         print("[CRAWL] no auth cookies (anonymous crawl)")
 
+    # BAC용 역할별 세션 쿠키 저장
+    from crawl.auth import login_all_roles
+    role_sessions = login_all_roles()
+    for role, cookies in role_sessions.items():
+        role_file = run_path_fn(f"auth_cookies_{role}.json")
+        with open(role_file, "w", encoding="utf-8") as f:
+            json.dump(cookies, f, ensure_ascii=False, indent=2)
+    acquired = [r for r, c in role_sessions.items() if c or r == "guest"]
+    print(f"[CRAWL] role sessions saved: {acquired}")
+
     with open(crawl_file, encoding="utf-8") as f:
         pages = json.load(f)
     targets = build_targets(pages)
@@ -62,14 +72,14 @@ def _task_payload(payloads_file, emit_progress=None):
     _prog(30)
 
 
-def _task_fuzz(run_path_fn, payloads_file, payloads_meta_file, emit_progress=None):
-    from fuzzer.strategy import build_tasks
+def _task_probe(run_path_fn, payloads_file, payloads_meta_file, emit_progress=None):
+    from probe.strategy import build_tasks
 
     def _prog(n):
         if emit_progress: emit_progress(n)
 
     targets_file    = run_path_fn("targets.json")
-    fuzz_tasks_file = run_path_fn("fuzz_tasks.json")
+    probe_tasks_file = run_path_fn("probe_tasks.json")
 
     if not os.path.exists(payloads_file):
         print(f"[ERROR] missing payload file: {payloads_file}")
@@ -93,31 +103,31 @@ def _task_fuzz(run_path_fn, payloads_file, payloads_meta_file, emit_progress=Non
     if os.path.exists(cookies_file):
         with open(cookies_file, encoding="utf-8") as f:
             base_cookies = json.load(f)
-        print(f"[FUZZ] auth cookies loaded: {len(base_cookies)} cookies")
+        print(f"[PROBE] auth cookies loaded: {len(base_cookies)} cookies")
     else:
-        print("[FUZZ] no auth cookies — requests will be unauthenticated")
+        print("[PROBE] no auth cookies — requests will be unauthenticated")
 
     tasks = build_tasks(points_meta, payloads, targets, base_cookies=base_cookies)
-    with open(fuzz_tasks_file, "w", encoding="utf-8") as f:
+    with open(probe_tasks_file, "w", encoding="utf-8") as f:
         json.dump(tasks, f, ensure_ascii=False, indent=2)
-    print(f"[FUZZ] tasks saved: {fuzz_tasks_file} ({len(tasks)})")
+    print(f"[PROBE] tasks saved: {probe_tasks_file} ({len(tasks)})")
     _prog(35)
 
 
 def _task_execute(run_path_fn, emit_progress=None):
-    from fuzzer.executor import execute
+    from probe.executor import execute
 
     def _prog(n):
         if emit_progress: emit_progress(n)
 
-    fuzz_tasks_file = run_path_fn("fuzz_tasks.json")
+    probe_tasks_file = run_path_fn("probe_tasks.json")
     exec_file       = run_path_fn("execution_results.json")
 
-    if not os.path.exists(fuzz_tasks_file):
-        print(f"[ERROR] missing fuzz task file: {fuzz_tasks_file}")
+    if not os.path.exists(probe_tasks_file):
+        print(f"[ERROR] missing probe task file: {probe_tasks_file}")
         return
 
-    with open(fuzz_tasks_file, encoding="utf-8") as f:
+    with open(probe_tasks_file, encoding="utf-8") as f:
         tasks = json.load(f)
 
     def _execute_progress(done, total):
@@ -209,10 +219,10 @@ def _task_all(run_path_fn, target_url, payloads_file, payloads_meta_file, skip_c
         print("[ERROR] 페이로드 파일 없음 — 스캔 중단")
         return
 
-    _task_fuzz(run_path_fn, payloads_file, payloads_meta_file, emit_progress)
+    _task_probe(run_path_fn, payloads_file, payloads_meta_file, emit_progress)
     _prog(35)
 
-    if not os.path.exists(run_path_fn("fuzz_tasks.json")):
+    if not os.path.exists(run_path_fn("probe_tasks.json")):
         print("[ERROR] 퍼징 작업 파일 없음 — 스캔 중단")
         return
 

@@ -1,5 +1,4 @@
 """
-bac/prompt_builder.py
 BAC 탐지용 LLM 프롬프트 빌더
 
 LLM에게 CMS별 접근 제어 정보를 질의하여 아래 항목들을 JSON으로 반환받는다:

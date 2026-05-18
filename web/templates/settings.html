@@ -1,0 +1,141 @@
+{% extends "base.html" %}
+{% block title %}LADS - 설정{% endblock %}
+
+{% block content %}
+<section class="flex min-h-[calc(100vh-104px)] flex-col gap-5">
+  <div class="flex shrink-0 items-center justify-between gap-4">
+    <h1 class="text-[28px] font-black leading-9 text-slate-950">로그인 설정</h1>
+  </div>
+
+  {% if saved %}
+  <div id="saved-alert" class="flex items-center gap-3 rounded border border-emerald-200 bg-emerald-50 px-4 py-3 text-[14px] text-emerald-800 transition-opacity duration-500">
+    <span class="material-symbols-outlined text-[18px]">check_circle</span>
+    설정이 저장되었습니다. 다음 크롤링부터 적용됩니다.
+  </div>
+  {% endif %}
+
+  <form method="POST" action="/settings" class="flex flex-col gap-5">
+
+    <!-- 일반 계정 -->
+    <div class="rounded border border-surface-line bg-white p-6">
+      <h2 class="mb-1 text-[16px] font-black text-slate-950">일반 계정 (member)</h2>
+      <p class="mb-5 text-[13px] text-slate-500">XSS, SQLi, BAC member 세션에 사용됩니다. 비워두면 BAC 접근 제어 테스트가 제한됩니다.</p>
+
+      <div class="grid gap-4 md:grid-cols-2">
+        <div class="flex flex-col gap-1.5">
+          <label class="text-[13px] font-bold text-slate-700" for="login_id">아이디</label>
+          <input
+            id="login_id" name="login_id" type="text"
+            value="{{ login_id }}"
+            placeholder="user1"
+            class="rounded border border-surface-line px-3 py-2 font-mono text-[14px] text-slate-950 focus:border-slate-950 focus:outline-none"
+          >
+        </div>
+        <div class="flex flex-col gap-1.5">
+          <label class="text-[13px] font-bold text-slate-700" for="login_password">비밀번호</label>
+          <input
+            id="login_password" name="login_password" type="password"
+            value="{{ login_password }}"
+            placeholder="••••••••"
+            class="rounded border border-surface-line px-3 py-2 font-mono text-[14px] text-slate-950 focus:border-slate-950 focus:outline-none"
+          >
+        </div>
+      </div>
+    </div>
+
+    <!-- 관리자 계정 -->
+    <div class="rounded border border-surface-line bg-white p-6">
+      <h2 class="mb-1 text-[16px] font-black text-slate-950">관리자 계정 (admin)</h2>
+      <p class="mb-5 text-[13px] text-slate-500">BAC admin 세션에 사용됩니다. 비워두면 admin 세션 없이 진행합니다.</p>
+
+      <div class="grid gap-4 md:grid-cols-2">
+        <div class="flex flex-col gap-1.5">
+          <label class="text-[13px] font-bold text-slate-700" for="admin_id">아이디</label>
+          <input
+            id="admin_id" name="admin_id" type="text"
+            value="{{ admin_id }}"
+            placeholder="admin"
+            class="rounded border border-surface-line px-3 py-2 font-mono text-[14px] text-slate-950 focus:border-slate-950 focus:outline-none"
+          >
+        </div>
+        <div class="flex flex-col gap-1.5">
+          <label class="text-[13px] font-bold text-slate-700" for="admin_password">비밀번호</label>
+          <input
+            id="admin_password" name="admin_password" type="password"
+            value="{{ admin_password }}"
+            placeholder="••••••••"
+            class="rounded border border-surface-line px-3 py-2 font-mono text-[14px] text-slate-950 focus:border-slate-950 focus:outline-none"
+          >
+        </div>
+      </div>
+    </div>
+
+    <!-- 고급 설정 -->
+    <div class="rounded border border-surface-line bg-white">
+      <button
+        type="button"
+        onclick="toggleAdvanced()"
+        class="flex w-full items-center justify-between px-6 py-4 text-left"
+      >
+        <span class="text-[15px] font-bold text-slate-600">고급 설정</span>
+        <span id="advanced-icon" class="material-symbols-outlined text-[20px] text-slate-400 transition-transform">expand_more</span>
+      </button>
+
+      <div id="advanced-section" class="hidden border-t border-surface-line px-6 pb-6 pt-5">
+        <p class="text-[13px] text-slate-500">
+          로그인 실패를 성공으로 오인할 경우 Fallback용
+        </p>
+        <p class="mb-4 text-[13px] text-slate-500">
+          비워두면 자동 감지를 시도합니다.
+        </p>
+
+        <div class="flex flex-col gap-1.5">
+          <label class="text-[13px] font-bold text-slate-700" for="login_fail_indicator">로그인 실패 문자열</label>
+          <input
+            id="login_fail_indicator" name="login_fail_indicator" type="text"
+            value="{{ login_fail_indicator }}"
+            placeholder="예) 가입된 회원 아이디가 아니거나 비밀번호가 틀립니다."
+            class="rounded border border-surface-line px-3 py-2 font-mono text-[13px] text-slate-950 focus:border-slate-950 focus:outline-none"
+          >
+        </div>
+      </div>
+    </div>
+
+    <div class="flex justify-end">
+      <button
+        type="submit"
+        class="inline-flex h-10 items-center gap-2 rounded bg-slate-950 px-5 text-[14px] font-bold text-white hover:bg-slate-800"
+      >
+        <span class="material-symbols-outlined text-[18px]">save</span>
+        저장
+      </button>
+    </div>
+
+  </form>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  function toggleAdvanced() {
+    const section = document.getElementById('advanced-section');
+    const icon = document.getElementById('advanced-icon');
+    const isHidden = section.classList.toggle('hidden');
+    icon.style.transform = isHidden ? '' : 'rotate(180deg)';
+  }
+
+  // 저장된 값이 있으면 고급 설정 자동 펼치기
+  if (document.getElementById('login_fail_indicator').value) {
+    toggleAdvanced();
+  }
+
+  // 저장 알림 5초 후 페이드아웃
+  const alert = document.getElementById('saved-alert');
+  if (alert) {
+    setTimeout(() => {
+      alert.style.opacity = '0';
+      setTimeout(() => alert.remove(), 500);
+    }, 5000);
+  }
+</script>
+{% endblock %}

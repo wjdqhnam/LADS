@@ -31,7 +31,7 @@ from flask import Flask, Response, redirect, render_template, request
 from tasks import (
     _task_crawl as _crawl_impl,
     _task_payload as _payload_impl,
-    _task_fuzz as _fuzz_impl,
+    _task_probe as _probe_impl,
     _task_execute as _execute_impl,
     _task_validate as _validate_impl,
     _task_misconfig as _misconfig_impl,
@@ -136,8 +136,8 @@ def _task_payload():
     _payload_impl(PAYLOADS_FILE, _emit_progress)
 
 
-def _task_fuzz():
-    _fuzz_impl(_run_path, PAYLOADS_FILE, PAYLOADS_META_FILE, _emit_progress)
+def _task_probe():
+    _probe_impl(_run_path, PAYLOADS_FILE, PAYLOADS_META_FILE, _emit_progress)
 
 
 def _task_execute():
@@ -159,7 +159,7 @@ def _task_all(skip_crawl: bool = False):
 _TASK_FUNCS = {
     "crawl":    _task_crawl,
     "payload":  _task_payload,
-    "fuzz":     _task_fuzz,
+    "probe":    _task_probe,
     "execute":  _task_execute,
     "validate": _task_validate,
     "misconfig": _task_misconfig,
@@ -258,7 +258,7 @@ def _get_file_status():
         ("크롤링 결과", os.path.exists(_run_path("crawl_result.json"))),
         ("타깃 목록", os.path.exists(_run_path("targets.json"))),
         ("페이로드", os.path.exists(PAYLOADS_FILE)),
-        ("퍼징 작업", os.path.exists(_run_path("fuzz_tasks.json"))),
+        ("탐색 작업 목록", os.path.exists(_run_path("probe_tasks.json"))),
         ("실행 결과", os.path.exists(_run_path("execution_results.json"))),
         ("취약점 결과", os.path.exists(_run_path("findings.json"))),
     ]
@@ -297,7 +297,7 @@ def _get_pipeline_steps():
     checks = [
         ("crawl", "크롤러", "travel_explore", os.path.exists(_run_path("crawl_result.json")) and os.path.exists(_run_path("targets.json"))),
         ("payload", "페이로드", "psychology", os.path.exists(PAYLOADS_FILE)),
-        ("fuzz", "퍼징 전략", "pest_control", os.path.exists(_run_path("fuzz_tasks.json"))),
+        ("probe", "주입 테스트 준비", "radar", os.path.exists(_run_path("probe_tasks.json"))),
         ("execute", "실행기", "terminal", os.path.exists(_run_path("execution_results.json"))),
         ("validate", "분석기", "analytics", os.path.exists(_run_path("findings.json"))),
     ]
@@ -427,6 +427,64 @@ def targets_page():
     return render_template("targets.html", targets=_get_target_envs())
 
 
+# 지정된 키를 .env 파일에 덮어쓰고 os.environ도 즉시 갱신
+def _update_env_file(updates: dict) -> None:
+    env_path = ".env"
+    lines: list[str] = []
+    if os.path.exists(env_path):
+        with open(env_path, encoding="utf-8") as f:
+            lines = f.readlines()
+
+    written: set[str] = set()
+    new_lines: list[str] = []
+    for line in lines:
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#") or "=" not in stripped:
+            new_lines.append(line)
+            continue
+        key = stripped.split("=", 1)[0].strip()
+        if key in updates:
+            new_lines.append(f"{key}='{updates[key]}'\n")
+            written.add(key)
+        else:
+            new_lines.append(line)
+
+    for key, val in updates.items():
+        if key not in written:
+            new_lines.append(f"{key}='{val}'\n")
+
+    with open(env_path, "w", encoding="utf-8") as f:
+        f.writelines(new_lines)
+
+    for key, val in updates.items():
+        os.environ[key] = val
+
+
+@app.route("/settings", methods=["GET", "POST"])
+def settings_page():
+    saved = False
+    if request.method == "POST":
+        updates = {
+            "LOGIN_ID":             request.form.get("login_id", ""),
+            "LOGIN_PASSWORD":       request.form.get("login_password", ""),
+            "ADMIN_ID":             request.form.get("admin_id", ""),
+            "ADMIN_PASSWORD":       request.form.get("admin_password", ""),
+            "LOGIN_FAIL_INDICATOR": request.form.get("login_fail_indicator", ""),
+        }
+        _update_env_file(updates)
+        saved = True
+
+    return render_template(
+        "settings.html",
+        saved=saved,
+        login_id=os.getenv("LOGIN_ID", ""),
+        login_password=os.getenv("LOGIN_PASSWORD", ""),
+        admin_id=os.getenv("ADMIN_ID", ""),
+        admin_password=os.getenv("ADMIN_PASSWORD", ""),
+        login_fail_indicator=os.getenv("LOGIN_FAIL_INDICATOR", ""),
+    )
+
+
 @app.route("/settings/target", methods=["POST"])
 def set_target():
     global _active_target_key
@@ -491,7 +549,7 @@ def run_detail(run_id):
         has_crawl="crawl_result.json" in files,
         has_targets="targets.json" in files,
         has_payload=os.path.exists(PAYLOADS_FILE),
-        has_fuzz="fuzz_tasks.json" in files,
+        has_probe="probe_tasks.json" in files,
         has_exec="execution_results.json" in files,
         has_findings="findings.json" in files,
         findings=findings,

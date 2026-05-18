@@ -11,7 +11,7 @@ var _labels = {
   crawl: '크롤링',
   payload: '페이로드 준비',
   scan: '스캔 실행',
-  fuzz: '스캔 작업 생성',
+  probe: '주입 테스트 준비',
   execute: '활성 스캔',
   validate: '결과 분석',
   all: '전체 진단'
@@ -86,8 +86,8 @@ function _stageFromMessage(message) {
   if (text.indexOf('payload') !== -1 || text.indexOf('페이로드') !== -1 || text.indexOf('llm') !== -1) {
     return { label: 'PAYLOAD', cls: 'bg-violet-100 text-violet-800', row: 'bg-violet-50' };
   }
-  if (text.indexOf('fuzz') !== -1 || text.indexOf('퍼징') !== -1 || text.indexOf('strategy') !== -1) {
-    return { label: 'FUZZ', cls: 'bg-amber-100 text-amber-800', row: 'bg-amber-50' };
+  if (text.indexOf('probe') !== -1 || text.indexOf('주입 테스트') !== -1 || text.indexOf('strategy') !== -1) {
+    return { label: 'PROBE', cls: 'bg-amber-100 text-amber-800', row: 'bg-amber-50' };
   }
   if (text.indexOf('execute') !== -1 || text.indexOf('실행') !== -1 || text.indexOf('request') !== -1) {
     return { label: 'EXEC', cls: 'bg-indigo-100 text-indigo-800', row: 'bg-indigo-50' };

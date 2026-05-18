@@ -73,7 +73,7 @@ def execute(
     output_file: str | None = None,
     progress_callback=None,
 ) -> list[dict]:
-    """fuzz task -> HTTP send -> results."""
+    # probe task -> HTTP send -> results
 
     session = _make_session()
     results: list[dict] = []
