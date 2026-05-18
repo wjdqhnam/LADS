@@ -15,6 +15,14 @@ XSS_CONTEXT_HINT: Dict[str, str] = {
     "unknown":       '→ 컨텍스트 불명확',
 }
 
+# vuln_type → xss_context 매핑
+_VULN_TYPE_TO_XSS_CONTEXT: Dict[str, str] = {
+    "xss_search":  "attr_value",   # value="" 속성 반영
+    "xss_subject": "stored",       # 게시글 제목 (Stored)
+    "xss_content": "body",         # 게시글 본문 (HTML 허용)
+    "xss_comment": "stored",       # 댓글 (Stored)
+}
+
 
 def _base_url(url: str) -> str:
     return urlparse(url)._replace(query="", fragment="").geturl()
@@ -142,7 +150,8 @@ def build_tasks(
             if not payload or payload in used_payloads:
                 return
             used_payloads.add(payload)
-            meta = {"vuln_type": vtype, "type": rec_type, "family": family}
+            xss_ctx = _VULN_TYPE_TO_XSS_CONTEXT.get(vtype, "unknown")
+            meta = {"vuln_type": vtype, "type": rec_type, "family": family, "xss_context": xss_ctx}
             base_value = str(p.get("base_value") or "")
             modes = ("replace", "append") if base_value else ("replace",)
             for mode in modes:

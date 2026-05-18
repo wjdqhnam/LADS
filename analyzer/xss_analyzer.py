@@ -22,6 +22,23 @@ XSS_MARKERS = (
     # 백틱 변형
     "onerror=alert`",
     "onmouseover=alert`",
+    # 공백 포함 이벤트 핸들러 (ModSecurity 우회 패턴)
+    "onerror = alert",
+    "onload = alert",
+    # 엔티티 인코딩된 이벤트 핸들러 값 (WAF 우회)
+    "onerror=&#",
+    # eval concat 우회
+    "eval('al'",
+    "eval(\"al\"",
+    # Blind XSS 콜백 패턴
+    "new image().src=",
+    "document.location=",
+    # 원격 스크립트 로드 (XSSHunter 패턴)
+    "script src=//",
+    "script src='//",
+    # window 오브젝트 concat 우회
+    "window['ale'",
+    "window[\"ale\"",
 )
 
 # 인코딩 흔적 — 마커 주변에 보이면 안전한 것으로 간주
@@ -77,7 +94,11 @@ def validate_xss(test_result: dict) -> tuple[bool, str]:
 
     body_lower = body_raw.lower()
     payload    = (test_result.get("payload") or "")
-    context    = test_result.get("xss_context") or "unknown"
+    context    = (
+        test_result.get("xss_context")
+        or (test_result.get("meta") or {}).get("xss_context")
+        or "unknown"
+    )
 
     # 1) 위험 마커 — 인코딩 가드 포함
     msg = _check_markers(body_lower, body_raw)
