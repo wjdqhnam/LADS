@@ -1,34 +1,20 @@
-"""
-analyzer 패키지 — 취약점 판정 진입점
-─────────────────────────────────────
-executor 결과(execution_results.json) → 취약 판정 → findings.json
-
-Phase 1 (단건 판정)
-    - validate_sqli  : Time / Error / Boolean(controls)
-    - validate_xss   : 마커 노출 / 페이로드 반사 (HTML 인코딩 가드)
-    - validate_bac   : 관리자 경로 비인가 접근
-
-Phase 2 (그룹 분석)
-    - detect_boolean_group : 동일 (point, param, url) 묶음에서
-      TRUE/FALSE 페이로드 응답 길이 차이로 Boolean SQLi 판정
-
-사용:
-    from analyzer import run, validate
-    findings = run("results/execution_results.json", "results/findings.json")
-"""
 from __future__ import annotations
 
 import json
 import os
 
-from .sqli_analyzer import validate_sqli, detect_boolean_group
+from .sqli_analyzer import (
+    validate_sqli,
+    detect_boolean_group,
+    detect_orderby_group,
+)
 from .xss_analyzer  import validate_xss
-from .bac_analyzer  import validate_bac
+from .bac_analyzer  import validate_bac, detect_bac_group
 
 __all__ = [
     "run", "validate",
     "validate_sqli", "validate_xss", "validate_bac",
-    "detect_boolean_group",
+    "detect_boolean_group", "detect_orderby_group", "detect_bac_group",
 ]
 
 
@@ -48,6 +34,7 @@ def _make_finding(r: dict, evidence: str) -> dict:
         "payload":     r.get("payload") or "",
         "inject_mode": r.get("inject_mode"),
         "vuln_type":   meta.get("vuln_type"),
+        "role":        meta.get("role"),   # ← BAC 결과 보고서에서 사용
         "status":      r.get("status"),
         "elapsed":     r.get("elapsed") or 0.0,
         "evidence":    evidence,
@@ -65,7 +52,7 @@ def _validate_single(r: dict) -> tuple[bool, str]:
     if "bac" in vt or "broken_access" in vt or "auth" in vt:
         return validate_bac(r)
 
-    # 타입 불명확 → XSS → SQLi 순서로 시도 (BAC 는 형식이 달라 fallback 제외)
+    # 타입 불명확 → XSS → SQLi 순서로 시도 (BAC는 형식이 달라 fallback 제외)
     ok, ev = validate_xss(r)
     if ok:
         return True, ev
@@ -76,7 +63,7 @@ def _validate_single(r: dict) -> tuple[bool, str]:
 def validate(results: list[dict], progress_callback=None) -> list[dict]:
     """
     executor 결과 리스트 → finding 리스트.
-    Phase 1 (단건 분석) + Phase 2 (그룹 Boolean) 결합.
+    Phase 1 (단건 분석) + Phase 2 (그룹 분석) 결합.
     """
     findings: list[dict] = []
     found_ids: set = set()
@@ -95,14 +82,21 @@ def validate(results: list[dict], progress_callback=None) -> list[dict]:
             findings.append(_make_finding(r, evidence))
             found_ids.add(r.get("id"))
 
-    # Phase 2: 그룹 Boolean (단건에서 못 잡은 케이스 보강)
-    for item in detect_boolean_group(results):
-        r        = item["result"]
-        evidence = item["evidence"]
-        if r.get("id") in found_ids:
-            continue
-        findings.append(_make_finding(r, evidence))
-        found_ids.add(r.get("id"))
+    # Phase 2: 그룹 분석 (단건에서 못 잡은 케이스 보강)
+    group_detectors = [
+        detect_boolean_group,
+        detect_orderby_group,   # 신규
+        detect_bac_group,       # 신규
+    ]
+
+    for detector in group_detectors:
+        for item in detector(results):
+            r        = item["result"]
+            evidence = item["evidence"]
+            if r.get("id") in found_ids:
+                continue
+            findings.append(_make_finding(r, evidence))
+            found_ids.add(r.get("id"))
 
     return findings
 
