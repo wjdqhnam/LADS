@@ -61,8 +61,10 @@ def _load_targets() -> list[dict]:
             "url": os.getenv("TARGET_URL", "http://localhost"),
             "cms": "custom",
             "login_url": os.getenv("LOGIN_URL", ""),
-            "login_id": os.getenv("LOGIN_ID", ""),
-            "login_password": os.getenv("LOGIN_PASSWORD", ""),
+            "login_id": os.getenv("LOGIN_ID_1", ""),
+            "login_password": os.getenv("LOGIN_PASSWORD_1", ""),
+            "login_id_2": os.getenv("LOGIN_ID_2", ""),
+            "login_password_2": os.getenv("LOGIN_PASSWORD_2", ""),
             "admin_id": os.getenv("ADMIN_ID", ""),
             "admin_password": os.getenv("ADMIN_PASSWORD", ""),
             "login_fail_indicator": os.getenv("LOGIN_FAIL_INDICATOR", ""),
@@ -79,8 +81,10 @@ def _apply_active_target_env(target: dict) -> None:
     mapping = {
         "TARGET_URL": target.get("url", ""),
         "LOGIN_URL": target.get("login_url", ""),
-        "LOGIN_ID": target.get("login_id", ""),
-        "LOGIN_PASSWORD": target.get("login_password", ""),
+        "LOGIN_ID_1": target.get("login_id", ""),
+        "LOGIN_PASSWORD_1": target.get("login_password", ""),
+        "LOGIN_ID_2": target.get("login_id_2", ""),
+        "LOGIN_PASSWORD_2": target.get("login_password_2", ""),
         "ADMIN_ID": target.get("admin_id", ""),
         "ADMIN_PASSWORD": target.get("admin_password", ""),
         "LOGIN_FAIL_INDICATOR": target.get("login_fail_indicator", ""),
@@ -90,8 +94,10 @@ def _apply_active_target_env(target: dict) -> None:
     try:
         import crawl.auth as _auth
         _auth.LOGIN_URL = mapping["LOGIN_URL"]
-        _auth.LOGIN_ID = mapping["LOGIN_ID"]
-        _auth.LOGIN_PASSWORD = mapping["LOGIN_PASSWORD"]
+        _auth.LOGIN_ID_1 = mapping["LOGIN_ID_1"]
+        _auth.LOGIN_PASSWORD_1 = mapping["LOGIN_PASSWORD_1"]
+        _auth.LOGIN_ID_2 = mapping["LOGIN_ID_2"]
+        _auth.LOGIN_PASSWORD_2 = mapping["LOGIN_PASSWORD_2"]
         _auth.ADMIN_ID = mapping["ADMIN_ID"]
         _auth.ADMIN_PASSWORD = mapping["ADMIN_PASSWORD"]
         _auth.LOGIN_FAIL_INDICATOR = mapping["LOGIN_FAIL_INDICATOR"]
@@ -180,7 +186,8 @@ def _task_crawl():
 
 
 def _task_payload():
-    _payload_impl(PAYLOADS_FILE, _emit_progress)
+    targets_file = _run_path("targets.json")
+    _payload_impl(PAYLOADS_FILE, targets_file=targets_file, emit_progress=_emit_progress)
 
 
 def _task_probe():
@@ -529,6 +536,8 @@ def add_target():
         "login_url": "",
         "login_id": "",
         "login_password": "",
+        "login_id_2": "",
+        "login_password_2": "",
         "admin_id": "",
         "admin_password": "",
         "login_fail_indicator": "",
@@ -560,6 +569,8 @@ def update_target(key):
     target["login_url"] = request.form.get("login_url", "").strip()
     target["login_id"] = request.form.get("login_id", "").strip()
     target["login_password"] = request.form.get("login_password", "").strip()
+    target["login_id_2"] = request.form.get("login_id_2", "").strip()
+    target["login_password_2"] = request.form.get("login_password_2", "").strip()
     target["admin_id"] = request.form.get("admin_id", "").strip()
     target["admin_password"] = request.form.get("admin_password", "").strip()
     target["login_fail_indicator"] = request.form.get("login_fail_indicator", "").strip()

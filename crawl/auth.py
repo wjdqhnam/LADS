@@ -13,8 +13,10 @@ load_dotenv()
 # 로그인 관련 환경 변수
 LOGIN_URL = os.getenv("LOGIN_URL", "")
 LOGIN_METHOD = os.getenv("LOGIN_METHOD", "POST").upper()
-LOGIN_ID = os.getenv("LOGIN_ID", "")
-LOGIN_PASSWORD = os.getenv("LOGIN_PASSWORD", "")
+LOGIN_ID_1 = os.getenv("LOGIN_ID_1", "")
+LOGIN_PASSWORD_1 = os.getenv("LOGIN_PASSWORD_1", "")
+LOGIN_ID_2 = os.getenv("LOGIN_ID_2", "")
+LOGIN_PASSWORD_2 = os.getenv("LOGIN_PASSWORD_2", "")
 LOGIN_FAIL_INDICATOR = os.getenv("LOGIN_FAIL_INDICATOR", "")
 ADMIN_ID = os.getenv("ADMIN_ID", "")
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "")
@@ -321,8 +323,8 @@ def login(
     session: requests.Session,
     url: str = LOGIN_URL,
     method: str = LOGIN_METHOD,
-    login_id: str = LOGIN_ID,
-    login_password: str = LOGIN_PASSWORD,
+    login_id: str = LOGIN_ID_1,
+    login_password: str = LOGIN_PASSWORD_1,
     fail_indicator: str = LOGIN_FAIL_INDICATOR,
     base_url: str = "",
     timeout: int = _TIMEOUT,
@@ -425,14 +427,23 @@ def login_all_roles(
         timeout=timeout,
     )
 
-    if LOGIN_ID:
+    if LOGIN_ID_1:
         session = _make_session()
-        ok, cookies = login(session, login_id=LOGIN_ID, login_password=LOGIN_PASSWORD, **common)
+        ok, cookies = login(session, login_id=LOGIN_ID_1, login_password=LOGIN_PASSWORD_1, **common)
         if ok:
             roles["member"] = cookies
             print(f"[AUTH - OK] member login success: {len(cookies)} cookies")
         else:
             print("[AUTH - FAIL] member login failed; skipped", file=sys.stderr)
+
+    if LOGIN_ID_2:
+        session = _make_session()
+        ok, cookies = login(session, login_id=LOGIN_ID_2, login_password=LOGIN_PASSWORD_2, **common)
+        if ok:
+            roles["member2"] = cookies
+            print(f"[AUTH - OK] member2 login success: {len(cookies)} cookies")
+        else:
+            print("[AUTH - FAIL] member2 login failed; skipped", file=sys.stderr)
 
     if ADMIN_ID:
         session = _make_session()

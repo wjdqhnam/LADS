@@ -74,6 +74,8 @@ def _task_crawl(run_path_fn, target_url, emit_progress=None):
     prog_per_role = 18 // n_roles
 
     for i, (role, cookies) in enumerate(role_sessions.items()):
+        if role == "member2":
+            continue
         print(f"[CRAWL] [{role}] start: {target_url}")
         crawler = Crawler(target_url, init_cookies=cookies)
 
@@ -112,7 +114,7 @@ def _task_crawl(run_path_fn, target_url, emit_progress=None):
     print(f"[CRAWL] targets saved: {targets_file} ({len(targets)})")
 
 
-def _task_payload(payloads_file, emit_progress=None, targets_file=None):
+def _task_payload(payloads_file, targets_file=None, emit_progress=None):
     from payload.generator import run as generate_run
 
     def _prog(n):
@@ -264,7 +266,7 @@ def _task_all(run_path_fn, target_url, payloads_file, payloads_meta_file, skip_c
         print(f"[PAYLOAD] 기존 페이로드 재사용 ({_cnt}개) — 새로 생성하려면 파일 삭제 후 재스캔")
         _prog(30)
     else:
-        _task_payload(payloads_file, emit_progress, targets_file=run_path_fn("targets.json"))
+        _task_payload(payloads_file, targets_file=run_path_fn("targets.json"), emit_progress=emit_progress)
         _prog(30)
 
     if not os.path.exists(payloads_file):

