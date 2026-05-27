@@ -5,7 +5,6 @@ import queue
 import subprocess
 import sys
 import threading
-import time
 from datetime import datetime
 
 
@@ -42,18 +41,66 @@ from tasks import (
 load_dotenv()
 
 
-BASE_URL = os.getenv("TARGET_URL", "http://34.68.27.120:8081")
-TARGET_URL_2 = os.getenv("TARGET_URL_2", "http://34.68.27.120:8080")
-CMS_NAME = "Gnuboard5 5.3.2.8"
+TARGETS_CONFIG_FILE = "targets_config.json"
 PAYLOADS_FILE = os.getenv("PAYLOADS_FILE", "results/payloads_llm.json")
 PAYLOADS_META_FILE = os.getenv("PAYLOADS_META_FILE", "results/payloads_llm_meta.json")
 RUNS_DIR = "runs"
 
-_TARGETS = [
-    {"key": "primary", "name": "Gnuboard5 (8081)", "url": BASE_URL, "version": CMS_NAME},
-    {"key": "secondary", "name": "Gnuboard5 (8080)", "url": TARGET_URL_2, "version": "Test Env"},
-]
-_active_target_key = "primary"
+
+def _load_targets() -> list[dict]:
+    if os.path.exists(TARGETS_CONFIG_FILE):
+        try:
+            with open(TARGETS_CONFIG_FILE, encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return [
+        {
+            "key": "primary",
+            "name": "기본 타깃",
+            "url": os.getenv("TARGET_URL", "http://localhost"),
+            "cms": "custom",
+            "login_url": os.getenv("LOGIN_URL", ""),
+            "login_id": os.getenv("LOGIN_ID", ""),
+            "login_password": os.getenv("LOGIN_PASSWORD", ""),
+            "admin_id": os.getenv("ADMIN_ID", ""),
+            "admin_password": os.getenv("ADMIN_PASSWORD", ""),
+            "login_fail_indicator": os.getenv("LOGIN_FAIL_INDICATOR", ""),
+        }
+    ]
+
+
+def _save_targets(targets: list[dict]) -> None:
+    with open(TARGETS_CONFIG_FILE, "w", encoding="utf-8") as f:
+        json.dump(targets, f, ensure_ascii=False, indent=2)
+
+
+def _apply_active_target_env(target: dict) -> None:
+    mapping = {
+        "TARGET_URL": target.get("url", ""),
+        "LOGIN_URL": target.get("login_url", ""),
+        "LOGIN_ID": target.get("login_id", ""),
+        "LOGIN_PASSWORD": target.get("login_password", ""),
+        "ADMIN_ID": target.get("admin_id", ""),
+        "ADMIN_PASSWORD": target.get("admin_password", ""),
+        "LOGIN_FAIL_INDICATOR": target.get("login_fail_indicator", ""),
+    }
+    for k, v in mapping.items():
+        os.environ[k] = v
+    try:
+        import crawl.auth as _auth
+        _auth.LOGIN_URL = mapping["LOGIN_URL"]
+        _auth.LOGIN_ID = mapping["LOGIN_ID"]
+        _auth.LOGIN_PASSWORD = mapping["LOGIN_PASSWORD"]
+        _auth.ADMIN_ID = mapping["ADMIN_ID"]
+        _auth.ADMIN_PASSWORD = mapping["ADMIN_PASSWORD"]
+        _auth.LOGIN_FAIL_INDICATOR = mapping["LOGIN_FAIL_INDICATOR"]
+    except ImportError:
+        pass
+
+
+_TARGETS: list[dict] = _load_targets()
+_active_target_key: str = _TARGETS[0]["key"] if _TARGETS else ""
 _current_run_id: str | None = None
 
 app = Flask(__name__, template_folder='web/templates', static_folder='web/static')
@@ -95,8 +142,8 @@ def _run_path(filename: str, run_id: str | None = None) -> str:
 
 
 def _active_url() -> str:
-    target = next((t for t in _TARGETS if t["key"] == _active_target_key), _TARGETS[0])
-    return target["url"]
+    target = next((t for t in _TARGETS if t["key"] == _active_target_key), _TARGETS[0] if _TARGETS else {})
+    return target.get("url", "")
 
 
 def _emit_progress(pct: int) -> None:
@@ -293,13 +340,26 @@ def _get_exec_summary():
         return None
 
 
+def _misconfig_done() -> bool:
+    p = _run_path("findings.json")
+    if not os.path.exists(p):
+        return False
+    try:
+        with open(p, encoding="utf-8") as f:
+            findings = json.load(f)
+        return any(fi.get("module") == "misconfig" for fi in findings)
+    except Exception:
+        return False
+
+
 def _get_pipeline_steps():
     checks = [
-        ("crawl", "크롤러", "travel_explore", os.path.exists(_run_path("crawl_result.json")) and os.path.exists(_run_path("targets.json"))),
-        ("payload", "페이로드", "psychology", os.path.exists(PAYLOADS_FILE)),
-        ("probe", "주입 테스트 준비", "radar", os.path.exists(_run_path("probe_tasks.json"))),
-        ("execute", "실행기", "terminal", os.path.exists(_run_path("execution_results.json"))),
-        ("validate", "분석기", "analytics", os.path.exists(_run_path("findings.json"))),
+        ("crawl",     "크롤러",        "travel_explore", os.path.exists(_run_path("crawl_result.json")) and os.path.exists(_run_path("targets.json"))),
+        ("payload",   "페이로드",       "psychology",     os.path.exists(PAYLOADS_FILE)),
+        ("probe",     "주입 테스트 준비", "radar",          os.path.exists(_run_path("probe_tasks.json"))),
+        ("execute",   "실행기",         "terminal",       os.path.exists(_run_path("execution_results.json"))),
+        ("validate",  "분석기",         "analytics",      os.path.exists(_run_path("findings.json"))),
+        ("misconfig", "설정 오류 점검",  "policy",         _misconfig_done()),
     ]
     active_assigned = False
     steps = []
@@ -324,10 +384,7 @@ def _get_target_envs():
     for target in _TARGETS:
         is_active = target["key"] == _active_target_key
         result.append({
-            "name": target["name"],
-            "key": target["key"],
-            "url": target["url"],
-            "version": target["version"],
+            **target,
             "is_active": is_active,
             "status": "active" if is_active else "standby",
             "status_label": "스캔 대상" if is_active else "대기 중",
@@ -341,7 +398,6 @@ def index():
     print("index")
     return render_template(
         "index.html",
-        cms_name=CMS_NAME,
         base_url=_active_url(),
         file_status=_get_file_status(),
         pipeline_steps=_get_pipeline_steps(),
@@ -372,8 +428,9 @@ def findings_page():
         except Exception as exc:
             return f"결과 파일 읽기 오류: {exc}", 500
 
-    xss_cnt = sum(1 for f in findings if "xss" in (f.get("vuln_type") or "").lower())
-    sqli_cnt = sum(1 for f in findings if "sql" in (f.get("vuln_type") or "").lower())
+    xss_cnt       = sum(1 for f in findings if f.get("module") == "xss")
+    sqli_cnt      = sum(1 for f in findings if f.get("module") == "sqli")
+    misconfig_cnt = sum(1 for f in findings if f.get("module") == "misconfig")
 
     all_results = []
     safe_cnt = 0
@@ -386,17 +443,33 @@ def findings_page():
                 hit = findings_by_id.get(r.get("id"))
                 r["_vulnerable"] = hit is not None
                 r["_evidence"] = hit.get("evidence", "") if hit else ""
-                r["_vuln_type"] = hit.get("vuln_type", "") if hit else (r.get("meta") or {}).get("vuln_type", "")
+                r["_vuln_type"] = hit.get("module", "") if hit else (r.get("meta") or {}).get("vuln_type", "")
             all_results = exec_results
             safe_cnt = sum(1 for r in all_results if not r.get("_vulnerable") and not r.get("error"))
         except Exception:
             pass
+
+    for mf in findings:
+        if mf.get("module") != "misconfig":
+            continue
+        all_results.append({
+            "_vulnerable": True,
+            "_evidence":   mf.get("evidence", ""),
+            "_vuln_type":  "misconfig",
+            "url":         mf.get("url", ""),
+            "method":      "GET",
+            "inject_param": None,
+            "payload":     "",
+            "status":      mf.get("status"),
+            "error":       None,
+        })
 
     return render_template(
         "findings.html",
         findings=findings,
         xss_cnt=xss_cnt,
         sqli_cnt=sqli_cnt,
+        misconfig_cnt=misconfig_cnt,
         safe_cnt=safe_cnt,
         all_results=all_results,
         run_id=run_id,
@@ -424,73 +497,80 @@ def exec_results_page():
 
 @app.route("/targets")
 def targets_page():
-    return render_template("targets.html", targets=_get_target_envs())
+    saved = request.args.get("saved") == "1"
+    open_key = request.args.get("open", "")
+    return render_template("targets.html", targets=_get_target_envs(), saved=saved, open_key=open_key)
 
 
-# 지정된 키를 .env 파일에 덮어쓰고 os.environ도 즉시 갱신
-def _update_env_file(updates: dict) -> None:
-    env_path = ".env"
-    lines: list[str] = []
-    if os.path.exists(env_path):
-        with open(env_path, encoding="utf-8") as f:
-            lines = f.readlines()
-
-    written: set[str] = set()
-    new_lines: list[str] = []
-    for line in lines:
-        stripped = line.strip()
-        if not stripped or stripped.startswith("#") or "=" not in stripped:
-            new_lines.append(line)
-            continue
-        key = stripped.split("=", 1)[0].strip()
-        if key in updates:
-            new_lines.append(f"{key}='{updates[key]}'\n")
-            written.add(key)
-        else:
-            new_lines.append(line)
-
-    for key, val in updates.items():
-        if key not in written:
-            new_lines.append(f"{key}='{val}'\n")
-
-    with open(env_path, "w", encoding="utf-8") as f:
-        f.writelines(new_lines)
-
-    for key, val in updates.items():
-        os.environ[key] = val
-
-
-@app.route("/settings", methods=["GET", "POST"])
-def settings_page():
-    saved = False
-    if request.method == "POST":
-        updates = {
-            "LOGIN_ID":             request.form.get("login_id", ""),
-            "LOGIN_PASSWORD":       request.form.get("login_password", ""),
-            "ADMIN_ID":             request.form.get("admin_id", ""),
-            "ADMIN_PASSWORD":       request.form.get("admin_password", ""),
-            "LOGIN_FAIL_INDICATOR": request.form.get("login_fail_indicator", ""),
-        }
-        _update_env_file(updates)
-        saved = True
-
-    return render_template(
-        "settings.html",
-        saved=saved,
-        login_id=os.getenv("LOGIN_ID", ""),
-        login_password=os.getenv("LOGIN_PASSWORD", ""),
-        admin_id=os.getenv("ADMIN_ID", ""),
-        admin_password=os.getenv("ADMIN_PASSWORD", ""),
-        login_fail_indicator=os.getenv("LOGIN_FAIL_INDICATOR", ""),
-    )
-
-
-@app.route("/settings/target", methods=["POST"])
+@app.route("/targets/set", methods=["POST"])
 def set_target():
     global _active_target_key
     key = request.form.get("key")
-    if any(t["key"] == key for t in _TARGETS):
+    target = next((t for t in _TARGETS if t["key"] == key), None)
+    if target:
         _active_target_key = key
+        _apply_active_target_env(target)
+    return redirect("/targets")
+
+
+@app.route("/targets/add", methods=["POST"])
+def add_target():
+    import time
+    name = request.form.get("name", "").strip()
+    url = request.form.get("url", "").strip().rstrip("/")
+    if not name or not url:
+        return redirect("/targets")
+    key = f"target_{int(time.time())}"
+    _TARGETS.append({
+        "key": key,
+        "name": name,
+        "url": url,
+        "cms": "custom",
+        "login_url": "",
+        "login_id": "",
+        "login_password": "",
+        "admin_id": "",
+        "admin_password": "",
+        "login_fail_indicator": "",
+    })
+    _save_targets(_TARGETS)
+    return redirect("/targets")
+
+
+@app.route("/targets/delete", methods=["POST"])
+def delete_target():
+    global _active_target_key
+    key = request.form.get("key")
+    new_list = [t for t in _TARGETS if t["key"] != key]
+    _TARGETS.clear()
+    _TARGETS.extend(new_list)
+    _save_targets(_TARGETS)
+    if _active_target_key == key:
+        _active_target_key = _TARGETS[0]["key"] if _TARGETS else ""
+        if _TARGETS:
+            _apply_active_target_env(_TARGETS[0])
+    return redirect("/targets")
+
+
+@app.route("/targets/update/<key>", methods=["POST"])
+def update_target(key):
+    target = next((t for t in _TARGETS if t["key"] == key), None)
+    if not target:
+        return redirect("/targets")
+    target["login_url"] = request.form.get("login_url", "").strip()
+    target["login_id"] = request.form.get("login_id", "").strip()
+    target["login_password"] = request.form.get("login_password", "").strip()
+    target["admin_id"] = request.form.get("admin_id", "").strip()
+    target["admin_password"] = request.form.get("admin_password", "").strip()
+    target["login_fail_indicator"] = request.form.get("login_fail_indicator", "").strip()
+    _save_targets(_TARGETS)
+    if target["key"] == _active_target_key:
+        _apply_active_target_env(target)
+    return redirect(f"/targets?saved=1&open={key}")
+
+
+@app.route("/settings")
+def settings_page():
     return redirect("/targets")
 
 
@@ -525,8 +605,8 @@ def run_detail(run_id):
         try:
             with open(os.path.join(run_dir, "findings.json"), encoding="utf-8") as f:
                 findings = json.load(f)
-            xss_cnt = sum(1 for fi in findings if "xss" in (fi.get("vuln_type") or "").lower())
-            sqli_cnt = sum(1 for fi in findings if "sql" in (fi.get("vuln_type") or "").lower())
+            xss_cnt = sum(1 for fi in findings if fi.get("module") == "xss")
+            sqli_cnt = sum(1 for fi in findings if fi.get("module") == "sqli")
         except Exception:
             pass
 
@@ -583,6 +663,25 @@ def delete_run(run_id):
         if _current_run_id == run_id:
             _init_run()
     return redirect("/runs")
+
+
+@app.route("/runs/<run_id>/report.pdf")
+def download_report(run_id):
+    from flask import send_file
+    import io
+    import report as report_gen
+
+    run_dir = os.path.join(RUNS_DIR, run_id)
+    if not os.path.isdir(run_dir):
+        return "Run not found", 404
+
+    pdf_bytes = report_gen.generate(run_id, run_dir)
+    return send_file(
+        io.BytesIO(pdf_bytes),
+        mimetype="application/pdf",
+        as_attachment=True,
+        download_name=f"LADS_{run_id}.pdf",
+    )
 
 
 if __name__ == "__main__":

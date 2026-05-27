@@ -60,22 +60,18 @@
       </a>
       <a class="nav-link {% if path == '/targets' %}nav-active{% endif %}" href="/targets">
         <span class="material-symbols-outlined">gps_fixed</span>
-        타깃 환경
+        타깃 설정
       </a>
       <a class="nav-link {% if path == '/runs' or path.startswith('/runs/') %}nav-active{% endif %}" href="/runs">
         <span class="material-symbols-outlined">history</span>
         실행 이력
       </a>
-      <a class="nav-link {% if path == '/settings' %}nav-active{% endif %}" href="/settings">
-        <span class="material-symbols-outlined">manage_accounts</span>
-        설정
-      </a>
     </div>
 
     <div class="p-5">
-      <a class="flex h-12 w-full items-center justify-center gap-2 rounded-sm bg-slate-800 text-[15px] font-bold text-white hover:bg-slate-900" href="/">
+      <a class="flex h-12 w-full items-center justify-center gap-2 rounded-sm bg-slate-800 text-[15px] font-bold text-white hover:bg-slate-900" href="/" onclick="if(location.pathname=='/'){event.preventDefault();_startStream('/stream/all');}">
         <span class="material-symbols-outlined text-[20px]">play_arrow</span>
-        스캔 시작
+        전체 스캔 시작
       </a>
     </div>
   </nav>
@@ -92,9 +88,8 @@
       <div class="grid gap-4">
         <a href="/">파이프라인 모니터</a>
         <a href="/findings">취약점 목록</a>
-        <a href="/targets">타깃 환경</a>
+        <a href="/targets">타깃 설정</a>
         <a href="/runs">실행 이력</a>
-        <a href="/settings">로그인 설정</a>
       </div>
     </nav>
 

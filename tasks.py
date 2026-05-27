@@ -12,9 +12,46 @@ TASK_LABELS = {
 }
 
 
+# 역할별 크롤 결과를 URL 기준으로 병합하고 accessible_by(어떤 역할에서 접근 가능한지) 태깅
+def _merge_crawl_results(role_pages: dict[str, list[dict]]) -> list[dict]:
+    from urllib.parse import urlparse
+
+    def _form_sig(form: dict) -> str:
+        path = urlparse(form.get("action", "")).path or form.get("action", "")
+        method = form.get("method", "GET").upper()
+        names = sorted(f["name"] for f in form.get("fields", []) if f.get("name"))
+        return f"{method}:{path}:{','.join(names)}"
+
+    url_map: dict[str, dict] = {}
+
+    for role, pages in role_pages.items():
+        for page in pages:
+            url = page["url"]
+            status = page.get("status_code", 0)
+
+            if url not in url_map:
+                url_map[url] = {**page, "accessible_by": []}
+
+            # 해당 역할이 200으로 접근 가능한 경우 기록
+            if status == 200 and role not in url_map[url]["accessible_by"]:
+                url_map[url]["accessible_by"].append(role)
+
+            # 해당 역할에서만 보이는 새 폼 추가 (폼 시그니처 기준 중복 제거)
+            existing_sigs = {_form_sig(f) for f in url_map[url].get("forms", [])}
+            for form in page.get("forms", []):
+                sig = _form_sig(form)
+                if sig not in existing_sigs:
+                    url_map[url].setdefault("forms", []).append(form)
+                    existing_sigs.add(sig)
+
+    return list(url_map.values())
+
+
 def _task_crawl(run_path_fn, target_url, emit_progress=None):
+    from dataclasses import asdict
+    from crawl.auth import login_all_roles
     from crawl.crawler import Crawler
-    from crawl.target_builder import build_targets, print_summary
+    from crawl.target_builder import build_targets
 
     def _prog(n):
         if emit_progress: emit_progress(n)
@@ -22,42 +59,57 @@ def _task_crawl(run_path_fn, target_url, emit_progress=None):
     crawl_file   = run_path_fn("crawl_result.json")
     targets_file = run_path_fn("targets.json")
 
-    print(f"[CRAWL] start: {target_url}")
-    crawler = Crawler(target_url)
+    # 역할별 세션 쿠키 획득
+    role_sessions = login_all_roles(base_url=target_url)
+    acquired = [r for r in role_sessions if role_sessions[r] or r == "guest"]
+    print(f"[CRAWL] roles to crawl: {acquired}")
 
-    def _crawl_progress(done, total):
-        _prog(int(done / max(total, 1) * 20))
+    for role, cookies in role_sessions.items():
+        with open(run_path_fn(f"auth_cookies_{role}.json"), "w", encoding="utf-8") as f:
+            json.dump(cookies, f, ensure_ascii=False, indent=2)
 
-    crawler.crawl(progress_callback=_crawl_progress)
-    crawler.save(crawl_file)
-    crawler.summary()
+    # 역할별 크롤 실행
+    role_pages: dict[str, list[dict]] = {}
+    n_roles = max(len(role_sessions), 1)
+    prog_per_role = 18 // n_roles
+
+    for i, (role, cookies) in enumerate(role_sessions.items()):
+        print(f"[CRAWL] [{role}] start: {target_url}")
+        crawler = Crawler(target_url, init_cookies=cookies)
+
+        base = i * prog_per_role
+        def _crawl_progress(done, total, _base=base):
+            _prog(_base + int(done / max(total, 1) * prog_per_role))
+
+        crawler.crawl(progress_callback=_crawl_progress)
+        crawler.summary()
+        role_pages[role] = [asdict(r) for r in crawler.results]
+        print(f"[CRAWL] [{role}] pages={len(crawler.results)}")
+
+    _prog(18)
+
+    # 병합 및 accessible_by 태깅
+    merged_pages = _merge_crawl_results(role_pages)
+    print(f"[CRAWL] merged: {len(merged_pages)} unique pages")
+
+    os.makedirs(os.path.dirname(crawl_file) or ".", exist_ok=True)
+    with open(crawl_file, "w", encoding="utf-8") as f:
+        json.dump(merged_pages, f, ensure_ascii=False, indent=2)
+    print(f"[CRAWL] saved: {crawl_file}")
+
+    # 이후 단계(BAC 등)가 auth_cookies.json 하나만 참조하므로 가장 높은 권한 세션으로 유지
+    main_cookies = role_sessions.get("member") or role_sessions.get("admin") or {}
+    if main_cookies:
+        with open(run_path_fn("auth_cookies.json"), "w", encoding="utf-8") as f:
+            json.dump(main_cookies, f, ensure_ascii=False, indent=2)
+        print(f"[CRAWL] auth cookies saved: {len(main_cookies)} cookies")
+
     _prog(20)
 
-    if crawler.auth_cookies:
-        cookies_file = run_path_fn("auth_cookies.json")
-        with open(cookies_file, "w", encoding="utf-8") as f:
-            json.dump(crawler.auth_cookies, f, ensure_ascii=False, indent=2)
-        print(f"[CRAWL] auth cookies saved: {len(crawler.auth_cookies)} cookies")
-    else:
-        print("[CRAWL] no auth cookies (anonymous crawl)")
-
-    # BAC용 역할별 세션 쿠키 저장
-    from crawl.auth import login_all_roles
-    role_sessions = login_all_roles()
-    for role, cookies in role_sessions.items():
-        role_file = run_path_fn(f"auth_cookies_{role}.json")
-        with open(role_file, "w", encoding="utf-8") as f:
-            json.dump(cookies, f, ensure_ascii=False, indent=2)
-    acquired = [r for r, c in role_sessions.items() if c or r == "guest"]
-    print(f"[CRAWL] role sessions saved: {acquired}")
-
-    with open(crawl_file, encoding="utf-8") as f:
-        pages = json.load(f)
-    targets = build_targets(pages)
+    targets = build_targets(merged_pages)
     with open(targets_file, "w", encoding="utf-8") as f:
         json.dump(targets, f, ensure_ascii=False, indent=2)
     print(f"[CRAWL] targets saved: {targets_file} ({len(targets)})")
-    print_summary(targets)
 
 
 def _task_payload(payloads_file, emit_progress=None):

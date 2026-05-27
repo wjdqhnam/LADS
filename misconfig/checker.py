@@ -1,16 +1,3 @@
-"""
-misconfig/checker.py
-GET/HEAD 요청 → 룰 기반 검증 → findings 저장
-
-체크 항목:
-  - 민감 파일: .env, .git/config, composer.json 등
-  - 백업 파일: config.php.bak, index.php.bak 등
-  - 디렉토리 리스팅: /data/, /uploads/, /theme/ 등
-  - phpinfo: phpinfo.php, info.php 등
-  - 에러 노출: Fatal error, SQL syntax 등
-  - 보안 헤더 누락: X-Frame-Options, CSP 등
-  - 버전 정보 노출: Server, X-Powered-By 헤더
-"""
 from __future__ import annotations
 
 import re
@@ -292,16 +279,7 @@ def _check_error_disclosure(base_url: str) -> list[dict]:
 # ── 메인 체크 함수 ────────────────────────────────────────────
 
 def check(base_url: str, progress_callback=None) -> list[dict]:
-    """
-    base_url에 대해 전체 misconfiguration 체크 수행.
 
-    Args:
-        base_url: 타깃 기본 URL (예: http://example.com)
-        progress_callback: (done, total) → None
-
-    Returns:
-        findings list (findings.py 포맷)
-    """
     base_url = base_url.rstrip("/")
     findings: list[dict] = []
 
@@ -331,18 +309,7 @@ def run(
     progress_callback=None,
     append: bool = True,
 ) -> list[dict]:
-    """
-    misconfig 체크 후 findings 저장.
 
-    Args:
-        base_url:          타깃 기본 URL
-        output_file:       저장 경로
-        progress_callback: (done, total) → None
-        append:            True면 기존 findings에 추가, False면 덮어쓰기
-
-    Returns:
-        이번 실행에서 발견된 findings list
-    """
     import json
     import os
 

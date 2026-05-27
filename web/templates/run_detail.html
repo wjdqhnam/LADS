@@ -13,13 +13,20 @@
       <h1 class="text-[28px] font-black leading-tight text-slate-950 font-mono">{{ run_id }}</h1>
       <p class="mt-1 text-[14px] text-slate-500">{{ ts }}</p>
     </div>
-    {% if not is_current %}
-    <form method="POST" action="/runs/delete/{{ run_id }}" onsubmit="return confirm('이 실행 기록을 삭제할까요?')">
-      <button class="inline-flex h-10 items-center rounded-sm border border-red-200 bg-white px-4 text-[13px] font-extrabold text-error hover:bg-red-50" type="submit">
-        삭제
-      </button>
-    </form>
-    {% endif %}
+    <div class="flex gap-2">
+      <a href="/runs/{{ run_id }}/report.pdf"
+         class="inline-flex h-10 items-center gap-2 rounded-sm border border-slate-200 bg-white px-4 text-[13px] font-extrabold text-slate-700 hover:bg-slate-50">
+        <span class="material-symbols-outlined text-[18px]">download</span>
+        PDF 보고서
+      </a>
+      {% if not is_current %}
+      <form method="POST" action="/runs/delete/{{ run_id }}" onsubmit="return confirm('이 실행 기록을 삭제할까요?')">
+        <button class="inline-flex h-10 items-center rounded-sm border border-red-200 bg-white px-4 text-[13px] font-extrabold text-error hover:bg-red-50" type="submit">
+          삭제
+        </button>
+      </form>
+      {% endif %}
+    </div>
   </div>
 
   {# ── 파이프라인 상태 ── #}

@@ -22,14 +22,14 @@ except ImportError:
 
 from payload.filter import filter_payloads, deduplicate, report as filter_report
 
-
+_BASE = os.getenv("TARGET_URL", "http://34.68.27.120:8081").rstrip("/")
 
 INPUT_POINTS = [
 
     # XSS 타겟
     {
         "name":    "xss_wr_subject",
-        "url":     "http://34.68.27.120:8081/bbs/write_update.php",
+        "url":     _BASE + "/bbs/write_update.php",
         "method":  "POST",
         "param":   "wr_subject",
         "type":    "stored_xss",
@@ -39,7 +39,7 @@ INPUT_POINTS = [
     },
     {
         "name":    "xss_wr_content",
-        "url":     "http://34.68.27.120:8081/bbs/write_update.php",
+        "url":     _BASE + "/bbs/write_update.php",
         "method":  "POST",
         "param":   "wr_content",
         "type":    "stored_xss",
@@ -49,7 +49,7 @@ INPUT_POINTS = [
     },
     {
         "name":    "xss_search_stx",
-        "url":     "http://34.68.27.120:8081/bbs/search.php",
+        "url":     _BASE + "/bbs/search.php",
         "method":  "GET",
         "param":   "stx",
         "type":    "reflected_xss",
@@ -59,7 +59,7 @@ INPUT_POINTS = [
     },
     {
         "name":    "xss_qalist_stx",
-        "url":     "http://34.68.27.120:8081/bbs/board.php",
+        "url":     _BASE + "/bbs/board.php",
         "method":  "GET",
         "param":   "stx",
         "type":    "reflected_xss",
@@ -69,7 +69,7 @@ INPUT_POINTS = [
     },
     {
         "name":    "xss_comment",
-        "url":     "http://34.68.27.120:8081/bbs/write_comment_update.php",
+        "url":     _BASE + "/bbs/write_comment_update.php",
         "method":  "POST",
         "param":   "wr_content",
         "type":    "stored_xss",
@@ -81,7 +81,7 @@ INPUT_POINTS = [
     # SQLi 타겟
     {
         "name":    "sqli_search_sfl",
-        "url":     "http://34.68.27.120:8081/bbs/search.php",
+        "url":     _BASE + "/bbs/search.php",
         "method":  "GET",
         "param":   "sfl",
         "type":    "string",
@@ -92,7 +92,7 @@ INPUT_POINTS = [
     },
     {
         "name":    "sqli_search_sst",
-        "url":     "http://34.68.27.120:8081/bbs/search.php",
+        "url":     _BASE + "/bbs/search.php",
         "method":  "GET",
         "param":   "sst",
         "type":    "string",
@@ -103,7 +103,7 @@ INPUT_POINTS = [
     },
     {
         "name":    "sqli_search_stx",
-        "url":     "http://34.68.27.120:8081/bbs/search.php",
+        "url":     _BASE + "/bbs/search.php",
         "method":  "GET",
         "param":   "stx",
         "type":    "string",
@@ -114,7 +114,7 @@ INPUT_POINTS = [
     },
     {
         "name":    "sqli_login_mb_id",
-        "url":     "http://34.68.27.120:8081/bbs/login_check.php",
+        "url":     _BASE + "/bbs/login_check.php",
         "method":  "POST",
         "param":   "mb_id",
         "type":    "string",
@@ -125,7 +125,7 @@ INPUT_POINTS = [
     },
     {
         "name":    "sqli_qalist_sfl",
-        "url":     "http://34.68.27.120:8081/bbs/board.php",
+        "url":     _BASE + "/bbs/board.php",
         "method":  "GET",
         "param":   "sfl",
         "type":    "string",
@@ -142,7 +142,7 @@ COUNT = 7  # 타입당 페이로드 수
 def run(out_file: str = "results/payloads_llm.json", progress_callback=None):
     print(f"\n{'='*60}")
     print(f"  Gnuboard5 Payload Generator v2")
-    print(f"  Target: http://34.68.27.120:8081/")
+    print(f"  Target: {_BASE}/")
     print(f"{'='*60}\n")
 
     client = LLMClient()
@@ -225,8 +225,3 @@ if __name__ == "__main__":
     parser.add_argument("--out", default="results/payloads_llm.json")
     args = parser.parse_args()
     run(args.out)
-    try:
-        from pause_on_exit import pause_if_enabled
-        pause_if_enabled()
-    except Exception:
-        pass

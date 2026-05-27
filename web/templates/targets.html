@@ -1,59 +1,194 @@
 {% extends "base.html" %}
-{% block title %}LADS - 타깃 환경{% endblock %}
+{% block title %}LADS - 타깃 설정{% endblock %}
 
 {% block content %}
 <section class="flex min-h-[calc(100vh-104px)] flex-col gap-5">
   <div class="flex shrink-0 items-center justify-between gap-4">
-    <h1 class="text-[28px] font-black leading-9 text-slate-950">타깃 환경</h1>
-    <span class="font-mono text-[13px] text-slate-600">2 targets</span>
+    <h1 class="text-[28px] font-black leading-9 text-slate-950">타깃 설정</h1>
+    <span class="font-mono text-[13px] text-slate-500">{{ targets|length }}개 등록됨</span>
   </div>
 
-  <div class="grid gap-5 lg:grid-cols-2">
+  {% if saved %}
+  <div id="saved-alert" class="flex items-center gap-3 rounded border border-emerald-200 bg-emerald-50 px-4 py-3 text-[14px] text-emerald-800">
+    <span class="material-symbols-outlined text-[18px]">check_circle</span>
+    로그인 설정이 저장되었습니다.
+  </div>
+  {% endif %}
+
+  <!-- 타깃 카드 목록 -->
+  <div class="flex flex-col gap-4">
     {% for target in targets %}
-    <article class="rounded border border-outline-variant bg-white p-5">
-      <div class="flex items-start justify-between gap-4">
+    <article class="rounded border border-outline-variant bg-white" id="target-{{ target.key }}">
+
+      <!-- 헤더 -->
+      <div class="flex items-start justify-between gap-4 p-5">
         <div class="flex min-w-0 items-start gap-4">
-          <div class="flex h-14 w-14 shrink-0 items-center justify-center rounded-sm border border-outline-variant bg-surface-container">
-            <span class="material-symbols-outlined text-[26px] text-slate-600">web</span>
+          <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded border border-outline-variant bg-surface-soft">
+            <span class="material-symbols-outlined text-[22px] text-slate-500">
+              {% if target.cms == 'wordpress' %}language{% else %}web{% endif %}
+            </span>
           </div>
           <div class="min-w-0">
-            <h2 class="truncate text-[18px] font-black text-slate-950">{{ target.name }}</h2>
-            <p class="mt-1 truncate font-mono text-[13px] text-slate-600">{{ target.url }}</p>
+            <div class="flex flex-wrap items-center gap-2">
+              <h2 class="text-[17px] font-black text-slate-950">{{ target.name }}</h2>
+            </div>
+            <p class="mt-0.5 truncate font-mono text-[13px] text-slate-500">{{ target.url }}</p>
           </div>
         </div>
-        <span class="inline-flex items-center gap-2 rounded-sm {% if target.status == 'active' %}bg-blue-100 text-slate-700{% else %}border border-outline-variant bg-surface-variant text-slate-700{% endif %} px-3 py-1 font-mono text-[13px] font-bold">
-          <span class="h-[7px] w-[7px] rounded-full {% if target.status == 'active' %}bg-slate-950 animate-pulse{% else %}bg-outline{% endif %}"></span>
-          {{ target.status_label }}
+        <span class="inline-flex shrink-0 items-center gap-1.5 rounded {% if target.is_active %}bg-blue-100 text-slate-700{% else %}border border-outline-variant text-slate-400{% endif %} px-2.5 py-1 font-mono text-[12px] font-bold">
+          <span class="h-[6px] w-[6px] rounded-full {% if target.is_active %}animate-pulse bg-slate-950{% else %}bg-slate-400{% endif %}"></span>
+          {{ '스캔 대상' if target.is_active else '대기 중' }}
         </span>
       </div>
-      <div class="mt-5 grid grid-cols-2 gap-4 border-t border-outline-variant pt-4">
-        <div>
-          <div class="font-mono text-[13px] text-outline">환경 ID</div>
-          <div class="mt-1 text-[15px] font-bold text-slate-950">{{ target.key }}</div>
-        </div>
-        <div>
-          <div class="font-mono text-[13px] text-outline">버전</div>
-          <div class="mt-1 text-[15px] font-bold text-slate-950">{{ target.version }}</div>
-        </div>
-        <div class="col-span-2">
-          <div class="font-mono text-[13px] text-outline">마지막 실행</div>
-          <div class="mt-1 text-[15px] font-bold text-slate-950">{{ target.last_scanned }}</div>
-        </div>
-      </div>
-      {% if not target.is_active %}
-      <form method="POST" action="/settings/target" class="mt-5">
-        <input type="hidden" name="key" value="{{ target.key }}">
-        <button class="w-full rounded border border-outline-variant bg-white py-2 text-[13px] font-semibold text-slate-950 hover:bg-surface-container" type="submit">
-          이 서버를 스캔 대상으로 설정
+
+      <!-- 액션 버튼 -->
+      <div class="flex flex-wrap items-center gap-2 border-t border-outline-variant px-5 py-3">
+        {% if not target.is_active %}
+        <form method="POST" action="/targets/set">
+          <input type="hidden" name="key" value="{{ target.key }}">
+          <button type="submit" class="inline-flex items-center gap-1.5 rounded bg-slate-950 px-3 py-1.5 text-[13px] font-semibold text-white hover:bg-slate-700">
+            <span class="material-symbols-outlined text-[15px]">gps_fixed</span>
+            스캔 대상으로 설정
+          </button>
+        </form>
+        {% else %}
+        <span class="inline-flex items-center gap-1.5 rounded border border-blue-200 bg-blue-50 px-3 py-1.5 text-[13px] font-semibold text-slate-600">
+          <span class="material-symbols-outlined text-[15px]">check_circle</span>
+          현재 스캔 대상
+        </span>
+        {% endif %}
+
+        <button
+          type="button"
+          onclick="toggleLogin('{{ target.key }}')"
+          class="inline-flex items-center gap-1.5 rounded border border-outline-variant bg-white px-3 py-1.5 text-[13px] font-semibold text-slate-700 hover:bg-surface-soft"
+        >
+          <span class="material-symbols-outlined text-[15px]">key</span>
+          로그인 설정
+          <span id="login-icon-{{ target.key }}" class="material-symbols-outlined text-[15px] transition-transform duration-200">expand_more</span>
         </button>
-      </form>
-      {% else %}
-      <div class="mt-5 h-[5px] overflow-hidden rounded-full bg-blue-100">
-        <div class="h-full w-full rounded-full bg-slate-950"></div>
+
+        {% if not target.is_active %}
+        <form method="POST" action="/targets/delete" class="ml-auto" onsubmit="return confirm('타깃 「{{ target.name }}」을 삭제하시겠습니까?')">
+          <input type="hidden" name="key" value="{{ target.key }}">
+          <button type="submit" class="inline-flex items-center gap-1.5 rounded border border-red-200 px-3 py-1.5 text-[13px] font-semibold text-red-500 hover:bg-red-50">
+            <span class="material-symbols-outlined text-[15px]">delete</span>
+            삭제
+          </button>
+        </form>
+        {% endif %}
       </div>
-      {% endif %}
+
+      <!-- 로그인 설정 (접이식) -->
+      <div id="login-section-{{ target.key }}" class="hidden border-t border-outline-variant bg-surface-soft/50 px-5 pb-5 pt-4">
+        <form method="POST" action="/targets/update/{{ target.key }}">
+          <div class="grid gap-4 md:grid-cols-2">
+            <div class="flex flex-col gap-1.5 md:col-span-2">
+              <label class="text-[13px] font-bold text-slate-700">로그인 URL</label>
+              <input
+                name="login_url" type="text"
+                value="{{ target.login_url }}"
+                placeholder="예) http://example.com/login.php — 비워두면 자동 탐색"
+                class="rounded border border-surface-line bg-white px-3 py-2 font-mono text-[13px] text-slate-950 focus:border-slate-950 focus:outline-none"
+              >
+            </div>
+            <div class="flex flex-col gap-1.5">
+              <label class="text-[13px] font-bold text-slate-700">일반 계정 아이디</label>
+              <input name="login_id" type="text" value="{{ target.login_id }}" placeholder="member 아이디"
+                class="rounded border border-surface-line bg-white px-3 py-2 font-mono text-[13px] text-slate-950 focus:border-slate-950 focus:outline-none">
+            </div>
+            <div class="flex flex-col gap-1.5">
+              <label class="text-[13px] font-bold text-slate-700">일반 계정 비밀번호</label>
+              <input name="login_password" type="password" value="{{ target.login_password }}" placeholder="member 비밀번호"
+                class="rounded border border-surface-line bg-white px-3 py-2 font-mono text-[13px] text-slate-950 focus:border-slate-950 focus:outline-none">
+            </div>
+            <div class="flex flex-col gap-1.5">
+              <label class="text-[13px] font-bold text-slate-700">관리자 아이디</label>
+              <input name="admin_id" type="text" value="{{ target.admin_id }}" placeholder="admin 아이디"
+                class="rounded border border-surface-line bg-white px-3 py-2 font-mono text-[13px] text-slate-950 focus:border-slate-950 focus:outline-none">
+            </div>
+            <div class="flex flex-col gap-1.5">
+              <label class="text-[13px] font-bold text-slate-700">관리자 비밀번호</label>
+              <input name="admin_password" type="password" value="{{ target.admin_password }}" placeholder="admin 비밀번호"
+                class="rounded border border-surface-line bg-white px-3 py-2 font-mono text-[13px] text-slate-950 focus:border-slate-950 focus:outline-none">
+            </div>
+          </div>
+          <div class="mt-4 flex justify-end">
+            <button type="submit" class="inline-flex h-9 items-center gap-1.5 rounded bg-slate-950 px-4 text-[13px] font-bold text-white hover:bg-slate-700">
+              <span class="material-symbols-outlined text-[16px]">save</span>
+              저장
+            </button>
+          </div>
+        </form>
+      </div>
+
     </article>
     {% endfor %}
   </div>
+
+  <!-- 타깃 추가 -->
+  <div class="rounded border border-dashed border-slate-300 bg-white">
+    <button type="button" onclick="toggleAdd()" class="flex w-full items-center gap-3 px-5 py-4 text-left hover:bg-surface-soft/50">
+      <span class="material-symbols-outlined text-[20px] text-slate-400">add_circle</span>
+      <span class="text-[15px] font-bold text-slate-600">타깃 추가</span>
+      <span id="add-icon" class="material-symbols-outlined ml-auto text-[18px] text-slate-400 transition-transform duration-200">expand_more</span>
+    </button>
+
+    <div id="add-section" class="hidden border-t border-slate-200 px-5 pb-5 pt-4">
+      <form method="POST" action="/targets/add">
+        <div class="grid gap-4 md:grid-cols-2">
+          <div class="flex flex-col gap-1.5">
+            <label class="text-[13px] font-bold text-slate-700">이름 <span class="text-red-500">*</span></label>
+            <input name="name" type="text" required placeholder="예) 내 사이트"
+              class="rounded border border-surface-line px-3 py-2 text-[13px] text-slate-950 focus:border-slate-950 focus:outline-none">
+          </div>
+          <div class="flex flex-col gap-1.5">
+            <label class="text-[13px] font-bold text-slate-700">URL <span class="text-red-500">*</span></label>
+            <input name="url" type="text" required placeholder="http://example.com"
+              class="rounded border border-surface-line px-3 py-2 font-mono text-[13px] text-slate-950 focus:border-slate-950 focus:outline-none">
+          </div>
+        </div>
+        <div class="mt-4 flex justify-end">
+          <button type="submit" class="inline-flex h-9 items-center gap-1.5 rounded bg-slate-950 px-4 text-[13px] font-bold text-white hover:bg-slate-700">
+            <span class="material-symbols-outlined text-[16px]">add</span>
+            추가
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
 </section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function toggleLogin(key) {
+  const section = document.getElementById('login-section-' + key);
+  const icon = document.getElementById('login-icon-' + key);
+  const hidden = section.classList.toggle('hidden');
+  icon.style.transform = hidden ? '' : 'rotate(180deg)';
+}
+
+function toggleAdd() {
+  const section = document.getElementById('add-section');
+  const icon = document.getElementById('add-icon');
+  const hidden = section.classList.toggle('hidden');
+  icon.style.transform = hidden ? '' : 'rotate(180deg)';
+}
+
+// 저장 후 해당 타깃 로그인 섹션 자동 펼치기
+const openKey = "{{ open_key }}";
+if (openKey) toggleLogin(openKey);
+
+// 저장 알림 자동 페이드아웃
+const alert = document.getElementById('saved-alert');
+if (alert) {
+  setTimeout(() => {
+    alert.style.transition = 'opacity 0.5s';
+    alert.style.opacity = '0';
+    setTimeout(() => alert.remove(), 500);
+  }, 4000);
+}
+</script>
 {% endblock %}

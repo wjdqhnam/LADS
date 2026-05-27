@@ -64,12 +64,11 @@
       ></div>
     </div>
 
-    <div class="grid gap-4 md:grid-cols-5">
+    <div class="grid gap-4 md:grid-cols-3 lg:grid-cols-6">
       {% for step in pipeline_steps %}
-      <button
+      <div
         class="pipeline-step-card {{ step.state }}"
         data-task="{{ step.key }}"
-        onclick="runTask('{{ step.key }}')"
       >
         <span class="pipeline-node">
           <span class="material-symbols-outlined text-[22px]"
@@ -82,7 +81,7 @@
           >{% if step.state == 'complete' %}Done{% elif step.state == 'active'
           %}Ready{% else %}Waiting{% endif %}</span
         >
-      </button>
+      </div>
       {% endfor %}
     </div>
   </section>
@@ -216,6 +215,8 @@
     padding: 16px;
     text-align: left;
     opacity: 0.52;
+    cursor: default;
+    user-select: none;
   }
   .pipeline-step-card.complete,
   .pipeline-step-card.active {

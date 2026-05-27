@@ -7,64 +7,41 @@ function toggleMenu(force) {
 
 var _es = null;
 var _currentTask = null;
+var _currentStageTask = null;
+var _hadError = false;
+
 var _labels = {
-  crawl: '크롤링',
-  payload: '페이로드 준비',
-  scan: '스캔 실행',
-  probe: '주입 테스트 준비',
-  execute: '활성 스캔',
-  validate: '결과 분석',
-  all: '전체 진단'
+  crawl:     '크롤링',
+  payload:   '페이로드 준비',
+  probe:     '주입 테스트 준비',
+  execute:   '활성 스캔',
+  validate:  '결과 분석',
+  misconfig: '설정 오류 점검',
+  all:       '전체 진단'
 };
 
-function runTask(task) {
-  _startStream('/stream/' + task);
-}
+var _taskOrder = ['crawl', 'payload', 'probe', 'execute', 'validate', 'misconfig'];
 
-function runTaskAll() {
+var _stageLabelToTask = {
+  'CRAWL':    'crawl',
+  'PAYLOAD':  'payload',
+  'PROBE':    'probe',
+  'EXEC':     'execute',
+  'VALIDATE': 'validate',
+  'MISCONFIG':'misconfig'
+};
+
+function startFullScan() {
   _startStream('/stream/all');
 }
 
-function _setButtons(disabled) {
-  document.querySelectorAll('button').forEach(function (button) {
-    button.disabled = disabled;
-  });
+function startScanSkipCrawl() {
+  _startStream('/stream/all?skip_crawl=1');
 }
 
-function _setPipelineLoading(taskName) {
-  var steps = Array.prototype.slice.call(document.querySelectorAll('.pipeline-step-card'));
-  var targetIndex = taskName === 'all' ? 0 : steps.findIndex(function (step) {
-    return step.dataset.task === taskName;
-  });
-
-  if (targetIndex >= 0) {
-    var percent = taskName === 'all' ? 0 : Math.round((targetIndex / Math.max(steps.length, 1)) * 100);
-    _updateProgressBar(percent);
-  }
-
-  steps.forEach(function (step) {
-    var node = step.querySelector('.pipeline-node');
-    var status = step.querySelector('.pipeline-status');
-    if (!node || !status) return;
-
-    if (taskName === 'all') {
-      if (step.dataset.task === 'crawl') {
-        node.className = 'pipeline-node animate-pulse';
-        status.textContent = 'Loading';
-        status.className = 'pipeline-status text-amber-600';
-        step.classList.remove('pending');
-        step.classList.add('active');
-      }
-      return;
-    }
-
-    if (step.dataset.task === taskName) {
-      node.className = 'pipeline-node animate-pulse';
-      status.textContent = 'Loading';
-      status.className = 'pipeline-status text-amber-600';
-      step.classList.remove('pending');
-      step.classList.add('active');
-    }
+function _setButtons(disabled) {
+  document.querySelectorAll('button').forEach(function (btn) {
+    btn.disabled = disabled;
   });
 }
 
@@ -80,23 +57,23 @@ function _badgeClass(kind) {
 
 function _stageFromMessage(message) {
   var text = message.toLowerCase();
-  if (text.indexOf('crawl') !== -1 || text.indexOf('크롤') !== -1 || text.indexOf('crawler') !== -1) {
-    return { label: 'CRAWL', cls: 'bg-sky-100 text-sky-800', row: 'bg-sky-50' };
+  if (text.indexOf('[crawl]') !== -1 || text.indexOf('크롤') !== -1 || text.indexOf('crawler') !== -1) {
+    return { label: 'CRAWL',    cls: 'bg-sky-100 text-sky-800',     row: 'bg-sky-50' };
   }
-  if (text.indexOf('payload') !== -1 || text.indexOf('페이로드') !== -1 || text.indexOf('llm') !== -1) {
-    return { label: 'PAYLOAD', cls: 'bg-violet-100 text-violet-800', row: 'bg-violet-50' };
+  if (text.indexOf('[payload]') !== -1 || text.indexOf('페이로드') !== -1 || text.indexOf('llm') !== -1) {
+    return { label: 'PAYLOAD',  cls: 'bg-violet-100 text-violet-800', row: 'bg-violet-50' };
   }
-  if (text.indexOf('probe') !== -1 || text.indexOf('주입 테스트') !== -1 || text.indexOf('strategy') !== -1) {
-    return { label: 'PROBE', cls: 'bg-amber-100 text-amber-800', row: 'bg-amber-50' };
+  if (text.indexOf('[probe]') !== -1 || text.indexOf('주입 테스트') !== -1) {
+    return { label: 'PROBE',    cls: 'bg-amber-100 text-amber-800',  row: 'bg-amber-50' };
   }
-  if (text.indexOf('execute') !== -1 || text.indexOf('실행') !== -1 || text.indexOf('request') !== -1) {
-    return { label: 'EXEC', cls: 'bg-indigo-100 text-indigo-800', row: 'bg-indigo-50' };
+  if (text.indexOf('[exec]') !== -1 || text.indexOf('실행') !== -1) {
+    return { label: 'EXEC',     cls: 'bg-indigo-100 text-indigo-800', row: 'bg-indigo-50' };
   }
-  if (text.indexOf('validate') !== -1 || text.indexOf('분석') !== -1 || text.indexOf('판정') !== -1 || text.indexOf('취약') !== -1) {
-    return { label: 'VALIDATE', cls: 'bg-rose-100 text-rose-800', row: 'bg-rose-50' };
+  if (text.indexOf('[validate]') !== -1 || text.indexOf('판정') !== -1 || text.indexOf('취약') !== -1) {
+    return { label: 'VALIDATE', cls: 'bg-rose-100 text-rose-800',    row: 'bg-rose-50' };
   }
-  if (text.indexOf('__progress__') !== -1 || text.indexOf('progress') !== -1) {
-    return { label: 'PROGRESS', cls: 'bg-emerald-100 text-emerald-800', row: 'bg-emerald-50' };
+  if (text.indexOf('[misconfig]') !== -1 || text.indexOf('설정 오류') !== -1) {
+    return { label: 'MISCONFIG',cls: 'bg-blue-100 text-blue-800',    row: 'bg-blue-50' };
   }
   return { label: 'SYSTEM', cls: 'bg-slate-100 text-slate-700', row: '' };
 }
@@ -108,12 +85,41 @@ function _updateProgressBar(percent) {
   if (percentLabel) percentLabel.textContent = percent + '%';
   if (bar) {
     bar.style.width = percent + '%';
-    if (percent >= 100) {
-      bar.className = 'h-full rounded-full bg-emerald-500 transition-all duration-500';
-    } else {
-      bar.className = 'h-full rounded-full bg-amber-500 transition-all duration-300';
-    }
+    bar.className = percent >= 100
+      ? 'h-full rounded-full bg-emerald-500 transition-all duration-500'
+      : 'h-full rounded-full bg-amber-500 transition-all duration-300';
   }
+}
+
+function _updatePipelineCardForStage(stageLabel) {
+  var taskKey = _stageLabelToTask[stageLabel];
+  if (!taskKey || taskKey === _currentStageTask) return;
+  _currentStageTask = taskKey;
+
+  var steps = document.querySelectorAll('.pipeline-step-card');
+  var targetIdx = _taskOrder.indexOf(taskKey);
+
+  steps.forEach(function (step) {
+    var stepTask = step.dataset.task;
+    var stepIdx = _taskOrder.indexOf(stepTask);
+    var node = step.querySelector('.pipeline-node');
+    var status = step.querySelector('.pipeline-status');
+    var icon = node ? node.querySelector('.material-symbols-outlined') : null;
+    if (!node || !status) return;
+
+    if (stepIdx < targetIdx) {
+      step.className = 'pipeline-step-card complete';
+      node.className = 'pipeline-node';
+      if (icon) icon.textContent = 'check';
+      status.textContent = 'Done';
+      status.className = 'pipeline-status';
+    } else if (stepTask === taskKey) {
+      step.className = 'pipeline-step-card active';
+      node.className = 'pipeline-node animate-pulse';
+      status.textContent = 'Running';
+      status.className = 'pipeline-status text-amber-600';
+    }
+  });
 }
 
 function _startStream(url) {
@@ -122,39 +128,47 @@ function _startStream(url) {
     _es = null;
   }
 
-  var logCard = document.getElementById('log-card');
-  var logArea = document.getElementById('log-area');
+  var logArea  = document.getElementById('log-area');
   var logTitle = document.getElementById('log-title');
   var logBadge = document.getElementById('log-badge');
-  if (!logCard || !logArea || !logTitle || !logBadge) return;
+  if (!logArea || !logTitle || !logBadge) return;
 
   var taskName = url.split('/stream/')[1].split('?')[0];
   _currentTask = taskName;
-  _setPipelineLoading(taskName);
+  _currentStageTask = null;
+  _hadError = false;
 
   logTitle.textContent = (_labels[taskName] || taskName) + ' 로그';
   logBadge.textContent = 'Running';
   logBadge.className = _badgeClass('running');
   logArea.textContent = '';
   _setButtons(true);
+  _updateProgressBar(0);
 
   _es = new EventSource(url);
+
   _es.onmessage = function (event) {
     if (event.data === '__DONE__') {
       _es.close();
       _es = null;
-      logBadge.textContent = 'Done';
-      logBadge.className = _badgeClass('ok');
-      _updateProgressBar(100);
+      if (_hadError) {
+        logBadge.textContent = 'Error';
+        logBadge.className = _badgeClass('error');
+      } else {
+        logBadge.textContent = 'Done';
+        logBadge.className = _badgeClass('ok');
+        _updateProgressBar(100);
+      }
       _setButtons(false);
-      var isFullScan = _currentTask === 'all';
-      setTimeout(function () {
-        if (isFullScan) {
-          window.location.href = '/findings';
-        } else {
-          location.reload();
-        }
-      }, 1500);
+      if (!_hadError) {
+        setTimeout(function () {
+          if (_currentTask === 'all') {
+            window.location.href = '/findings';
+          } else {
+            location.reload();
+          }
+        }, 1500);
+      }
       return;
     }
 
@@ -165,6 +179,11 @@ function _startStream(url) {
     }
 
     var stage = _stageFromMessage(event.data);
+
+    if (_currentTask === 'all' && _stageLabelToTask[stage.label]) {
+      _updatePipelineCardForStage(stage.label);
+    }
+
     var row = document.createElement('div');
     row.className = 'flex gap-4 rounded px-2 py-1 ' + stage.row;
 
@@ -176,12 +195,17 @@ function _startStream(url) {
     stageBadge.className = 'w-[82px] shrink-0 rounded px-2 text-center text-[11px] font-black ' + stage.cls;
     stageBadge.textContent = stage.label;
 
+    var isError = event.data.indexOf('[ERROR]') !== -1;
+    if (isError) _hadError = true;
+
     var level = document.createElement('span');
     level.className = 'w-[52px] shrink-0 text-secondary';
-    level.textContent = event.data.indexOf('[ERROR]') !== -1 ? '[ERROR]' : event.data.indexOf('[WARN]') !== -1 ? '[WARN]' : '[INFO]';
+    level.textContent = isError                             ? '[ERROR]'
+                      : event.data.indexOf('[WARN]') !== -1 ? '[WARN]'
+                      : '[INFO]';
 
     var message = document.createElement('span');
-    message.className = event.data.indexOf('[ERROR]') !== -1 ? 'text-error' : 'text-slate-950';
+    message.className = isError ? 'text-error' : 'text-slate-950';
     message.textContent = event.data;
 
     row.appendChild(time);
@@ -193,10 +217,7 @@ function _startStream(url) {
   };
 
   _es.onerror = function () {
-    if (_es) {
-      _es.close();
-      _es = null;
-    }
+    if (_es) { _es.close(); _es = null; }
     logBadge.textContent = 'Error';
     logBadge.className = _badgeClass('error');
     _setButtons(false);
