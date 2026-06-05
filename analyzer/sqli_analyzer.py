@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import re
 from collections import defaultdict
 from typing import Optional
 
@@ -27,51 +26,9 @@ DB_ERROR_KEYWORDS = (
     "table 'g5_",
 )
 
-_BOOL_TRUE = re.compile(
-    r"1\s*=\s*1"
-    r"|'\s*([a-z0-9])\s*'\s*=\s*'\s*\1"
-    r"|\bor\s+1\b"
-    r"|\band\s+1\s*=\s*1"
-    r"|\btrue\b"
-    r"|length\(.+\)\s*>\s*0"
-    r"|exists\s*\("
-    r"|case\s+when\s*\(\s*1\s*=\s*1",
-    re.IGNORECASE,
-)
-_BOOL_FALSE = re.compile(
-    r"1\s*=\s*2"
-    r"|1\s*=\s*0"
-    r"|\band\s+1\s*=\s*2"
-    r"|\bfalse\b"
-    r"|\band\s+0\b"
-    r"|case\s+when\s*\(\s*1\s*=\s*2",
-    re.IGNORECASE,
-)
-
-_BOOL_PROBE = re.compile(
-    r"ascii\(.+\)\s*[=><]"
-    r"|(?:substr|substring|mid)\([^)]+\)\s*[=><]"
-    r"|length\(.+\)\s*=\s*\d+"
-    r"|.+\s+regexp\s+",
-    re.IGNORECASE,
-)
-
-_ORDERBY_INJECT = re.compile(r"order\s+by\s+(?:\d+|\(|\w+\s*,)", re.IGNORECASE)
-_ORDERBY_NUM = re.compile(r"order\s+by\s+(\d+)", re.IGNORECASE)
-
-
-def _is_group_candidate(payload: str) -> bool:
-    if not payload:
-        return False
-    if _BOOL_TRUE.search(payload):
-        return True
-    if _BOOL_FALSE.search(payload):
-        return True
-    if _BOOL_PROBE.search(payload):
-        return True
-    if _ORDERBY_INJECT.search(payload):
-        return True
-    return False
+def _is_group_candidate(meta: dict) -> bool:
+    mtype = (meta.get("type") or "").upper()
+    return mtype in ("BOOLEAN", "SQLI_ORDERBY", "SQLI_FIELD")
 
 
 def _extract_response(test_result: dict) -> dict:
@@ -135,8 +92,8 @@ def validate_sqli(test_result: dict) -> tuple[bool, str]:
     if msg:
         return True, msg
 
-    payload = test_result.get("payload") or ""
-    if _is_group_candidate(payload):
+    meta = test_result.get("meta") or {}
+    if _is_group_candidate(meta):
         return False, "그룹 분석 대상 (Phase 2로 위임)"
 
     msg = _check_error_based(resp["body"])
@@ -171,10 +128,10 @@ def detect_boolean_group(results: list[dict]) -> list[dict]:
     for _key, group in groups.items():
         true_items, false_items = [], []
         for r in group:
-            payload = r.get("payload") or ""
-            if _BOOL_TRUE.search(payload):
+            bool_side = (r.get("meta") or {}).get("bool_side") or ""
+            if bool_side == "true":
                 true_items.append(r)
-            if _BOOL_FALSE.search(payload):
+            elif bool_side == "false":
                 false_items.append(r)
 
         if true_items and false_items:
@@ -235,7 +192,7 @@ def detect_probe_group(results: list[dict]) -> list[dict]:
         if not r.get("error")
         and r.get("response_body")
         and ("sqli" in _vuln_type(r) or "sql" in _vuln_type(r))
-        and _BOOL_PROBE.search(r.get("payload") or "")
+        and (r.get("meta") or {}).get("bool_side") == "probe"
     ]
 
     if not probe_results:
@@ -286,7 +243,7 @@ def detect_orderby_group(results: list[dict]) -> list[dict]:
         r for r in results
         if not r.get("error")
         and r.get("response_body")
-        and _ORDERBY_INJECT.search(r.get("payload") or "")
+        and (r.get("meta") or {}).get("type", "").upper() == "SQLI_ORDERBY"
     ]
 
     if not orderby_results:

