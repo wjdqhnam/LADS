@@ -129,15 +129,27 @@ def _validate_single(r: dict) -> tuple[bool, str]:
     return validate_sqli(r)
 
 
+_XSS_TYPE_CATEGORY = {
+    XSS_VERIFIED:         "verified",
+    XSS_REFLECTED:        "reflected",
+    XSS_STORED_REFLECTED: "stored",
+    XSS_SUSPICIOUS:       "suspicious",
+}
+
+
 def _handle_xss(raw: tuple, r: dict, rid: str | None, findings: list[dict], found_ids: set) -> None:
     if rid in found_ids:
         return
     if not isinstance(raw, tuple) or not raw[0]:
         return
-    found, evidence, xss_type, confidence = raw
+    evidence   = raw[1]
+    xss_type   = raw[2]
+    confidence = raw[3]
+    xss_extra  = raw[4] if len(raw) > 4 else {}
+
     meta     = r.get("meta") or {}
-    vt       = (meta.get("vuln_type") or "").lower()
-    category = _derive_category(vt, evidence)
+    category = _XSS_TYPE_CATEGORY.get(xss_type, "unknown")
+
     f = make_finding(
         module=MODULE_XSS,
         type=xss_type,
@@ -148,13 +160,14 @@ def _handle_xss(raw: tuple, r: dict, rid: str | None, findings: list[dict], foun
         status=r.get("status"),
         confidence=confidence,
         evidence=evidence,
+        extra=xss_extra or None,
     )
-    f["id"]          = r.get("id")
-    f["point"]       = r.get("point")
+    f["id"]            = r.get("id")
+    f["point"]         = r.get("point")
     f["task_group_id"] = r.get("task_group_id")
-    f["inject_mode"] = r.get("inject_mode")
-    f["elapsed"]     = r.get("elapsed") or 0.0
-    f["role"]        = meta.get("role")
+    f["inject_mode"]   = r.get("inject_mode")
+    f["elapsed"]       = r.get("elapsed") or 0.0
+    f["role"]          = meta.get("role")
     findings.append(f)
     if rid:
         found_ids.add(rid)

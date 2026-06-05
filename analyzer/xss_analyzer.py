@@ -7,6 +7,7 @@ from .xss_context import (
     CTX_SAFE_TAG, CTX_COMMENT, CTX_URL_ATTR, CTX_EVENT_ATTR,
     CTX_SCRIPT, CTX_HTML_TEXT, CTX_ATTR, CTX_UNKNOWN,
 )
+from .xss_reflection import classify_reflection, ReflectionKind, decode_html_entities
 from findings import (
     XSS_SUSPICIOUS, XSS_REFLECTED, XSS_STORED_REFLECTED,
     XSS_VERIFIED,  # Playwright 확인 시에만 사용, 현재 미구현
@@ -100,12 +101,43 @@ def _verdict(ctx: str, payload: str) -> tuple[str, str]:
     return XSS_SUSPICIOUS, "low"
 
 
-# returns (found, evidence, xss_type, confidence). __init__.py _validate_single()이 4-tuple을 받도록 A 담당자가 수정 필요.
-def validate_xss(test_result: dict) -> tuple[bool, str, str, str]:
-    _NO = (False, "안전함 (XSS 시그니처 미검출 / 인코딩됨)", XSS_SUSPICIOUS, "low")
+def _make_extra(
+    ctx: str,
+    is_safe: bool,
+    marker: Optional[str],
+    stored: bool,
+    idx: int,
+    source: str = "response_body",
+) -> dict:
+    return {
+        "context":      ctx,
+        "safe_context": is_safe,
+        "marker":       marker,
+        "stored":       stored,
+        "verified":     False,
+        "reflection": {
+            "found":  True,
+            "source": source,
+            "index":  idx,
+        },
+    }
+
+
+_EXTRA_NOT_FOUND: dict = {
+    "context":      CTX_UNKNOWN,
+    "safe_context": False,
+    "marker":       None,
+    "stored":       False,
+    "verified":     False,
+    "reflection": {"found": False, "source": "response_body", "index": -1},
+}
+
+
+def validate_xss(test_result: dict) -> tuple[bool, str, str, str, dict]:
+    _NO = (False, "안전함 (XSS 시그니처 미검출 / 인코딩됨)", XSS_SUSPICIOUS, "low", _EXTRA_NOT_FOUND)
 
     if not test_result:
-        return False, "검증 불가 (입력 없음)", XSS_SUSPICIOUS, "low"
+        return False, "검증 불가 (입력 없음)", XSS_SUSPICIOUS, "low", _EXTRA_NOT_FOUND
 
     try:
         status = int(test_result.get("status") or 0)
@@ -116,37 +148,52 @@ def validate_xss(test_result: dict) -> tuple[bool, str, str, str]:
 
     body_raw = _extract_body(test_result)
     if not body_raw:
-        return False, "검증 불가 (응답 본문 없음)", XSS_SUSPICIOUS, "low"
+        return False, "검증 불가 (응답 본문 없음)", XSS_SUSPICIOUS, "low", _EXTRA_NOT_FOUND
 
     body_lower = body_raw.lower()
     payload    = test_result.get("payload") or ""
 
     ev, ctx, idx, found_marker = _find_marker(body_lower, body_raw)
     if ev and found_marker is not None:
-        if is_idx_in_safe_context(body_raw, idx):
-            return True, f"[{ctx}] {ev} — safe context 억제", XSS_SUSPICIOUS, "low"
+        is_safe = is_idx_in_safe_context(body_raw, idx)
+        extra   = _make_extra(ctx, is_safe, found_marker, False, idx)
+        if is_safe:
+            return True, f"[{ctx}] {ev} — safe context 억제", XSS_SUSPICIOUS, "low", extra
         xss_type, confidence = _verdict(ctx, found_marker)
-        return True, f"[{ctx}] {ev}", xss_type, confidence
+        return True, f"[{ctx}] {ev}", xss_type, confidence, extra
 
     ev, ctx, idx = _find_payload_reflection(payload, body_lower, body_raw)
     if ev:
-        if is_idx_in_safe_context(body_raw, idx):
-            return True, f"[{ctx}] {ev} — safe context 억제", XSS_SUSPICIOUS, "low"
-        return True, f"[{ctx}] {ev}", XSS_SUSPICIOUS, "low"
+        is_safe = is_idx_in_safe_context(body_raw, idx)
+        extra   = _make_extra(ctx, is_safe, None, False, idx)
+        if is_safe:
+            return True, f"[{ctx}] {ev} — safe context 억제", XSS_SUSPICIOUS, "low", extra
+        return True, f"[{ctx}] {ev}", XSS_SUSPICIOUS, "low", extra
+
+    # reflection classifier — entity/url decode 형태 반사 탐지
+    if payload:
+        kind = classify_reflection(body_raw, payload)
+        if kind not in (ReflectionKind.NONE, ReflectionKind.CASE_FOLDED):
+            extra = _make_extra(CTX_UNKNOWN, False, None, False, -1)
+            return True, f"[decoded] payload 반사 ({kind.value})", XSS_SUSPICIOUS, "low", extra
 
     verify_raw = test_result.get("verify_body") or ""
     if verify_raw:
         verify_lower = verify_raw.lower()
         ev, ctx, idx, found_marker = _find_marker(verify_lower, verify_raw)
         if ev and found_marker is not None:
-            if is_idx_in_safe_context(verify_raw, idx):
-                return True, f"Stored [{ctx}] {ev} — safe context 억제", XSS_SUSPICIOUS, "low"
+            is_safe = is_idx_in_safe_context(verify_raw, idx)
+            extra   = _make_extra(ctx, is_safe, found_marker, True, idx, "verify_body")
+            if is_safe:
+                return True, f"Stored [{ctx}] {ev} — safe context 억제", XSS_SUSPICIOUS, "low", extra
             _, confidence = _verdict(ctx, found_marker)
-            return True, f"Stored [{ctx}] {ev}", XSS_STORED_REFLECTED, confidence
+            return True, f"Stored [{ctx}] {ev}", XSS_STORED_REFLECTED, confidence, extra
         ev, ctx, idx = _find_payload_reflection(payload, verify_lower, verify_raw)
         if ev:
-            if is_idx_in_safe_context(verify_raw, idx):
-                return True, f"Stored [{ctx}] {ev} — safe context 억제", XSS_SUSPICIOUS, "low"
-            return True, f"Stored [{ctx}] {ev}", XSS_STORED_REFLECTED, "medium"
+            is_safe = is_idx_in_safe_context(verify_raw, idx)
+            extra   = _make_extra(ctx, is_safe, None, True, idx, "verify_body")
+            if is_safe:
+                return True, f"Stored [{ctx}] {ev} — safe context 억제", XSS_SUSPICIOUS, "low", extra
+            return True, f"Stored [{ctx}] {ev}", XSS_STORED_REFLECTED, "medium", extra
 
     return _NO
