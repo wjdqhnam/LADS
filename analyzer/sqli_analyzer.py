@@ -54,8 +54,7 @@ def _vuln_type(r: dict) -> str:
 
 
 def _body_length(r: dict) -> int:
-    body = r.get("response_body") or ""
-    return len(body)
+    return r.get("content_length") or 0
 
 
 def _has_db_error(body: str) -> bool:
