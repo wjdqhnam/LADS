@@ -37,8 +37,9 @@ def _extract_body(test_result: dict) -> str:
 
 # ── 헬퍼 ─────────────────────────────────────────────────────────
 def _is_encoded(body: str, idx: int, marker_len: int, window: int = 10) -> bool:
-    start = max(0, idx - window)
-    end   = idx + marker_len + window
+    effective_window = max(window, marker_len)
+    start = max(0, idx - effective_window)
+    end   = idx + marker_len + effective_window
     surrounding = body[start:end]
     return any(tok in surrounding for tok in _ENCODED_TOKENS)
 
@@ -60,9 +61,12 @@ def _check_payload_reflection(payload: str, body_lower: str) -> Optional[str]:
     pl = payload.lower().strip()
     if len(pl) < 4:                     # 너무 짧은 문자열은 우연 매치 가능
         return None
-    if pl in body_lower:
-        return f"페이로드 반사 (payload 본문 내 그대로 노출)"
-    return None
+    idx = body_lower.find(pl)
+    if idx == -1:
+        return None
+    if _is_encoded(body_lower, idx, len(pl)):
+        return None
+    return f"페이로드 반사 (payload 본문 내 그대로 노출)"
 
 
 # ── 메인 진입점 ──────────────────────────────────────────────────
